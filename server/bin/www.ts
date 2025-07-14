@@ -2,9 +2,16 @@
 
 import app from "../app";
 import debugLib from "debug";
-import http from "http";
+import https from "https";
+import fs from "fs";
+import path from "path";
 
 const debug = debugLib("server:server");
+
+const options = {
+  key: fs.readFileSync(path.join(__dirname, "../certs/key.pem")),
+  cert: fs.readFileSync(path.join(__dirname, "../certs/cert.pem")),
+};
 
 process.on("uncaughtException", (err) => {
   console.error("Uncaught Exception:", err);
@@ -13,11 +20,11 @@ process.on("uncaughtException", (err) => {
 
 console.log("Starting server...");
 const port = normalizePort(process.env.PORT || "5000");
-const server = http.createServer(app);
+const server = https.createServer(options, app);
 
 console.log(`Attempting to listen on port ${port}...`);
-server.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
+server.listen(Number(port), "0.0.0.0", () => {
+  console.log(`Server is running on https://0.0.0.0:${port}`);
 });
 server.on("error", onError);
 server.on("listening", onListening);

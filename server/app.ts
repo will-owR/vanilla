@@ -3,12 +3,14 @@ import createError from "http-errors";
 import path from "path";
 import cookieParser from "cookie-parser";
 import logger from "morgan";
+import cors from "cors";
 
 import indexRouter from "./routes/index";
 import usersRouter from "./routes/users";
 import calendarRouter from "./routes/calendar";
 import googleCalendarRouter from "./routes/googleCalendar";
 import projectManagementRouter from "./routes/projectManagement";
+import themeRouter from "./routes/theme";
 
 const app: Express = express();
 
@@ -17,6 +19,20 @@ app.set("json spaces", 2);
 app.set("x-powered-by", false);
 
 // Middleware
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000",
+      "http://0.0.0.0:3000",
+      "http://10.0.0.87:3000",
+      "https://localhost:3000",
+      "https://0.0.0.0:3000",
+      "https://10.0.0.87:3000",
+      /\.app\.github\.dev$/, // Allow any GitHub Codespaces URL
+    ],
+    credentials: true,
+  })
+);
 app.use(logger("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -34,6 +50,7 @@ app.use("/users", usersRouter);
 app.use("/calendar", calendarRouter);
 app.use("/calendar/google", googleCalendarRouter);
 app.use("/projects", projectManagementRouter);
+app.use("/theme", themeRouter);
 
 // catch 404 and forward to error handler
 app.use(function (req: Request, res: Response, next: NextFunction) {

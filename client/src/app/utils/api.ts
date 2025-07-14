@@ -1,4 +1,18 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+export function getApiBaseUrl() {
+  // Get the current hostname from the window location
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  
+  // Check if we're running in GitHub Codespaces
+  if (hostname.endsWith('.app.github.dev')) {
+    // Replace the port number in the Codespaces URL
+    return `https://${hostname.replace(/3000/, '5000')}`;
+  }
+  
+  // Use environment variable if set, otherwise default to local development URL
+  return process.env.NEXT_PUBLIC_API_URL || 'https://localhost:5000';
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 interface Calendar {
   id: string;
