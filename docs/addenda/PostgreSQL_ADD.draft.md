@@ -41,12 +41,24 @@ All contributors and agents must read and fully understand the following documen
 - Simple data schema validation
 - No container complexity
 
+**Discussion Points:**
+
+- Verify if current SQLite3 implementation fully meets "Simple data schema validation" requirement
+- Strategy for JSON storage in SQLite3 that aligns with future PostgreSQL migration
+- Development environment setup without container complexity
+
 ### Phase 2: Core Feature Development
 
 - Calendar generation pipeline
 - Basic CRUD operations
 - Local data persistence
 - Feature completion priority
+
+**Discussion Points:**
+
+- Assessment: Are calendar generation features blocking database decisions?
+- Strategy for Prisma schema design that works in both SQLite3 and PostgreSQL
+- Balance between feature development and database architecture
 
 ### Phase 3: PostgreSQL Migration
 
@@ -55,12 +67,26 @@ All contributors and agents must read and fully understand the following documen
 - Data migration strategy
 - Parallel running capability
 
+**Discussion Points:**
+
+- JSONB migration strategy: immediate vs. phased approach
+- Timing and setup requirements for staging environment
+- Implementation plan for parallel running capability
+- Feature flag strategy for gradual transition
+
 ### Phase 4: Production Readiness
 
 - Container setup (current docker-compose.yml)
 - Cloud deployment configurations
 - Performance optimization
 - Backup/restore procedures
+
+**Discussion Points:**
+
+- Performance benchmarking strategy between SQLite3 and PostgreSQL
+- Zero-downtime migration approach
+- Rollback procedures and data integrity verification
+- Monitoring and scaling considerations
 
 ## 3. Technical Implementation
 
