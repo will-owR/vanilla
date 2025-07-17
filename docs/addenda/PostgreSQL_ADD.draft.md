@@ -197,6 +197,62 @@ Notes:
 
 ---
 
+## ADDENDA
+
+### A1. Immediate Actions (Development Environment)
+
+1. **Current Environment Assessment**
+
+   - Verify devcontainer stability
+   - Document current file-based storage approach
+   - Identify points of database interaction
+   - Map calendar feature dependencies
+
+2. **Minimal PostgreSQL Setup**
+
+   - Base installation in devcontainer
+   - Core extensions (uuid-ossp, pgcrypto)
+   - Connection verification
+   - Environment stability check
+
+3. **Validation Framework**
+   - Database health check procedures
+   - Extension state monitoring
+   - Development velocity baseline
+   - Impact assessment tools
+
+### A2. Process Documentation
+
+1. **Extension Management**
+
+   - Addition/removal procedures
+   - Dependency tracking
+   - Verification requirements
+   - Rollback procedures
+
+2. **Development Safeguards**
+   - Performance impact monitoring
+   - Feature development velocity tracking
+   - Database change review process
+   - Stability verification steps
+
+### A3. Growth Management
+
+1. **Feature Support**
+
+   - Calendar feature requirement mapping
+   - Database capability alignment
+   - Extension needs assessment
+   - Performance optimization opportunities
+
+2. **Monitoring & Metrics**
+   - Development velocity tracking
+   - Database performance baselines
+   - Extension health monitoring
+   - Impact assessment metrics
+
+---
+
 **Next Steps**:
 
 1. Review and align with team
