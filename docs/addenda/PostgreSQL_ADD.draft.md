@@ -9,7 +9,42 @@ All contributors and agents must read and fully understand the following documen
 
 > **Draft Status**: Outline for discussion and alignment
 > **Last Updated**: July 17, 2025
-> **Purpose**: Restructure implementation approach to align with Development Philosophy
+> **Purpose**: Achieve team consensus on database strategy
+
+## Important: Process & Philosophy
+
+### Key Requirements
+
+1. **Stability First**: Current devcontainer stability must be preserved
+
+   - Single-document container configuration remains
+   - No disruption to existing development workflow
+   - Careful integration of new services
+
+2. **Adaptable Foundation**: Design for stable growth
+
+   - Start with essential extensions only (uuid-ossp, pgcrypto)
+   - Establish clear process for safe extension additions
+   - Design for flexibility without sacrificing stability
+
+3. **Reliable Process**: Implementation must be
+   - Reproducible
+   - Well-documented
+   - Failure-resistant
+
+### Process Order
+
+1. **Discussion First**: Team-wide review and input on all aspects
+2. **Document Decisions**: Clear capture of agreed approaches
+3. **Phase Planning**: Break down into manageable, agreed-upon steps
+4. **Implementation Last**: Execute only after consensus and documentation
+
+No implementation steps should begin until:
+
+- Full team review is complete
+- Consensus is documented
+- Phasing strategy is agreed upon
+- Risks and alternatives are understood
 
 ## 1. Context & Rationale
 
@@ -28,25 +63,25 @@ All contributors and agents must read and fully understand the following documen
 
 ### 1.3 Strategy Evolution
 
-- Initial: SQLite3 for development speed
-- Target: PostgreSQL for production readiness
-- Rationale: Balance rapid development with scalable architecture
+- Foundation: Enable calendar feature development first
+- Growth: PostgreSQL capabilities align with feature needs
+- Rationale: Support calendar generation without blocking development
 
 ## 2. Implementation Phases
 
 ### Phase 1: Development Setup
 
-- ⚠️ PostgreSQL installation and configuration
-- Database connection validation
-- Schema initialization
-- Development environment setup
+- Minimal PostgreSQL setup to support calendar features
+- Verify calendar development can proceed unimpeded
+- Basic extension framework for calendar data needs
+- Validation that database changes don't block development
 
 **Discussion Points:**
 
-- ⚠️ PostgreSQL Setup: Installation and configuration needed
-- ⚠️ Connection: Database connectivity verification required
-- ⚠️ Schema: Initial schema creation pending
-- ⚠️ Environment: Dev container configuration needed
+- ⚠️ Minimal Setup: Only what calendar features need now
+- ⚠️ Verification: Ensure development can continue smoothly
+- ⚠️ Extensions: Support current calendar data requirements
+- ⚠️ Protection: Guard against development disruption
 
 ### Phase 2: Core Feature Development
 
@@ -77,70 +112,88 @@ All contributors and agents must read and fully understand the following documen
 
 ### Phase 4: Production Readiness
 
-- Container setup (current docker-compose.yml)
-- Cloud deployment configurations
-- Performance optimization
-- Backup/restore procedures
+- Calendar feature performance validation
+- Data persistence reliability for calendar projects
+- Scalable calendar generation support
+- Database maintenance without feature disruption
 
 **Discussion Points:**
 
-- Performance benchmarking strategy between SQLite3 and PostgreSQL
-- Zero-downtime migration approach
-- Rollback procedures and data integrity verification
-- Monitoring and scaling considerations
+- Calendar generation performance metrics
+- Project data reliability requirements
+- Growth path for calendar features
+- Zero-impact database maintenance procedures
 
 ## 3. Technical Implementation
 
-[Technical sections to be aligned with current implementation...]
+### 3.1 Calendar Feature Support
+
+- Database capabilities needed by calendar features
+- Extension selection based on feature requirements
+- Performance optimization for calendar operations
+
+### 3.2 Development Continuity
+
+- Non-blocking database procedures
+- Feature-driven extension management
+- Stability verification process
+
+### 3.3 Data Reliability
+
+- Project data persistence
+- Backup procedures that prioritize calendar data
+- Recovery without feature disruption
 
 ## 4. Migration Path
 
 ### 4.1 Development to Production
 
-- Data model validation
-- Schema migration scripts
-- Feature flag implementation
-- Rollback procedures
+- Feature-driven database evolution
+- Calendar generation performance assurance
+- Non-disruptive deployment procedures
+- Data integrity with development continuity
 
 ### 4.2 Testing Strategy
 
-- Unit tests with SQLite3
-- Integration tests with PostgreSQL
-- Performance benchmarks
-- Migration validations
+- Calendar feature functionality tests
+- Data persistence validation for projects
+- Performance impact on calendar generation
+- Database changes don't block development
 
 ## 5. Success Criteria
 
 ### 5.1 Development Phase
 
-- Calendar features complete
-- Data model validated
-- Core functionality tested
+- Calendar features proceed without database blockers
+- Database supports current feature requirements
+- Development velocity maintained
+- Extension framework validated
 
 ### 5.2 Production Phase
 
-- Zero-downtime migration
-- Performance metrics met
-- Data integrity verified
-- Backup/restore validated
+- Calendar generation performs at scale
+- Project data persists reliably
+- Database changes don't impact feature development
+- Maintenance procedures preserve functionality
 
 ## 6. Current Status
 
-> **Development Priority**: Database features are implemented only when directly enabling or enhancing calendar generation capabilities. This maintains focus on the primary goal and prevents premature optimization.
+> **Development Priority**: Calendar generation features proceed unimpeded while database integration follows an adaptable, non-blocking approach.
 
 [Development status tracker]
 
-- ⚠️ BLOCKED: PostgreSQL installation and setup required
-- □ Database configuration and validation
-- □ Schema initialization
-- ▶️ Core calendar features in development
+- ▶️ Calendar features: Continuing with file-based storage
+- ⚠️ Setup: Minimal PostgreSQL for current feature needs
+- □ Validation: Extension framework establishment
+- □ Growth: Feature-driven capability expansion
 
 Notes:
 
-- ⚠️ Critical: PostgreSQL installation needed before proceeding
-- Database setup must be completed before schema implementation
-- Calendar features can proceed with file-based storage for now
-- Will revisit database integration once installation is complete
+- Calendar development continues without database dependencies
+- PostgreSQL setup focused on essential calendar feature support
+- Extensions added only when required by calendar features
+- Each database change verified not to impact development velocity
+- Adaptable foundation ready for incremental enhancement
 
 ---
 
