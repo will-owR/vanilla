@@ -10,6 +10,24 @@ Home to ChronosCraft AI
 
 Fluid and magic-like crafting of stunningly unique, personalized, printable calendars using Generative AI.
 
+## Development Philosophy
+
+We maintain stability through structured change management:
+
+1. Discuss and understand the full context
+2. Document agreements and decisions
+3. Create actionable, phased plans
+4. Implement incrementally
+
+All contributors, human and AI, must:
+
+- Start with README.md
+- Respect project structure
+- Follow established patterns
+- Propose changes that align with architecture
+
+This approach prevents destabilizing changes and maintains our clean, component-based architecture.
+
 ## Overview
 
 ChronosCraft AI is a web application where users co-create beautiful, personalized, printable calendars with the help of Generative AI. The project is split into two main parts:
