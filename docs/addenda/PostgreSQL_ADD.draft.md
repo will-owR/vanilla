@@ -43,9 +43,9 @@ All contributors and agents must read and fully understand the following documen
 
 **Discussion Points:**
 
-- Verify if current SQLite3 implementation fully meets "Simple data schema validation" requirement
-- Strategy for JSON storage in SQLite3 that aligns with future PostgreSQL migration
-- Development environment setup without container complexity
+- ✓ Schema validation: Using Prisma's built-in validation with PostgreSQL
+- ✓ JSON storage: Using PostgreSQL's native JSONB support
+- ✓ Development environment: Keeping current PostgreSQL setup
 
 ### Phase 2: Core Feature Development
 
@@ -125,12 +125,20 @@ All contributors and agents must read and fully understand the following documen
 
 ## 6. Current Status
 
+> **Development Priority**: Database features are implemented only when directly enabling or enhancing calendar generation capabilities. This maintains focus on the primary goal and prevents premature optimization.
+
 [Development status tracker]
 
-- ✓ Initial SQLite3 setup
-- □ Core features complete
-- □ PostgreSQL migration
+- ⚠️ Database setup functional with PostgreSQL (SQLite3 migration deferred)
+- ▶️ Core calendar features in development
+- □ PostgreSQL optimization
 - □ Production deployment
+
+Notes:
+
+- Current schema supports basic calendar generation needs
+- Additional features (user accounts, etc.) deferred until required by calendar functionality
+- Database decisions remain subordinate to calendar generation requirements
 
 ---
 
