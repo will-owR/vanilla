@@ -1,3 +1,10 @@
+# 🚨 REQUIRED READING & COMPLIANCE 🚨
+
+All contributors and agents must read and fully understand the following documents before any work, proposals, or changes. Compliance is assumed and non-negotiable:
+
+- [Application Root README](../../README.md)
+- [This PostgreSQL Integration Strategy (DRAFT)](./PostgreSQL_ADD.draft.md)
+
 # PostgreSQL Integration Strategy (DRAFT)
 
 > **Draft Status**: Outline for discussion and alignment
