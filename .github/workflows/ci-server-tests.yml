@@ -1,0 +1,41 @@
+name: CI - Server tests
+
+on:
+  push:
+    branches: [main, feat/day4, "**/*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  server-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Chromium (for Puppeteer)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg ca-certificates \
+            fonts-liberation libappindicator3-1 libasound2 libatk-bridge2.0-0 \
+            libatk1.0-0 libc6 libdbus-1-3 libgdk-pixbuf2.0-0 libnspr4 libnss3 \
+            libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 libxrandr2 \
+            libxss1 libxtst6 xdg-utils libu2f-udev
+          sudo apt-get install -y chromium-browser
+          echo "CHROME_PATH=/usr/bin/chromium-browser" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        working-directory: ./server
+        run: npm ci
+
+      - name: Clean samples (optional)
+        working-directory: ./server
+        run: npm run clean:samples || true
+
+      - name: Run server tests
+        working-directory: ./server
+        run: npm test --silent

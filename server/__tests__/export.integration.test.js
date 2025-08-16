@@ -1,5 +1,5 @@
-/* eslint-disable no-undef, @typescript-eslint/no-var-requires */
-/* Vitest provides globals (beforeAll, afterAll, test, expect) at runtime */
+/* global beforeAll, afterAll, test, expect */
+// Vitest provides globals (beforeAll, afterAll, test, expect) at runtime
 const request = require("supertest");
 const app = require("../index");
 const { startServer } = require("../index");
