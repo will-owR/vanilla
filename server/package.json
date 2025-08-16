@@ -6,6 +6,7 @@
     "start:ci": "ts-node ./bin/www.ts",
     "dev:ci": "DEBUG=* ts-node ./bin/www.ts",
     "lint": "eslint . --ext .ts",
+    "clean:samples": "node ./scripts/clean_samples.js",
     "start": "node index.js",
     "dev": "nodemon index.js",
     "test": "vitest",

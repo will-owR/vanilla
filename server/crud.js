@@ -35,12 +35,21 @@ function withDbRetry(fn, args, cb, maxAttempts = 5, baseDelay = 50) {
         return;
       }
 
-      // Promise mode - prefer resolving with sqlite3 Statement `this` when available
+      // Promise mode - for db.run the callback does not provide a `result` and
+      // `this` is the sqlite3 Statement (useful for lastID/changes). For db.get
+      // and db.all, the callback provides the result (rows/object) in the
+      // `result` parameter. Use `result` when present, otherwise fall back to
+      // resolving with `this` (Statement).
       if (err) reject(err);
       else {
         try {
-          // if `this` is the sqlite3 Statement, return it so callers can read lastID/changes
-          if (typeof this !== "undefined" && this) return resolve(this);
+          if (
+            typeof result === "undefined" &&
+            typeof this !== "undefined" &&
+            this
+          ) {
+            return resolve(this);
+          }
         } catch (e) {
           // ignore and fall back
         }
@@ -86,7 +95,7 @@ exports.getPrompts = (cb) => {
     [`SELECT * FROM prompts ORDER BY created_at DESC`, []],
     cb
   );
-  if (!cb) return op;
+  if (!cb) return op.then((rows) => (Array.isArray(rows) ? rows : []));
 };
 
 exports.getPromptById = (id, cb) => {
@@ -95,7 +104,14 @@ exports.getPromptById = (id, cb) => {
     [`SELECT * FROM prompts WHERE id = ?`, [id]],
     cb
   );
-  if (!cb) return op;
+  if (!cb)
+    return op.then((row) =>
+      row &&
+      typeof row === "object" &&
+      Object.prototype.hasOwnProperty.call(row, "id")
+        ? row
+        : null
+    );
 };
 
 exports.updatePrompt = (id, prompt, cb) => {
