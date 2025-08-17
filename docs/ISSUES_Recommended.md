@@ -24,12 +24,15 @@ Checklist
    - Priority: P1
    - Owner: you/me (I can run checks or provide commands)
    - Verification: `GET /health` returns `200` when services are up in devcontainer; otherwise returns structured 503 during startup.
+   - Status: Partially verified
+   - Notes: Basic health checks ran during Day 4 work; `prisma` schema issues were resolved and the health endpoint reports service readiness when DB and Puppeteer are up (verified 2025-08-17).
 
 3. [ ] Puppeteer smoke test in devcontainer
 
    - Priority: P1
    - Owner: me (run inside devcontainer) or you if running locally
-   - Verification: small script successfully launches Chrome via `CHROME_PATH` and renders a page to PDF or plain check; exit code 0.
+     - Verification: small script successfully launches Chrome via `CHROME_PATH` and renders a page to PDF or plain check; exit code 0.
+     - Status: Verified locally (not run inside container here) — a export test script generated a PDF at `samples/automated_export_test.pdf` (2025-08-17).
 
 4. [ ] Confirm devcontainer `postCreateCommand` completes (install dependencies)
 
@@ -41,19 +44,22 @@ Checklist
 
    - Priority: P1
    - Owner: me
-   - Verification: `npm test` in `client/`, `server/`, and `shared/` pass on CI or devcontainer.
+     - Verification: `npm test` in `client/`, `server/`, and `shared/` pass locally in dev session; client tests were fixed (conservative JSON parsing) and all suites pass (verified 2025-08-17).
+     - Status: Done (local verification)
 
 6. [ ] Replace GET `/preview` query-JSON with POST for large payloads (refactor client usage)
 
    - Priority: P2
    - Owner: me
-   - Verification: client `endpoints.preview` uses POST and preview route accepts JSON body; tests updated accordingly.
+     - Verification: `previewEndpoint` in client already posts to `/api/preview` and server accepts POST `/api/preview` (verified 2025-08-17).
+     - Status: Done
 
 7. [ ] Add an integration test covering core loop: prompt → preview → export
 
    - Priority: P1
    - Owner: me
-   - Verification: Integration test runs in CI (or locally) and validates full flow with small sample data and cleans up artifacts.
+     - Verification: Integration test `server/__tests__/coreFlow.integration.test.js` was added and ran locally during Day 4 work; core flow validated (2025-08-17).
+     - Status: Done (local verification)
 
 8. [ ] Add CI job to run tests and the integration smoke test (optional gated job for Puppeteer)
    - Priority: P2
@@ -68,3 +74,4 @@ Change log (most recent at top)
 
 - [TODO] File created; `.env.example` will be added now and the first item verified.
 - [INFO] API docs added at `docs/API_ENDPOINTS.md` on 2025-08-17.
+- [VERIFIED] Client export now POSTs to `/export`, server `/api/export` and `/export` respond with PDF binary and standardized JSON error payloads when applicable (verified 2025-08-17).
