@@ -24,21 +24,24 @@ Checklist
    - Priority: P1
    - Owner: you/me (I can run checks or provide commands)
    - Verification: `GET /health` returns `200` when services are up in devcontainer; otherwise returns structured 503 during startup.
-   - Status: Partially verified
-   - Notes: Basic health checks ran during Day 4 work; `prisma` schema issues were resolved and the health endpoint reports service readiness when DB and Puppeteer are up (verified 2025-08-17).
+   - Status: Verified (local)
+   - Notes: Health endpoint returned 200 and DB connectivity succeeded when `./scripts/devcontainer_smoke_health.sh` was run (verification 2025-08-17). This indicates the `db` service is reachable in the current environment. If replicating in a fresh Codespace, ensure `.env` values are set and the `db` service is started.
 
 3. [ ] Puppeteer smoke test in devcontainer
 
    - Priority: P1
    - Owner: me (run inside devcontainer) or you if running locally
      - Verification: small script successfully launches Chrome via `CHROME_PATH` and renders a page to PDF or plain check; exit code 0.
-     - Status: Verified locally (not run inside container here) — a export test script generated a PDF at `samples/automated_export_test.pdf` (2025-08-17).
+   - Status: Verified in workspace/devcontainer
+   - Notes: After installing server deps (`cd server && npm ci`) and running the smoke script with `NODE_PATH=server/node_modules`, the script wrote `samples/puppeteer_smoke_test.pdf` successfully (verified 2025-08-17). Ensure `CHROME_PATH` is set in CI/devcontainer and that `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true` is respected during install.
 
 4. [ ] Confirm devcontainer `postCreateCommand` completes (install dependencies)
 
    - Priority: P2
    - Owner: me / contributor who opens Codespace
-   - Verification: `cd client && npm run dev` and `cd server && npm run dev` succeed in container and forwarded ports open.
+     - Verification: `cd client && npm run dev` and `cd server && npm run dev` succeed in container and forwarded ports open.
+     - Status: Simulated locally
+     - Notes: Global `concurrently` was installed manually to simulate `postCreateCommand` behavior and verify the workflow. A full verification inside a fresh Codespace/devcontainer (where the `postCreateCommand` runs automatically) is still recommended.
 
 5. [ ] Run client & server tests (Vitest/Jest) and fix failures
 
@@ -65,6 +68,8 @@ Checklist
    - Priority: P2
    - Owner: me / repo maintainer
    - Verification: GitHub Actions or similar runs tests and reports status on PRs.
+   - Status: Partially done
+   - Notes: A sample workflow `ci-smoke-puppeteer.yml` was added to `.github/workflows/` to install Chromium, set `CHROME_PATH`, run the smoke export script, and upload the generated PDF as an artifact. The workflow is non-blocking by default and will need refinement for CI flakiness handling (verification 2025-08-17).
 
 How to check items off
 
