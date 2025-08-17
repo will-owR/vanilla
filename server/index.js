@@ -560,6 +560,35 @@ app.get("/preview", (req, res) => {
   }
 });
 
+// Backwards-compatible API route to accept JSON body for preview requests
+app.post("/api/preview", (req, res) => {
+  const content = req.body && (req.body.content || req.body);
+
+  // Validate required parameter
+  if (!content) {
+    return sendValidationError(res, "Content parameter is required", {
+      provided: typeof req.body,
+      required: "object with content or direct content",
+    });
+  }
+
+  try {
+    const contentObj =
+      typeof content === "string" ? JSON.parse(content) : content;
+
+    // Validate content structure
+    if (!contentObj.title || !contentObj.body) {
+      return sendValidationError(res, "Content must include title and body", {
+        provided: Object.keys(contentObj),
+      });
+    }
+
+    res.json({ preview: previewTemplate(contentObj), metadata: {} });
+  } catch (err) {
+    sendValidationError(res, "Invalid content format", { error: err.message });
+  }
+});
+
 // --- OVERRIDE ENDPOINT ---
 app.post("/override", (req, res) => {
   const { content, changes } = req.body;
@@ -602,138 +631,130 @@ app.post("/override", (req, res) => {
 });
 
 // --- PDF EXPORT ENDPOINT ---
-app.post("/export", async (req, res, next) => {
+// Backwards-compatible export endpoint: accept GET with query or POST with JSON body
+app.post("/api/export", async (req, res, next) => {
   const fs = require("fs");
   const path = require("path");
+  const {
+    sendValidationError,
+    sendProcessingError,
+    sendServiceUnavailableError,
+  } = require("./utils/errorHandler");
 
-  // Input validation
-  const { title, body } = req.body;
+  const { title, body } = req.body || {};
   if (!title || !body) {
     return sendValidationError(res, "Content must include title and body", {
-      provided: Object.keys(req.body),
+      provided: Object.keys(req.body || {}),
       required: ["title", "body"],
     });
   }
 
-  // Prefer async export via queue when available. If BullMQ is not installed,
-  // gracefully fall back to the synchronous in-request generation.
-  let Queue;
-  try {
-    ({ Queue } = require("bullmq"));
-  } catch (e) {
-    Queue = null;
-  }
-
-  // Log request for debugging (optional)
-  try {
-    const reqBodyPath = path.resolve(
-      __dirname,
-      "../samples/export_request_body.json"
-    );
-    fs.writeFileSync(reqBodyPath, JSON.stringify(req.body, null, 2));
-  } catch (e) {
-    console.warn("Failed to write debug log:", e.message);
-  }
-
-  // If we have BullMQ available, enqueue an export job and return 202 with a
-  // status URL. Otherwise fall back to in-request generation (original path).
-  // Only use BullMQ if it's installed and a REDIS_URL is explicitly configured.
-  // This avoids surprising attempts to connect to localhost Redis in dev/test
-  // environments where Redis is not available.
-  if (Queue && process.env.REDIS_URL) {
-    try {
-      const { Queue: Q } = require("bullmq");
-      const IORedis = require("ioredis");
-      const connection = new IORedis(
-        process.env.REDIS_URL || "redis://127.0.0.1:6379"
-      );
-      const exportQueue = new Q("export_queue", { connection });
-
-      // Create a pdf_exports DB record to track the job (best-effort)
-      let exportRecord = null;
-      try {
-        exportRecord = await crud.createPDFExport(null, "queued");
-      } catch (e) {
-        // ignore DB errors here; we'll still enqueue the job
-      }
-
-      const jobData = {
-        title,
-        body,
-        exportId: exportRecord ? exportRecord.id : null,
-      };
-      const job = await exportQueue.add("exportPdf", jobData, {
-        removeOnComplete: true,
-      });
-
-      const statusUrl = `/api/pdf_exports/${
-        exportRecord ? exportRecord.id : job.id
-      }`;
-      res.status(202).json({ success: true, jobId: job.id, statusUrl });
-      return;
-    } catch (enqueueErr) {
-      console.warn(
-        "Failed to enqueue export job, falling back to sync generation:",
-        enqueueErr && enqueueErr.message
-      );
-      // fallthrough to synchronous generation below
-    }
-  }
-
-  // FALLBACK: synchronous generation (original behaviour)
+  // Use the same synchronous fallback logic as the GET /export route
   let page;
   try {
-    // Service availability check for fallback path
     if (!serviceState.puppeteer.ready || !browserInstance) {
-      const err = new Error("PDF generation service not ready");
-      err.status = 503;
-      err.code = "SERVICE_UNAVAILABLE";
-      return next(err);
+      return sendServiceUnavailableError(
+        res,
+        "PDF generation service not ready",
+        {
+          code: "SERVICE_UNAVAILABLE",
+        }
+      );
     }
 
-    // PDF Generation process
     page = await browserInstance.newPage();
-    if (!page) {
-      throw new Error("Failed to create new browser page");
-    }
+    if (!page) throw new Error("Failed to create browser page");
 
     const contentObj = { title, body };
     await page.setContent(previewTemplate(contentObj));
 
-    // Generate PDF with both buffer and file output
-    const timestamp = Date.now();
-    const filename = `output-${timestamp}.pdf`;
-    const outputPath = path.resolve(__dirname, `../samples/${filename}`);
+    const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
 
-    const pdf = await page.pdf({
-      path: outputPath, // Save to file
-      format: "A4",
-      printBackground: true,
-      margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
-    });
-
-    if (!fs.existsSync(outputPath))
-      throw new Error("PDF file was not created successfully");
-    const pdfBuffer = fs.readFileSync(outputPath);
-
-    // (debug write removed)
-
-    res.setHeader("Content-Disposition", `inline; filename=${filename}`);
+    // Successful binary response; keep binary behaviour for clients
+    res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Length", pdfBuffer.length);
     res.end(pdfBuffer);
-
-    try {
-      fs.unlinkSync(outputPath);
-    } catch (e) {}
     return;
   } catch (err) {
-    const exportError = new Error(`PDF Generation Failed: ${err.message}`);
-    exportError.status = 500;
-    exportError.code = "PDF_GENERATION_ERROR";
-    next(exportError);
+    console.error("Export generation error", err);
+    // Use standardized processing error payload
+    return sendProcessingError(res, `PDF Generation Failed: ${err.message}`, {
+      code: "PDF_GENERATION_ERROR",
+    });
   } finally {
     if (page) await page.close();
+  }
+});
+
+// Backwards-compatible POST /export for legacy clients that post to /export
+app.post("/export", async (req, res, next) => {
+  const {
+    sendValidationError,
+    sendProcessingError,
+    sendServiceUnavailableError,
+  } = require("./utils/errorHandler");
+
+  const { title, body } = req.body || {};
+  if (!title || !body) {
+    return sendValidationError(res, "Content must include title and body", {
+      provided: Object.keys(req.body || {}),
+      required: ["title", "body"],
+    });
+  }
+
+  let page;
+  try {
+    if (!serviceState.puppeteer.ready || !browserInstance) {
+      return sendServiceUnavailableError(
+        res,
+        "PDF generation service not ready",
+        {
+          code: "SERVICE_UNAVAILABLE",
+        }
+      );
+    }
+
+    page = await browserInstance.newPage();
+    if (!page) throw new Error("Failed to create browser page");
+
+    const contentObj = { title, body };
+    await page.setContent(previewTemplate(contentObj));
+
+    const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+
+    res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Length", pdfBuffer.length);
+    res.end(pdfBuffer);
+    return;
+  } catch (err) {
+    console.error("Export generation error", err);
+    return sendProcessingError(res, `PDF Generation Failed: ${err.message}`, {
+      code: "PDF_GENERATION_ERROR",
+    });
+  } finally {
+    if (page) await page.close();
+  }
+});
+
+// Maintain existing GET /export behaviour for legacy clients (keeps file save path)
+app.get("/export", async (req, res, next) => {
+  // existing behaviour remains unchanged for compatibility
+  // note: some clients still call /export via GET with content query
+  const { content } = req.query;
+  if (!content)
+    return sendValidationError(res, "Content parameter is required");
+  try {
+    const contentObj = JSON.parse(content);
+    const page = await browserInstance.newPage();
+    await page.setContent(previewTemplate(contentObj));
+    const pdf = await page.pdf({ format: "A4", printBackground: true });
+    await page.close();
+    res.setHeader("Content-Type", "application/pdf");
+    res.end(pdf);
+  } catch (err) {
+    next(err);
   }
 });
 

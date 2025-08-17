@@ -50,10 +50,12 @@ async function handleApiResponse(response) {
     contentType = undefined;
   }
 
-  // If response looks like JSON (by header or by presence of json()), parse it.
+  // Parse as JSON when Content-Type indicates JSON, or when the response
+  // provides a json() method but doesn't have a Headers-like object (test mocks).
   if (
     contentType?.includes("application/json") ||
-    typeof response?.json === "function"
+    (typeof response?.json === "function" &&
+      (!response?.headers || typeof response.headers.get !== "function"))
   ) {
     const data = await response.json();
     if (!response.ok) {
@@ -84,31 +86,34 @@ export async function exportToPdf(content, options = {}) {
       });
     }
 
-    const response = await fetch(
-      `/export?content=${encodeURIComponent(JSON.stringify(content))}`,
-      {
-        method: "GET",
-        headers: {
-          Accept: "application/pdf, application/json",
-          "X-Requested-With": "XMLHttpRequest",
-        },
-        ...options,
-      }
-    );
+    const response = await fetch("/export", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/pdf, application/json",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: JSON.stringify(content),
+      ...options,
+    });
 
+    // Use common response handler; it will return parsed JSON for JSON responses
+    // or return the raw response object for non-JSON (e.g., PDF) responses.
     const handled = await handleApiResponse(response);
 
-    // If it's not an error response and it's a PDF, get the blob
-    if (response.headers.get("content-type")?.includes("application/pdf")) {
+    // If server returned a PDF, return it as a blob
+    const ct = response.headers?.get?.("content-type");
+    if (ct?.includes("application/pdf")) {
       return await response.blob();
     }
 
+    // If we got here, the response was neither JSON error nor a PDF
     throw new APIError(
       "Unexpected response type",
       "PROCESSING_ERROR",
       response.status,
       null,
-      { contentType: response.headers.get("content-type") }
+      { contentType: ct, handled }
     );
   } catch (error) {
     if (error instanceof APIError) {
