@@ -739,22 +739,52 @@ app.post("/export", async (req, res, next) => {
 });
 
 // Maintain existing GET /export behaviour for legacy clients (keeps file save path)
-app.get("/export", async (req, res, next) => {
-  // existing behaviour remains unchanged for compatibility
-  // note: some clients still call /export via GET with content query
+app.get("/export", async (req, res) => {
+  // Backwards-compatible GET /export that accepts ?content=<json>
+  // Harmonized to use the standardized error response helpers and
+  // to return binary PDF with proper headers.
   const { content } = req.query;
-  if (!content)
+  const {
+    sendValidationError,
+    sendProcessingError,
+    sendServiceUnavailableError,
+  } = require("./utils/errorHandler");
+
+  if (!content) {
     return sendValidationError(res, "Content parameter is required");
+  }
+
+  let page;
   try {
     const contentObj = JSON.parse(content);
-    const page = await browserInstance.newPage();
+
+    if (!serviceState.puppeteer.ready || !browserInstance) {
+      return sendServiceUnavailableError(
+        res,
+        "PDF generation service not ready",
+        { code: "SERVICE_UNAVAILABLE" }
+      );
+    }
+
+    page = await browserInstance.newPage();
+    if (!page) throw new Error("Failed to create browser page");
+
     await page.setContent(previewTemplate(contentObj));
     const pdf = await page.pdf({ format: "A4", printBackground: true });
-    await page.close();
+
+    // Set headers to match POST export endpoints
+    res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
     res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Length", pdf.length);
     res.end(pdf);
+    return;
   } catch (err) {
-    next(err);
+    console.error("Export generation error (GET /export)", err);
+    return sendProcessingError(res, `PDF Generation Failed: ${err.message}`, {
+      code: "PDF_GENERATION_ERROR",
+    });
+  } finally {
+    if (page) await page.close();
   }
 });
 
