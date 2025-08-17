@@ -285,3 +285,26 @@
 - User guides
 - Developer documentation
 - Implementation examples
+
+## Short-term Actionable Checklist (Day4 / ISSUES_Recommended)
+
+Priority: follow ISSUES_Recommended first, then execute Day4 test matrix.
+
+Local (can run now in this workspace):
+
+- [x] Create `.env.example` and document required envs — already present.
+- [x] Install server dependencies (`cd server && npm ci`) and run server tests — done (Vitest passing).
+- [x] Install client dependencies (`cd client && npm ci`) and run client tests — done (Vitest passing).
+- [x] Puppeteer smoke export using `puppeteer-core` and `CHROME_PATH` — done locally; `samples/puppeteer_smoke_test.pdf` generated.
+
+Requires devcontainer/Docker (needs Docker on host or Codespace):
+
+- [ ] Start `db` service from `.devcontainer/docker-compose.yml` and verify DB readiness with `./scripts/devcontainer_smoke_health.sh`.
+- [ ] Confirm `postCreateCommand` completes inside devcontainer (dependency installs, global `concurrently`).
+- [ ] Run Puppeteer smoke export inside devcontainer to validate installed Chrome and `CHROME_PATH` integration.
+
+CI (requires GitHub Actions run):
+
+- [ ] Validate `ci-smoke-puppeteer.yml` runs successfully in GitHub Actions and uploads the PDF artifact.
+
+If Docker is unavailable locally, use a Codespace with Docker enabled or run the `db` service on a host and point `DATABASE_URL` to it for final verification.

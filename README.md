@@ -52,7 +52,7 @@ To empower creators (writers, poets, educators, marketers) to effortlessly desig
 - **Server:** Scalable platform (Express/Node.js). Ready to orchestrate multiple API calls.
 - **Database:** For a balance of structure and flexibility (PostgreSQL/JSONB).
   - Production deployments can use any PostgreSQL-compatible service (Azure Database, AWS RDS, etc.)
-  - Currently, SQLite3 is used for live development. Migration to PostgreSQL/JSONB is planned and health checks will be updated accordingly.
+  - Currently, SQLite3 is used for live development (Day4/testing). Per `docs/ROADMAP.md`, a Postgres migration will be performed only after a stable v0.1 release — until then, continue using SQLite3 for local/smoke tests.
   - See `/server/index.js` for the current health check implementation and TODO note.
 - **AI:**
   - **Default:** Use Google's Gemini for both text and image generation.
