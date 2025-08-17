@@ -1,0 +1,59 @@
+name: CI — Puppeteer smoke export
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - feat/**
+  pull_request:
+
+jobs:
+  smoke-puppeteer:
+    name: Puppeteer smoke export (optional/gated)
+    runs-on: ubuntu-latest
+    permissions: read-all
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install system dependencies (Chromium)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser
+
+      - name: Set CHROME_PATH
+        run: echo "CHROME_PATH=/usr/bin/chromium-browser" >> $GITHUB_ENV
+
+      - name: Install server deps
+        working-directory: server
+        run: |
+          export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
+          npm ci
+
+      - name: Run Puppeteer smoke export
+        working-directory: server
+        run: |
+          # Fail if the smoke export fails. This job is intentionaly strict so CI reflects export regressions.
+          node ../scripts/puppeteer_smoke_export.js
+
+      - name: Upload generated PDF (if present)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: puppeteer-smoke-pdf
+          path: samples/puppeteer_smoke_test.pdf
+
+      - name: Upload server logs (if present)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: puppeteer-smoke-logs
+          path: server/logs/**
+
+  # This job is stricter: failures will make the job fail so regressions are visible in CI.
