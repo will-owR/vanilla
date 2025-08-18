@@ -7,6 +7,7 @@
     "dev:ci": "DEBUG=* ts-node ./bin/www.ts",
     "lint": "eslint . --ext .ts",
     "clean:samples": "node ./scripts/clean_samples.js",
+    "smoke:export": "./scripts/run_smoke_export.sh",
     "start": "node index.js",
     "dev": "nodemon index.js",
     "test": "vitest",

@@ -140,6 +140,11 @@ Day 4 focuses on ensuring the core loop (Prompt -> AI Processing -> Preview -> B
 - [ ] Performance benchmarks established
 - [ ] Error handling verified
 
+### Day 4 verification notes (2025-08-17)
+
+- Server tests (Vitest) ran locally in the `server/` workspace: 13 tests passed (5 files), database initialized on local SQLite, Puppeteer initialization succeeded in tests.
+- Puppeteer smoke export: after installing server deps (`cd server && npm ci`) and running `node scripts/puppeteer_smoke_export.js` with `NODE_PATH=server/node_modules`, the script wrote `samples/puppeteer_smoke_test.pdf` successfully — verifies `CHROME_PATH` usage and `puppeteer-core` integration.
+
 ### 2. Documentation Quality
 
 - [ ] Complete API documentation

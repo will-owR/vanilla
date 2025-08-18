@@ -56,3 +56,22 @@ Test coverage is tracked in `docs/ISSUES.md`.
 When sending binary data (like PDFs) from Express, use `res.end(pdf)` instead of `res.send(pdf)` to avoid file corruption. See [`docs/archive/ISSUES_recommend.md`](../docs/archive/ISSUES_recommend.md) for the full debugging history and resolution.
 
 ---
+
+## Puppeteer smoke test
+
+From within the `server/` directory you can run a small Puppeteer smoke test which uses the Chrome binary provided by the devcontainer or system `CHROME_PATH`.
+
+1. Ensure server deps are installed in `server/node_modules`:
+
+```bash
+cd server
+npm ci
+```
+
+2. Run the smoke test (this resolves `puppeteer-core` from `server/node_modules` and uses the top-level smoke script):
+
+```bash
+npm run smoke:export
+```
+
+The script will write `samples/puppeteer_smoke_test.pdf` at the workspace root `samples/` directory. If Chrome is not found, set `CHROME_PATH` to the system binary before running.

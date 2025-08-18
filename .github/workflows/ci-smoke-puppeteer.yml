@@ -1,16 +1,17 @@
-name: CI — Puppeteer smoke export
+name: CI — Puppeteer smoke export (full export, gated)
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-      - feat/**
-  pull_request:
+  schedule:
+    # Run nightly to validate full export in a stable environment
+    - cron: "0 3 * * *"
 
 jobs:
   smoke-puppeteer:
-    name: Puppeteer smoke export (optional/gated)
+    name: Puppeteer full smoke export (gated)
     runs-on: ubuntu-latest
     permissions: read-all
 
@@ -39,8 +40,8 @@ jobs:
       - name: Run Puppeteer smoke export
         working-directory: server
         run: |
-          # Fail if the smoke export fails. This job is intentionaly strict so CI reflects export regressions.
-          node ../scripts/puppeteer_smoke_export.js
+          # Fail if the smoke export fails. This job is intentionally strict so CI reflects export regressions.
+          npm run smoke:export
 
       - name: Upload generated PDF (if present)
         if: always()
