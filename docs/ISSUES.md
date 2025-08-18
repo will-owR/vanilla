@@ -213,11 +213,13 @@ export const endpoints = {
 2. **Implementation Checklist**:
 
 - [x] API Layer
+
   - [x] Create `api.js` with retry logic
   - [x] Implement `APILogger` for status tracking
   - [x] Set up endpoint wrappers
 
 - [x] Components
+
   - [x] Preview component with error boundaries
   - [x] Editor component with validation
   - [x] Export component with progress tracking
@@ -283,3 +285,108 @@ export const endpoints = {
 - Expand error handling
 
 Remember: The goal is a working prototype that demonstrates the full flow. We can enhance individual components after proving the concept works.
+
+## Repository & Devcontainer Summary
+
+- Root README: Describes project vision (AetherPress prototype), tech stack (Svelte frontend, Express/Node backend, SQLite local with planned Postgres migration), testing approach (Vitest), and the core API endpoints (POST /prompt, GET /preview, POST /override, GET /export). It documents the quick-build philosophy and the short-term actionable checklist for Day4 testing.
+- Devcontainer: `.devcontainer/` contains a Dockerfile (Node.js 22 bullseye + Chrome + Postgres client), `devcontainer.json` (docker-compose integration, lifecycle hooks for installing client/server deps, forwarded ports 5173/3000/5432, and recommended VS Code extensions), and `docker-compose.yml` (services: `app` and `db` with healthchecks and a postgres volume). The devcontainer aims to provide a consistent environment for Puppeteer/Chrome and a PostgreSQL service for integration testing.
+- ROADMAP (docs/ROADMAP.md): Phased plan from current milestones (Phase 0) through Phase 3; lists short-term (MVP) features, Phase 1 upgrades (AI integration, Puppeteer PDF upgrade, async processing), and longer-term UX/enterprise features.
+
+## Why this alignment section
+
+Developers should be able to trace any open implementation task (ISSUE) through `docs/NEXT_STEPS.md` to the `docs/MVP_CHECKLIST.md` and finally to the high-level `docs/ROADMAP.md` phase. The sections below make that mapping explicit so PRs and work plans remain consistent with project goals.
+
+## Alignment: ISSUES -> NEXT_STEPS
+
+This document (ISSUES) focuses on actionable implementation tasks and experiments. Each implementation task below references the corresponding `NEXT_STEPS` item (which itself is derived from the `MVP_CHECKLIST`). Use these mappings when creating branches or PRs.
+
+- Prompt handling (ISSUE): Implement and harden `POST /prompt` (input validation, errors, response formatting) -> maps to NEXT_STEPS "Prompt Processing" -> MVP_CHECKLIST section "Prompt Processing" -> ROADMAP Phase 0 (Core Infrastructure / Base Features).
+- AI service abstraction (ISSUE): Create AI interface + mock + integration tests -> maps to NEXT_STEPS "AI Processing Layer" -> MVP checklist "AI Processing Layer" -> ROADMAP Phase 1 (AI Integration planned).
+- Preview generation (ISSUE): Backend `GET /preview`, templates, frontend preview component -> maps to NEXT_STEPS "Content Preview" -> MVP checklist "Content Preview" -> ROADMAP Phase 0 (Base Features) and Phase 1 (enhanced templates).
+- Override system (ISSUE): `POST /override`, version tracking, frontend edit UI -> maps to NEXT_STEPS "User Override System" -> MVP checklist "User Override System" -> ROADMAP Phase 0/Phase 2 (content management improvements).
+- PDF export (ISSUE): Prototype with pdf-lib; plan Puppeteer migration -> maps to NEXT_STEPS "PDF Export" -> MVP checklist "PDF Export" -> ROADMAP Phase 1 (PDF Generation Upgrade).
+- Database persistence (ISSUE): Ensure SQLite flows & migrations; prepare Postgres migration -> maps to NEXT_STEPS "Data Persistence" -> MVP checklist "Data Persistence" -> ROADMAP Phase 1 (Postgres migration).
+
+## Quick actionable adjustments
+
+1. For every open issue that implements a NEXT_STEPS checkbox, add this sentence to the PR: "Implements NEXT_STEPS: <section> — MVP_CHECKLIST: <section> — ROADMAP: <phase>".
+2. Create labels: `next_steps`, `mvp`, `roadmap-phase-0`, `roadmap-phase-1` to simplify triage.
+3. Add a short `ISSUE_TEMPLATE` that requires mapping to NEXT_STEPS and MVP_CHECKLIST entries before the issue can be moved to 'in progress'.
+
+## Next steps for automation
+
+- I can add an `ISSUE_TEMPLATE` and a small `docs/TRACEABILITY.md` that lists each NEXT_STEPS line with a one-line mapping to the MVP and ROADMAP. Say the word and I'll implement those files and (optionally) create GitHub labels.
+
+## Policy: Planning vs Implementation Flow
+
+- Planning authoritative flow: ROADMAP → MVP_CHECKLIST → NEXT_STEPS → ISSUES.
+- Implementation/status flow (when work is executed and checked off): ISSUES → NEXT_STEPS → MVP_CHECKLIST → ROADMAP.
+- Rule: When closing an ISSUE, include in the PR body: `Closes #<issue>` and: `NEXT_STEPS: <section> — MVP_CHECKLIST: <section> — ROADMAP: <phase>`; update upstream docs if the implementation changes scope or phase.
+
+## ISSUES (Regenerated authoritative actionables for AetherPress v0.1)
+
+Note: This section is the canonical, timeboxed set of actionables for polishing and delivering AetherPress v0.1. Treat these items as the flashpoint for application status and use the PR traceability line when closing work: `NEXT_STEPS: <section> — MVP_CHECKLIST: <section> — ROADMAP: <phase>`.
+
+Timebox & goal
+
+- Goal: Ship a polished, demo-ready AetherPress v0.1 (stable preview + reliable PDF export + basic override + persistence + test coverage for core flows).
+- Timebox: 2 weeks (14 calendar days) split into three milestone weeks: discovery/stabilize (days 1–3), implement core gaps & tests (days 4–10), polish, CI/devcontainer verification, and release prep (days 11–14).
+
+Priority actionables (order matters)
+
+1. Preview endpoint and frontend integration (Critical, 2–3 days)
+
+   - Implement `GET /preview` in server using existing template engine or previewTemplate example.
+   - Ensure frontend Preview component uses the endpoint and renders reliably for typical content.
+   - Acceptance: Preview matches expected HTML output and is stable under test data; add an integration test that fetches `/preview` and validates returned HTML contains title + body.
+
+2. PDF export via Puppeteer in devcontainer (Critical, 3–4 days)
+
+   - Ensure devcontainer has Chrome available (CHROME_PATH) and Puppeteer configured to `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true` in devcontainer.json.
+   - Implement or enable `GET /export` using Puppeteer (headless) that consumes preview HTML and returns PDF; fall back to pdf-lib if Puppeteer unavailable but mark degraded mode.
+   - Acceptance: Smoke export produces a valid PDF for representative content; add an automated smoke test that runs export and asserts non-empty PDF binary.
+
+3. Override persistence and version tracking (Important, 2–3 days)
+
+   - Implement `POST /override` to persist user edits in SQLite with simple version tracking (incremental version or timestamped entries).
+   - Acceptance: Overrides are saved and retrievable; preview and export reflect persisted edits.
+
+4. AI service adapter + mock → provider switch (Medium, 2–4 days)
+
+   - Add a pluggable AI adapter interface; ensure a working mock implementation remains for offline dev and tests. Provide a minimal integration to one real provider only if keys available (opt-in).
+   - Acceptance: System can switch between mock and real provider via config; tests use mock.
+
+5. DB migrations + devcontainer Postgres smoke (Optional but recommended, 2–3 days)
+
+   - Provide migration scripts and a verified path to run Postgres in devcontainer/docker-compose for integration tests; ensure schema parity with SQLite for dev.
+   - Acceptance: Migrations run without errors; CI/devcontainer healthcheck passes for DB readiness.
+
+6. Tests and CI improvements (Cross-cutting, ongoing)
+   - Add integration tests for Prompt → Preview → Override → Export flow. Ensure Vitest runs these in CI where possible (or mark as 'smoke' requiring Docker/Chromium).
+   - Acceptance: Unit tests green; at least one integration smoke test passes locally or in CI for core flow.
+
+Operational rules (enforcement)
+
+- PR traceability line is required for all PRs that change functionality: `NEXT_STEPS: <section> — MVP_CHECKLIST: <section> — ROADMAP: <phase>`.
+- When closing an ISSUE, ensure the relevant NEXT_STEPS checkbox, MVP_CHECKLIST item, and ROADMAP note (if scope changed) are updated.
+- Use labels: `v0.1-priority`, `next_steps`, `mvp`, `roadmap-phase-0`.
+
+Owners & quick assignments (suggested)
+
+- Preview & Export: backend lead + frontend lead pairing (one dev each) — pair for integration tests.
+- Override persistence: backend dev with DB support from shared/utils.
+- AI adapter: backend dev (can be lower priority if time-constrained).
+- Tests & CI: whoever closes the export/preview tasks ensures tests and CI update.
+
+Deliverables by day 14
+
+- Stable Preview endpoint + frontend preview component with tests
+- Reliable PDF export using Puppeteer in devcontainer (or documented degraded mode)
+- Override persistence with simple versioning and tests
+- Integration tests for core flow (Prompt → Preview → Override → Export)
+- Updated docs: README quick-start, devcontainer notes, and traceability lines in PRs/ISSUES for finished work
+
+If you want, I will now:
+
+- (A) Produce `docs/TRACEABILITY.md` and an `ISSUE_TEMPLATE.md` to enforce the PR/body discipline, and add a small `docs/RELEASE_PLAN_v0.1.md` with day-by-day tasks, or
+- (B) Immediately update `docs/NEXT_STEPS.md` and `docs/MVP_CHECKLIST.md` to mark v0.1 priorities and timeslices (I can do both). Which do you want first?

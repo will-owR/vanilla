@@ -203,3 +203,55 @@
 - Security checked
 - Browser compatibility tested
 - Mobile responsiveness confirmed
+
+## Alignment: MVP -> ROADMAP
+
+This section clarifies how MVP groups map to the higher-level ROADMAP phases so acceptance criteria remain consistent across planning and execution.
+
+- Core Infrastructure (Express, Svelte, DB) -> ROADMAP Phase 0 (Current Milestones / Core Infrastructure).
+- Prompt / Preview / Override / Export -> Phase 0 for prototype features; Phase 1 for production-ready upgrades (AI integration, Puppeteer PDF migration, async processing).
+- Testing, QA, and Documentation -> Cross-cutting concerns spanning Phase 0 & Phase 1.
+
+Quick rules:
+
+1. When an MVP item is completed, update the ROADMAP status if the work changes the planned phase (e.g., a prototype becomes production-ready).
+2. Use PR descriptions to reference: `MVP_CHECKLIST: <section> — ROADMAP: <phase>` to make traceability explicit.
+3. For backlog grooming, surface unchecked MVP items and map them to Phase 0/1 planning slots.
+
+## Policy: Planning vs Implementation Flow
+
+- Planning authoritative flow: ROADMAP → MVP_CHECKLIST → NEXT_STEPS → ISSUES.
+- Implementation/status flow (when work is executed and checked off): ISSUES → NEXT_STEPS → MVP_CHECKLIST → ROADMAP.
+- Rule: When marking MVP checklist items complete, reference the closing ISSUE and NEXT_STEPS entry in the PR description to keep traceability clear.
+
+## v0.1 Priority (14-day timebox)
+
+This section highlights the MVP checklist items that are in-scope for v0.1 and their timeboxes. Align PRs and issues to these items when working on v0.1.
+
+Priority items
+
+- Content Preview (v0.1: Days 1–3) — Backend `GET /preview` endpoint, Frontend preview component, integration test.
+- PDF Export (v0.1: Days 3–6) — Backend `GET /export` using Puppeteer (devcontainer); Frontend export trigger and progress.
+- Override Persistence (v0.1: Days 5–8) — `POST /override` saves edits with simple versioning; preview/export reflect saved edits.
+- AI Adapter & Mock (v0.1: Days 6–10) — Service abstraction and mock; opt-in real provider support.
+- DB migrations & Devcontainer Postgres (v0.1: Days 8–12) — migration scripts and devcontainer verification (optional but recommended).
+- Tests & CI (ongoing, finalize Days 10–14) — Integration tests for core flow; smoke tests must pass prior to release.
+
+Acceptance rules
+
+- An item is considered Done when:
+  1. The implementing ISSUE is closed and PR includes the traceability line: `NEXT_STEPS: <section> — MVP_CHECKLIST: <section> — ROADMAP: Phase 0`.
+  2. Relevant NEXT_STEPS checkboxes are updated.
+  3. Unit tests and at least one integration/smoke test for the flow are added and pass locally or in CI.
+
+Priority labels & branch naming
+
+- Labels: `v0.1-priority`, `mvp`, `next_steps`, `roadmap-phase-0`.
+- Branches: `v0.1/<short-task-name>` (e.g., `v0.1/preview-endpoint`).
+
+Release readiness
+
+- Before merging the final v0.1 branch, ensure:
+  - Preview and Export flows pass smoke tests in devcontainer.
+  - Override persistence works and is covered by tests.
+  - Documentation updated (README + devcontainer notes) with quick start and any known degraded modes.

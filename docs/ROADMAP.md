@@ -308,3 +308,9 @@ CI (requires GitHub Actions run):
 - [ ] Validate `ci-smoke-puppeteer.yml` runs successfully in GitHub Actions and uploads the PDF artifact.
 
 If Docker is unavailable locally, use a Codespace with Docker enabled or run the `db` service on a host and point `DATABASE_URL` to it for final verification.
+
+## Policy: Planning vs Implementation Flow
+
+- Planning authoritative flow: ROADMAP → MVP_CHECKLIST → NEXT_STEPS → ISSUES.
+- Implementation/status flow (when work is executed and checked off): ISSUES → NEXT_STEPS → MVP_CHECKLIST → ROADMAP.
+- Rule: Planning and priority decisions come from the ROADMAP. When an ISSUE is completed, update the NEXT_STEPS checkbox and the MVP_CHECKLIST status; if the completed work changes roadmap phase or scope, update `docs/ROADMAP.md` with a short note and link to the implementing PR.
