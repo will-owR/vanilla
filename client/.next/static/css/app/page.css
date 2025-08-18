@@ -1,0 +1,526 @@
+/*!************************************************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[5].use[2]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[13].oneOf[5].use[3]!./src/app/components/CustomizationSelectors.module.css ***!
+  \************************************************************************************************************************************************************************************************************************************************************************************************/
+.CustomizationSelectors_theme-selector__fXO4h,
+.CustomizationSelectors_font-selector__cQi9e,
+.CustomizationSelectors_background-selector__C_jJn {
+  margin-bottom: 1.5rem;
+}
+
+.CustomizationSelectors_theme-options__Rn81Z,
+.CustomizationSelectors_font-options__eDRjh,
+.CustomizationSelectors_background-options__yoOXo {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-gap: 0.5rem;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .CustomizationSelectors_theme-options__Rn81Z,
+  .CustomizationSelectors_font-options__eDRjh,
+  .CustomizationSelectors_background-options__yoOXo {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.CustomizationSelectors_customButton__sXwhM {
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.CustomizationSelectors_customButton__sXwhM:focus-visible {
+  outline: 2px solid #0077ff;
+  outline-offset: 2px;
+}
+
+button.CustomizationSelectors_selected__reN2m {
+  border-color: #0077ff;
+  box-shadow: 0 0 0 2px #0077ff;
+}
+
+/* Loading states */
+.CustomizationSelectors_loading__B6Q1R {
+  opacity: 0.7;
+  pointer-events: none;
+  position: relative;
+}
+
+.CustomizationSelectors_loading__B6Q1R::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px;
+  border: 2px solid #ccc;
+  border-top-color: #0077ff;
+  border-radius: 50%;
+  animation: CustomizationSelectors_spin__yxV5P 1s linear infinite;
+}
+
+@keyframes CustomizationSelectors_spin__yxV5P {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/*!****************************************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[5].use[2]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[13].oneOf[5].use[3]!./src/app/components/views/YearView.module.css ***!
+  \****************************************************************************************************************************************************************************************************************************************************************************************/
+.YearView_yearView__3DHdz {
+  padding: 1rem;
+  background: var(--calendar-bg);
+  color: var(--calendar-text);
+}
+
+.YearView_yearGrid__Z_DpT {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-gap: 1.5rem;
+  gap: 1.5rem;
+}
+
+.YearView_month__MzUlz {
+  background: var(--calendar-surface);
+  border: 1px solid var(--calendar-border);
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.YearView_monthTitle__vQ8qo {
+  margin: 0 0 0.5rem;
+  color: var(--calendar-primary);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.YearView_weekdays__SHVdG {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 0.25rem;
+}
+
+.YearView_weekday__PwEi7 {
+  font-size: 0.7rem;
+  text-align: center;
+  color: var(--calendar-accent);
+  font-weight: 500;
+}
+
+.YearView_days__2T_Tp {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-gap: 1px;
+  gap: 1px;
+}
+
+.YearView_day__HMhfF {
+  aspect-ratio: 1;
+  padding: 2px;
+  font-size: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+  border-radius: 4px;
+}
+
+.YearView_day__HMhfF:hover {
+  background: var(--calendar-accent);
+  color: white;
+}
+
+.YearView_day__HMhfF.YearView_selected__Jeql0 {
+  background-color: var(--calendar-accent);
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 0 0 2px var(--calendar-primary);
+  z-index: 1;
+  position: relative;
+}
+
+.YearView_day__HMhfF.YearView_selected__Jeql0:hover {
+  background-color: var(--calendar-primary);
+}
+
+.YearView_dayNumber__7ZC_G {
+  font-weight: 500;
+}
+
+.YearView_today__Bjd3s {
+  background: var(--calendar-primary);
+  color: white;
+}
+
+.YearView_selected__Jeql0 {
+  background: var(--calendar-accent) !important;
+  color: white !important;
+  transform: scale(1.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  z-index: 1;
+}
+
+.YearView_selected__Jeql0:hover {
+  transform: scale(1.1);
+}
+
+.YearView_otherMonth__VIwmv {
+  opacity: 0.3;
+}
+
+.YearView_indicators__qbmaO {
+  display: flex;
+  gap: 2px;
+  margin-top: 1px;
+}
+
+.YearView_eventIndicator__V2_XL {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--calendar-accent);
+}
+
+.YearView_holidayIndicator__IArJR {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--calendar-primary);
+}
+
+.YearView_hasEvents__yqX1n .YearView_dayNumber__7ZC_G,
+.YearView_hasHolidays__uN_Pp .YearView_dayNumber__7ZC_G {
+  font-weight: bold;
+}
+
+/*!*********************************************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[5].use[2]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[13].oneOf[5].use[3]!./src/app/components/views/ThemeSwitcher.module.css ***!
+  \*********************************************************************************************************************************************************************************************************************************************************************************************/
+.ThemeSwitcher_themeSwitcher__gQnRU {
+  padding: 1rem;
+  border-radius: 8px;
+  background: var(--calendar-surface);
+  margin-bottom: 1rem;
+}
+
+.ThemeSwitcher_label__c_ZOy {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: var(--calendar-primary);
+}
+
+.ThemeSwitcher_themeButtons__f_mgK {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ThemeSwitcher_themeButton__cwiV0 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid var(--calendar-border);
+  border-radius: 4px;
+  background: var(--calendar-surface);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ThemeSwitcher_themeButton__cwiV0:hover {
+  border-color: var(--calendar-accent);
+}
+
+.ThemeSwitcher_themeButton__cwiV0.ThemeSwitcher_active__d7_cS {
+  border-color: var(--calendar-primary);
+  background: var(--calendar-primary);
+  color: white;
+}
+
+.ThemeSwitcher_colorPreview__HpgrS {
+  display: flex;
+  gap: 2px;
+}
+
+.ThemeSwitcher_primary__DlhPT,
+.ThemeSwitcher_accent__0bv4K {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.ThemeSwitcher_primary__DlhPT {
+  background: var(--theme-primary);
+}
+
+.ThemeSwitcher_accent__0bv4K {
+  background: var(--theme-accent);
+}
+
+.ThemeSwitcher_themeName__7byGr {
+  font-size: 0.9rem;
+}
+
+/*!*********************************************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[5].use[2]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[13].oneOf[5].use[3]!./src/app/components/CalendarCreatorPlus.module.css ***!
+  \*********************************************************************************************************************************************************************************************************************************************************************************************/
+.CalendarCreatorPlus_calendar-plus-root__STc1i {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f8f9fa;
+}
+
+.CalendarCreatorPlus_calendar-plus-topbar__yyJHk {
+  height: 56px;
+  background: #22223b;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 2rem;
+  font-size: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.CalendarCreatorPlus_calendar-plus-main__i1uT5 {
+  display: flex;
+  flex: 1 1;
+  min-height: 0;
+}
+
+.CalendarCreatorPlus_calendar-plus-sidebar__UL0Qv {
+  width: 240px;
+  background: #4a4e69;
+  color: #fff;
+  padding: 1.5rem 1rem;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.CalendarCreatorPlus_calendar-plus-area__2JSdQ {
+  flex: 1 1;
+  background: #fff;
+  padding: 2rem;
+  overflow-y: auto;
+  border-radius: 0 0.5rem 0.5rem 0;
+  box-shadow: 0 0 0 1px #e0e0e0 inset;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+@media (max-width: 900px) {
+  .CalendarCreatorPlus_calendar-plus-sidebar__UL0Qv {
+    width: 64px;
+    padding: 1rem 0.5rem;
+  }
+  .CalendarCreatorPlus_calendar-plus-area__2JSdQ {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .CalendarCreatorPlus_calendar-plus-root__STc1i {
+    height: auto;
+  }
+  .CalendarCreatorPlus_calendar-plus-main__i1uT5 {
+    flex-direction: column;
+  }
+  .CalendarCreatorPlus_calendar-plus-sidebar__UL0Qv {
+    width: 100%;
+    flex-direction: row;
+    gap: 0.5rem;
+    box-shadow: none;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  .CalendarCreatorPlus_calendar-plus-area__2JSdQ {
+    border-radius: 0;
+  }
+}
+
+/*!*******************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[5].use[2]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[13].oneOf[5].use[3]!./src/app/page.module.css ***!
+  \*******************************************************************************************************************************************************************************************************************************************************************/
+.page_page__ZU32B {
+  --gray-rgb: 0, 0, 0;
+  --gray-alpha-200: rgba(var(--gray-rgb), 0.08);
+  --gray-alpha-100: rgba(var(--gray-rgb), 0.05);
+
+  --button-primary-hover: #383838;
+  --button-secondary-hover: #f2f2f2;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  font-family: var(--font-geist-sans);
+}
+
+@media (prefers-color-scheme: dark) {
+  .page_page__ZU32B {
+    --gray-rgb: 255, 255, 255;
+    --gray-alpha-200: rgba(var(--gray-rgb), 0.145);
+    --gray-alpha-100: rgba(var(--gray-rgb), 0.06);
+
+    --button-primary-hover: #ccc;
+    --button-secondary-hover: #1a1a1a;
+  }
+}
+
+.page_main__GlU4n {
+  flex: 1 1;
+  width: 100%;
+  display: flex;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  grid-row-start: 2;
+}
+
+.page_main__GlU4n ol {
+  font-family: var(--font-geist-mono);
+  padding-left: 0;
+  margin: 0;
+  font-size: 14px;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+  list-style-position: inside;
+}
+
+.page_main__GlU4n li:not(:last-of-type) {
+  margin-bottom: 8px;
+}
+
+.page_main__GlU4n code {
+  font-family: inherit;
+  background: var(--gray-alpha-100);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.page_ctas__g5wGe {
+  display: flex;
+  gap: 16px;
+}
+
+.page_ctas__g5wGe a {
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  border-radius: 128px;
+  height: 48px;
+  padding: 0 20px;
+  border: none;
+  border: 1px solid transparent;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+a.page_primary__V8M9Y {
+  background: var(--foreground);
+  color: var(--background);
+  gap: 8px;
+}
+
+a.page_secondary__lm_PT {
+  border-color: var(--gray-alpha-200);
+  min-width: 180px;
+}
+
+.page_footer__sHKi3 {
+  grid-row-start: 3;
+  display: flex;
+  gap: 24px;
+}
+
+.page_footer__sHKi3 a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page_footer__sHKi3 img {
+  flex-shrink: 0;
+}
+
+/* Enable hover only on non-touch devices */
+@media (hover: hover) and (pointer: fine) {
+  a.page_primary__V8M9Y:hover {
+    background: var(--button-primary-hover);
+    border-color: transparent;
+  }
+
+  a.page_secondary__lm_PT:hover {
+    background: var(--button-secondary-hover);
+    border-color: transparent;
+  }
+
+  .page_footer__sHKi3 a:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+}
+
+@media (max-width: 600px) {
+  .page_page__ZU32B {
+    padding: 32px;
+    padding-bottom: 80px;
+  }
+
+  .page_main__GlU4n {
+    align-items: center;
+  }
+
+  .page_main__GlU4n ol {
+    text-align: center;
+  }
+
+  .page_ctas__g5wGe {
+    flex-direction: column;
+  }
+
+  .page_ctas__g5wGe a {
+    font-size: 14px;
+    height: 40px;
+    padding: 0 16px;
+  }
+
+  a.page_secondary__lm_PT {
+    min-width: auto;
+  }
+
+  .page_footer__sHKi3 {
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .page_logo__7fc9l {
+    filter: invert();
+  }
+}
+
