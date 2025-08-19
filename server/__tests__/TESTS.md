@@ -78,6 +78,33 @@ CI note: The CI job must install a system Chrome/Chromium binary or set `CHROME_
 
 ---
 
+## Export text verification test (`export_text.test.mjs`)
+
+Purpose: End-to-end verification of the `/api/export/book` endpoint that asserts:
+
+- The response is a valid PDF (magic bytes `%PDF-`).
+- The extracted PDF text contains expected poem titles (uses `server/scripts/extract-pdf-text.js`).
+
+What it does:
+
+- Starts the app programmatically (no network listen), ensuring DB and Puppeteer are initialized.
+- Posts to `/api/export/book` and captures the binary response.
+- Writes the buffer to a temp file and calls `server/scripts/extract-pdf-text.js` to extract text for assertions.
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/export_text.test.mjs --run
+```
+
+Notes:
+
+- This test uses a subprocess to run the extraction script to avoid importing `pdf-parse` directly inside the test process (some versions run debug code on import).
+- For CI, see the `verify-export` script in `server/package.json` which runs the smoke export and extraction.
+
+---
+
 ## Export endpoint script (`test-export-endpoint.js`)
 
 Purpose: Manual script to POST to `/export` and write returned PDF to `samples/` for debugging.
