@@ -482,6 +482,9 @@ app.use((err, req, res, next) => {
 
 const crud = require("./crud");
 
+// Ebook renderer helper
+const { renderBookToPDF } = require("./ebook");
+
 // --- PROMPT PROCESSING ENDPOINT ---
 const { MockAIService } = require("./aiService");
 const aiService = new MockAIService();
@@ -1579,6 +1582,50 @@ app.get("/api/pdf_exports/:id", (req, res, next) => {
       next(err);
     }
   })();
+});
+
+// --- MULTI-POEM EBOOK EXPORT FOR SMOKE TESTS ---
+app.post("/api/export/book", async (req, res) => {
+  // Accept body with { poems: [...] } or load sample file if empty
+  let poems = null;
+  try {
+    poems = req.body && req.body.poems ? req.body.poems : null;
+  } catch (e) {
+    poems = null;
+  }
+
+  if (!poems) {
+    // Try loading sample dataset from server/samples/poems.json
+    try {
+      const samplePath = path.resolve(__dirname, "samples", "poems.json");
+      const raw = fs.readFileSync(samplePath, "utf8");
+      const parsed = JSON.parse(raw);
+      // Support both { poems: [...] } and direct array
+      poems = parsed && parsed.poems ? parsed.poems : parsed;
+    } catch (err) {
+      console.error("Failed to load sample poems:", err.message);
+      return res
+        .status(400)
+        .json({ error: "No poems provided and sample not available" });
+    }
+  }
+
+  if (!serviceState.puppeteer.ready || !browserInstance) {
+    return res.status(503).json({ error: "PDF generation service not ready" });
+  }
+
+  try {
+    const pdf = await renderBookToPDF(poems, browserInstance);
+    res.setHeader("Content-Disposition", "inline; filename=ebook.pdf");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Length", pdf.length);
+    res.end(pdf);
+  } catch (err) {
+    console.error("Ebook export error:", err);
+    res
+      .status(500)
+      .json({ error: "Failed to generate ebook", details: err.message });
+  }
 });
 
 app.put("/api/pdf_exports/:id", (req, res, next) => {
