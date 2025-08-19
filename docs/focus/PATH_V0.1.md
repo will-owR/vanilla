@@ -78,6 +78,8 @@ Production of an ebook with:
    - [ ] Implement background image handling
    - [ ] Add page break logic
 
+     (Note: foundation tasks implemented in `server/ebook.js` and `server/samples/images/`.)
+
 2. **Preview Component**
    - [ ] Add preview route
    - [ ] Implement preview component
@@ -92,6 +94,8 @@ Production of an ebook with:
    - [ ] Add error handling
    - [ ] Validate output quality
 
+     (Note: export route and Puppeteer workflow implemented; smoke tests and `server/scripts/smoke-export.sh` added.)
+
 2. **Frontend Integration**
    - [ ] Add export trigger
    - [ ] Implement download handling
@@ -105,7 +109,10 @@ Production of an ebook with:
    - [ ] Test with various poems
    - [ ] Validate page layouts
    - [ ] Check image handling
-   - [ ] Verify PDF quality
+
+     - [ ] Verify PDF quality
+
+     (Note: basic smoke test validates a non-empty PDF is produced; further PDF quality checks (fonts, DPI) are TODO.)
 
 2. **User Experience**
    - [ ] Add progress indicators
@@ -122,9 +129,26 @@ Production of an ebook with:
    - [ ] Include sample poems
 
 2. **Technical Documentation**
+
    - [ ] Update API documentation
    - [ ] Document template system
    - [ ] Add setup instructions
+
+     (Note: `.devcontainer/README.md` added and API route `/api/export/book` documented.)
+
+   ***
+
+   ## Implemented summary (added during break)
+
+   - `server/ebook.js`: HTML template generator for A4 eBooks (supports per-poem background SVGs).
+   - `server/samples/poems.json`: canonical sample poems used by smoke tests.
+   - `server/samples/images/*.svg`: decorative SVG backgrounds.
+   - `/api/export/book`: POST endpoint that returns a generated A4 PDF using the running Puppeteer instance.
+   - `server/scripts/smoke-export.sh`: script that POSTs the sample poems to `/api/export/book` and saves the response to a file (default: `/workspaces/vanilla/samples/ebook.pdf`).
+   - `server/__tests__/export.test.js`: Vitest integration test that posts to `/api/export/book` and asserts a PDF buffer was returned.
+   - `.devcontainer/README.md`: devcontainer summary and assessments added.
+
+   TODO (explicit): add a small check to `server/scripts/smoke-export.sh` that validates the saved file is a PDF by checking the magic bytes (PDF files start with `%PDF-`) before declaring success. Currently the script declares success based on HTTP status only.
 
 ## Implementation Strategy
 
