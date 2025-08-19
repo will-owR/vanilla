@@ -3,7 +3,8 @@
 set -euo pipefail
 
 HOST=${HOST:-http://localhost:3000}
-OUT=${OUT:-/tmp/ebook.pdf}
+#OUT=${OUT:-/tmp/ebook.pdf}
+OUT=${OUT:-/workspaces/vanilla/samples/ebook.pdf}
 JSON_FILE="$(pwd)/server/samples/poems.json"
 
 if [ ! -f "$JSON_FILE" ]; then
