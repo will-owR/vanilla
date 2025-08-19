@@ -1,4 +1,4 @@
-Demo: Produce a Summer Poems eBook
+Demo: Produce a Summer Poems eBook, ./scripts/archive/DEMO_README.md
 
 Goal
 
@@ -17,7 +17,7 @@ npm install
 
 ```bash
 # from repository root
-node scripts/demo_export.js
+node scripts/archive/demo_export.js
 ```
 
 3. Results:
