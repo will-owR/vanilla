@@ -14,6 +14,13 @@ See the [project root README](../README.md) for full architecture, development p
 
 ## Development
 
+The `scripts/` directory contains utility scripts for development, testing, and health checks:
+
+- `health-checks.js`: Server-side health monitoring (Puppeteer, preview endpoint)
+- `clean_samples.js`: Maintenance of sample outputs
+- `run_export_test_inproc.js`: In-process export testing
+- `run_smoke_export.sh`: Smoke tests for export functionality
+
 Start the development server with auto-reload:
 
 ```bash

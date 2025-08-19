@@ -7,9 +7,10 @@
 const fs = require("fs");
 const path = require("path");
 
-const poemsPath = path.resolve(__dirname, "../samples/poems.json");
-const outPdf = path.resolve(__dirname, "../samples/summer_demo.pdf");
-const outHtml = path.resolve(__dirname, "../samples/summer_demo.html");
+// demo_export.js path fix
+const poemsPath = path.resolve(__dirname, "../../samples/poems.json");
+const outPdf = path.resolve(__dirname, "../../samples/summer_demo.pdf");
+const outHtml = path.resolve(__dirname, "../../samples/summer_demo.html");
 
 async function main() {
   if (!fs.existsSync(poemsPath)) {

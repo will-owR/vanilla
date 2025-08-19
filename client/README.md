@@ -1,6 +1,12 @@
-# Svelte + Vite
+# AetherPress Client
 
-This template should help get you started developing with Svelte in Vite.
+Frontend SPA for AetherPress content generation and management.
+
+## Development Scripts
+
+The `scripts/` directory contains utility scripts for development and testing:
+
+- `health-check.sh`: Frontend availability and response monitoring
 
 ## Recommended IDE Setup
 
@@ -42,6 +48,6 @@ If you have state that's important to retain within a component, consider creati
 ```js
 // store.js
 // An extremely simple external store
-import { writable } from 'svelte/store'
-export default writable(0)
+import { writable } from "svelte/store";
+export default writable(0);
 ```
