@@ -69,6 +69,17 @@ if (require.main === module) {
 module.exports = app;
 // Also expose startServer so tests can programmatically initialize DB/Puppeteer
 module.exports.startServer = startServer;
+// Export a wrapper for previewTemplate so the module can be imported before
+// the previewTemplate binding is created during module evaluation in tests.
+module.exports.previewTemplate = (content) => {
+  // previewTemplate will be defined later in this module; evaluate at call time
+  return typeof previewTemplate === "function" ? previewTemplate(content) : "";
+};
+// Expose browserInstance for graceful shutdown in tests/scripts (may be undefined)
+Object.defineProperty(module.exports, "browser", {
+  enumerable: true,
+  get: () => browserInstance,
+});
 
 // Graceful startup configuration
 const STARTUP_GRACE_PERIOD_MS = 30000; // 30 seconds grace period
@@ -545,12 +556,20 @@ app.get("/preview", (req, res) => {
   }
 
   try {
-    const contentObj = JSON.parse(content);
+    let contentObj = JSON.parse(content);
+
+    // Support legacy envelope: { content: { title, body } }
+    if (contentObj && typeof contentObj === "object" && contentObj.content) {
+      contentObj = contentObj.content;
+    }
 
     // Validate content structure
-    if (!contentObj.title || !contentObj.body) {
+    if (!contentObj || !contentObj.title || !contentObj.body) {
       return sendValidationError(res, "Content must include title and body", {
-        provided: Object.keys(contentObj),
+        provided:
+          contentObj && typeof contentObj === "object"
+            ? Object.keys(contentObj)
+            : typeof contentObj,
       });
     }
 

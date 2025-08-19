@@ -67,7 +67,6 @@
 1. **Prompt Handling** (Pending)
    Goal: Accept user input for AI processing and route it to the backend.
    Acceptance Criteria:
-
    - User can submit a prompt via the frontend.
    - Backend receives and processes the prompt.
    - System provides feedback on submission success or failure.
@@ -75,7 +74,6 @@
 2. **AI Processing** (Pending)
    Goal: Simulate AI content generation using a service abstraction layer.
    Acceptance Criteria:
-
    - Backend generates content using hardcoded logic or a mock AI service.
    - Service abstraction layer is in place for future real AI integration.
    - Errors in AI processing are handled gracefully.
@@ -83,7 +81,6 @@
 3. **Preview Generation** (Pending)
    Goal: Provide a basic HTML preview of generated content.
    Acceptance Criteria:
-
    - User can preview generated content in the frontend.
    - Preview updates in real time as content changes.
    - Preview matches the structure of the final export.
@@ -91,7 +88,6 @@
 4. **Basic Override** (Pending)
    Goal: Allow minimal user edits to generated content before export.
    Acceptance Criteria:
-
    - User can edit content in the frontend.
    - Edits are reflected in the preview.
    - Edits are included in the exported PDF.
@@ -99,7 +95,6 @@
 5. **PDF Export (Prototype)** (Pending)
    Goal: Generate PDFs using pdf-lib for prototype purposes.
    Acceptance Criteria:
-
    - User can export content as a PDF.
    - Exported PDF matches the preview layout.
    - PDF generation is reliable for basic content.
@@ -118,7 +113,6 @@
 1. **AI Integration** (Planned)
    Goal: Integrate real AI services for text and image generation.
    Acceptance Criteria:
-
    - System can connect to at least one external AI provider (e.g., OpenAI, Gemini).
    - User can select between simulated and real AI processing.
    - AI-generated content is distinguishable from simulated content.
@@ -127,7 +121,6 @@
 2. **PDF Generation Upgrade** (Planned)
    Goal: Migrate from pdf-lib to Puppeteer for advanced PDF export.
    Acceptance Criteria:
-
    - PDFs support advanced HTML/CSS layouts and images.
    - Exported PDFs match the on-screen preview.
    - Generation time is reasonable for complex documents.
@@ -136,7 +129,6 @@
 3. **Performance Optimization** (Planned)
    Goal: Implement asynchronous processing and improve system responsiveness.
    Acceptance Criteria:
-
    - Backend supports async request handling for long-running tasks.
    - UI remains responsive during heavy processing.
    - System can queue and process multiple requests efficiently.
@@ -145,7 +137,6 @@
 4. **UI/UX Enhancement** (Planned)
    Goal: Improve the frontend for a more interactive and accessible user experience.
    Acceptance Criteria:
-
    - UI updates in real time as data changes.
    - Accessibility standards (WCAG 2.1) are met.
    - User feedback is collected and incorporated into design.
@@ -154,7 +145,6 @@
 5. **User Authentication & Session Management** (Planned)
    Goal: Add secure user authentication and session management.
    Acceptance Criteria:
-
    - Users can register, log in, and log out securely.
    - Sessions persist across browser reloads.
    - Role-based access control is implemented.
@@ -163,7 +153,6 @@
 6. **Database Migration to PostgreSQL** (Planned)
    Goal: Transition from SQLite to PostgreSQL for production scalability and advanced features.
    Acceptance Criteria:
-
    - PostgreSQL is set up and integrated as the primary database.
    - Data is migrated from SQLite to PostgreSQL with integrity.
    - New features leverage PostgreSQL capabilities.
@@ -180,7 +169,6 @@
 ### Phase 2: User Experience & Content Management
 
 1. **Enhanced UI/UX** (Planned)
-
    - Goal: Deliver a highly interactive, accessible, and visually appealing user interface.
    - Acceptance Criteria:
      - UI is responsive across all major devices and browsers.
@@ -189,7 +177,6 @@
      - Visual design is consistent and modern.
 
 2. **User Management System** (Planned)
-
    - Goal: Provide robust user authentication, authorization, and profile management.
    - Acceptance Criteria:
      - Users can register, log in, and manage their profiles.
@@ -198,7 +185,6 @@
      - Admins can manage users and permissions.
 
 3. **Content Management & Organization** (Planned)
-
    - Goal: Enable users to organize, version, and manage their content efficiently.
    - Acceptance Criteria:
      - Users can create, edit, and delete projects or documents.
@@ -207,7 +193,6 @@
      - Bulk operations (delete, move, export) are supported.
 
 4. **Template & Asset Management** (Planned)
-
    - Goal: Allow users to manage templates and assets for content and export.
    - Acceptance Criteria:
      - Users can create, edit, and select templates for content and PDF export.
@@ -216,7 +201,6 @@
      - System validates and previews templates before use.
 
 5. **Notifications & Feedback** (Planned)
-
    - Goal: Keep users informed of important events and provide actionable feedback.
    - Acceptance Criteria:
      - Users receive notifications for key events (export complete, errors, etc.).
@@ -227,7 +211,6 @@
 ### Phase 3: Advanced Features & Future Considerations
 
 1. **Workflow Automation** (Planned)
-
    - Goal: Allow users to automate and customize content generation and export workflows.
    - Acceptance Criteria:
      - Users can define multi-step workflows (e.g., generate, review, export).
@@ -236,7 +219,6 @@
      - Error handling and recovery are robust.
 
 2. **Integration Framework** (Planned)
-
    - Goal: Enable extensibility and integration with third-party services and tools.
    - Acceptance Criteria:
      - REST API is documented and supports all major operations.
@@ -245,7 +227,6 @@
      - Security and rate limiting are enforced.
 
 3. **Analytics & Monitoring** (Planned)
-
    - Goal: Provide actionable insights into usage, performance, and user behavior.
    - Acceptance Criteria:
      - Real-time dashboards for key metrics (usage, errors, performance).
@@ -254,7 +235,6 @@
      - Data export for further analysis.
 
 4. **Enterprise & Community Features** (Planned)
-
    - Goal: Support advanced deployment, collaboration, and extensibility needs.
    - Acceptance Criteria:
      - Multi-tenant and enterprise authentication support.

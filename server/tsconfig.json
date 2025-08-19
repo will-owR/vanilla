@@ -9,8 +9,7 @@
     "esModuleInterop": true,
     "strict": false,
     "skipLibCheck": true,
-    "types": ["node", "vitest"],
-    "typeRoots": ["./node_modules/@types"]
+    "types": ["node", "vitest"]
   },
   "include": ["./**/*.js"],
   "exclude": ["node_modules", "dist"]

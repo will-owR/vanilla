@@ -2,6 +2,8 @@
 
 The goal is a quick-build prototype involving a Node.js backend (for Puppeteer compatibility and potentially Express/FastAPI) and a modern frontend SPA (Svelte). This project demonstrates the foundational architecture for a quick-build prototype of AetherPress, focusing on the core loop: Prompt -> AI Processing -> Preview -> Basic Override -> PDF Export.
 
+Demo goal: produce an A4 eBook of public-domain summer poems — one poem per page with a decorative background image (see `docs/DEMO_README.md`).
+
 ## Development Philosophy
 
 We maintain stability through structured change management:
