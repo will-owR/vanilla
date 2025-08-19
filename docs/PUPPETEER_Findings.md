@@ -129,20 +129,22 @@ async function startServer() {
    - Set appropriate timeouts
    - Monitor memory usage
    - Implement circuit breakers
+   - Utilize health check scripts for resource validation
 
 2. **Error Handling**
 
    - Graceful degradation
    - Automatic recovery
    - Detailed error logging
-   - Health status reporting
+   - Health status reporting via `server/scripts/health-checks.js`
 
 3. **Monitoring**
 
-   - Instance health checks
+   - Instance health checks via `smoke-health.sh`
    - Performance metrics
    - Resource utilization
    - Error rates
+   - Integrated health status in server endpoints
 
 4. **Security**
    - Run with appropriate sandbox settings
@@ -150,10 +152,27 @@ async function startServer() {
    - Control access to Chrome instance
    - Sanitize input data
 
+## Script Organization
+
+Health check scripts are organized by component:
+
+1. **Server Scripts** (`server/scripts/`)
+
+   - `health-checks.js`: Core health check implementation
+   - `smoke-health.sh`: Environment and Puppeteer validation
+   - `db-health.sh`: Database connectivity checks
+
+2. **Integration Points**
+   - Server startup sequence
+   - Health check endpoints
+   - Smoke test automation
+   - PDF generation validation
+
 ## Next Steps
 
-1. Implement core service approach
-2. Add comprehensive health checks
-3. Set up monitoring
-4. Document recovery procedures
-5. Create smoke tests for PDF generation
+1. ✓ Implement core service approach
+2. ✓ Add comprehensive health checks
+3. ✓ Create smoke tests for PDF generation
+4. Enhance monitoring with metrics collection
+5. Document recovery procedures
+6. Implement automated performance testing
