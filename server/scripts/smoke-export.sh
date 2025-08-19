@@ -22,7 +22,17 @@ if [ "$RESP_CODE" = "200" ] || [ "$RESP_CODE" = "201" ]; then
   echo "Export saved to $OUT"
   ls -lh "$OUT" || true
   file "$OUT" || true
-  exit 0
+  # Verify the saved file is a PDF by checking the magic bytes (%PDF-)
+  if head -c 5 "$OUT" | grep -q "%PDF-"; then
+    echo "PDF magic bytes verified"
+    exit 0
+  else
+    echo "Saved file does not appear to be a valid PDF (missing %PDF- header)"
+    # Print first 200 bytes for debugging
+    echo "First bytes of file:" 
+    head -c 200 "$OUT" | sed -n '1,4p' | sed -n '1,200p' || true
+    exit 3
+  fi
 fi
 
 echo "Export failed with HTTP $RESP_CODE"

@@ -31,7 +31,7 @@ function generateEbookHTML(poems) {
       <div class="page">
         ${bg}
         <div class="content">
-          <h1>${escapeHtml(poem.title)}</n1>
+          <h1>${escapeHtml(poem.title || "")}</h1>
           <h2>${escapeHtml(poem.author || "")}</h2>
           <div class="poem">${escapeHtml(poem.content)}</div>
         </div>

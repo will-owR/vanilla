@@ -73,10 +73,10 @@ Production of an ebook with:
 
 1. **Template System**
 
-   - [ ] Create basic HTML template
-   - [ ] Set up CSS for poem layout
-   - [ ] Implement background image handling
-   - [ ] Add page break logic
+   - [x] Create basic HTML template
+   - [x] Set up CSS for poem layout
+   - [x] Implement background image handling
+   - [x] Add page break logic
 
      (Note: foundation tasks implemented in `server/ebook.js` and `server/samples/images/`.)
 
@@ -89,18 +89,18 @@ Production of an ebook with:
 
 1. **PDF Generation**
 
-   - [ ] Set up export route
-   - [ ] Implement Puppeteer workflow
-   - [ ] Add error handling
-   - [ ] Validate output quality
+   - [x] Set up export route
+   - [x] Implement Puppeteer workflow
+   - [x] Add error handling
+   - [x] Validate output quality
 
      (Note: export route and Puppeteer workflow implemented; smoke tests and `server/scripts/smoke-export.sh` added.)
 
 2. **Frontend Integration**
-   - [ ] Add export trigger
-   - [ ] Implement download handling
-   - [ ] Add loading states
-   - [ ] Basic error display
+   - [x] Add export trigger
+   - [x] Implement download handling
+   - [x] Add loading states
+   - [x] Basic error display
 
 ### Phase 3: Polish (1-2 days)
 
@@ -145,10 +145,17 @@ Production of an ebook with:
    - `server/samples/images/*.svg`: decorative SVG backgrounds.
    - `/api/export/book`: POST endpoint that returns a generated A4 PDF using the running Puppeteer instance.
    - `server/scripts/smoke-export.sh`: script that POSTs the sample poems to `/api/export/book` and saves the response to a file (default: `/workspaces/vanilla/samples/ebook.pdf`).
-   - `server/__tests__/export.test.js`: Vitest integration test that posts to `/api/export/book` and asserts a PDF buffer was returned.
+   - `server/scripts/extract-pdf-text.js`: Node script that extracts text from a PDF for automated verification (used by smoke/CI).
+   - `server/__tests__/export_text.test.mjs`: ESM Vitest integration test that posts to `/api/export/book`, asserts PDF magic bytes, and verifies extracted text contains a sample poem title.
    - `.devcontainer/README.md`: devcontainer summary and assessments added.
 
    TODO (explicit): add a small check to `server/scripts/smoke-export.sh` that validates the saved file is a PDF by checking the magic bytes (PDF files start with `%PDF-`) before declaring success. Currently the script declares success based on HTTP status only.
+
+   Primary TODOs (next):
+
+   - Replace the temp file location used in tests with a unique OS temp path (use `os.tmpdir()` and `fs.mkdtemp`) to avoid collisions and allow parallel test runs.
+   - Add the export test to CI (GitHub Actions) to run on pushes and pull requests. Create a lightweight workflow that starts the server, runs `npm --prefix server run verify-export`, and fails the job on non-zero exit.
+   - Convert the extraction script to a native, lightweight implementation using `pdfjs-dist` directly (avoid `pdf-parse` which has debug-mode side effects). This will reduce reliance on packages that execute code on import and make tests more deterministic.
 
 ## Implementation Strategy
 

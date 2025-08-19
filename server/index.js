@@ -1600,8 +1600,15 @@ app.post("/api/export/book", async (req, res) => {
       const samplePath = path.resolve(__dirname, "samples", "poems.json");
       const raw = fs.readFileSync(samplePath, "utf8");
       const parsed = JSON.parse(raw);
-      // Support both { poems: [...] } and direct array
-      poems = parsed && parsed.poems ? parsed.poems : parsed;
+      // Support shapes:
+      //  - { poems: [...] }
+      //  - [ { poems: [...] } ] (array wrapping)
+      //  - direct array of poem objects
+      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].poems) {
+        poems = parsed[0].poems;
+      } else {
+        poems = parsed && parsed.poems ? parsed.poems : parsed;
+      }
     } catch (err) {
       console.error("Failed to load sample poems:", err.message);
       return res

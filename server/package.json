@@ -8,9 +8,11 @@
     "lint": "eslint . --ext .ts",
     "clean:samples": "node ./scripts/clean_samples.js",
     "smoke:export": "./scripts/run_smoke_export.sh",
+    "verify-export": "bash ./scripts/smoke-export.sh && node ./scripts/extract-pdf-text.js",
     "start": "node index.js",
     "dev": "nodemon index.js",
     "test": "vitest",
+    "test:export": "vitest run --reporter dot --include 'server/__tests__/export_text.test.mjs'",
     "test:run": "vitest run",
     "test:watch": "vitest",
     "test:ci": "vitest run --coverage"
@@ -21,6 +23,7 @@
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.1",
     "morgan": "^1.10.0",
+    "pdf-parse": "^1.1.1",
     "puppeteer-core": "^24.16.2",
     "sqlite3": "^5.1.7",
     "uuid": "^11.1.0"

@@ -82,3 +82,39 @@ npm run smoke:export
 ```
 
 The script will write `samples/puppeteer_smoke_test.pdf` at the workspace root `samples/` directory. If Chrome is not found, set `CHROME_PATH` to the system binary before running.
+
+## How you can run these locally (verification)
+
+From the repo root you can run a full smoke + verification flow which:
+
+- posts the sample poems to the server export endpoint
+- saves the returned PDF to `samples/ebook.pdf`
+- extracts text from the PDF to assert expected content
+
+1. Ensure server dependencies are installed and the server is running (or let the test start the server programmatically):
+
+```bash
+cd server
+npm install
+npm run dev    # or run the tests which start the server in-process
+```
+
+2. Run the smoke export and extraction verification (writes PDF and prints extracted text):
+
+```bash
+cd /workspaces/vanilla
+npm --prefix server run verify-export
+```
+
+3. Run the automated export test (Vitest) which asserts the PDF magic bytes and that the extracted text contains a sample poem title:
+
+```bash
+npx vitest run server/__tests__/export_text.test.mjs --run
+# or
+npm --prefix server run test:export
+```
+
+Notes:
+
+- The extraction script `server/scripts/extract-pdf-text.js` uses a lightweight PDF parser to extract text for assertions.
+- The Vitest export test runs the server programmatically (does not bind to a network port) and closes the Puppeteer browser on teardown.
