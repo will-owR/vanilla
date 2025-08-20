@@ -146,10 +146,14 @@ Production of an ebook with:
    - `/api/export/book`: POST endpoint that returns a generated A4 PDF using the running Puppeteer instance.
    - `server/scripts/smoke-export.sh`: script that POSTs the sample poems to `/api/export/book` and saves the response to a file (default: `/workspaces/vanilla/samples/ebook.pdf`).
    - `server/scripts/extract-pdf-text.js`: Node script that extracts text from a PDF for automated verification (used by smoke/CI).
+     - `server/scripts/extract-pdf-text.js`: Node script that extracts text from a PDF for automated verification (used by smoke/CI). Recently updated to use `pdfjs-dist` (ESM) and to guard access to text items (uses `'str' in item` checks) to avoid TypeScript/typing issues.
    - `server/__tests__/export_text.test.mjs`: ESM Vitest integration test that posts to `/api/export/book`, asserts PDF magic bytes, and verifies extracted text contains a sample poem title.
+     - `server/scripts/e2e-smoke.js`: Lightweight Puppeteer-core smoke script that exercises the client prompt -> preview flow and falls back to direct backend preview when the UI path is flaky in headless runs. Uses `globalThis.fetch` for API fallback (requires Node 18+ in CI) and now logs DOM snapshots for debugging when the UI preview element is not present.
    - `.devcontainer/README.md`: devcontainer summary and assessments added.
 
    TODO (explicit): add a small check to `server/scripts/smoke-export.sh` that validates the saved file is a PDF by checking the magic bytes (PDF files start with `%PDF-`) before declaring success. Currently the script declares success based on HTTP status only.
+
+   NOTE: we want true UI verification (button flow), et al. — the current e2e smoke reliably validates the backend preview/export path via an API fallback, but for full end-to-end confidence we should add a UI-focused test that ensures the Generate -> Preview -> Preview Now (or automatic preview) flow renders the preview DOM in headless CI runs. Investigate why the preview button is disabled in some headless runs and consider driving the client store directly in the UI test or adding retries/waits to stabilize the UI path.
 
    Primary TODOs (next):
 
