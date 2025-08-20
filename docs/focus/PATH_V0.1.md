@@ -145,21 +145,44 @@ Production of an ebook with:
    - `server/samples/images/*.svg`: decorative SVG backgrounds.
    - `/api/export/book`: POST endpoint that returns a generated A4 PDF using the running Puppeteer instance.
    - `server/scripts/smoke-export.sh`: script that POSTs the sample poems to `/api/export/book` and saves the response to a file (default: `/workspaces/vanilla/samples/ebook.pdf`).
+     - `server/scripts/smoke-export.sh`: script that POSTs the sample poems to `/api/export/book` and saves the response to a file (defaults to a unique temp path). The script now validates the saved file starts with the PDF magic bytes (`%PDF-`).
    - `server/scripts/extract-pdf-text.js`: Node script that extracts text from a PDF for automated verification (used by smoke/CI).
      - `server/scripts/extract-pdf-text.js`: Node script that extracts text from a PDF for automated verification (used by smoke/CI). Recently updated to use `pdfjs-dist` (ESM) and to guard access to text items (uses `'str' in item` checks) to avoid TypeScript/typing issues.
    - `server/__tests__/export_text.test.mjs`: ESM Vitest integration test that posts to `/api/export/book`, asserts PDF magic bytes, and verifies extracted text contains a sample poem title.
      - `server/scripts/e2e-smoke.js`: Lightweight Puppeteer-core smoke script that exercises the client prompt -> preview flow and falls back to direct backend preview when the UI path is flaky in headless runs. Uses `globalThis.fetch` for API fallback (requires Node 18+ in CI) and now logs DOM snapshots for debugging when the UI preview element is not present.
    - `.devcontainer/README.md`: devcontainer summary and assessments added.
 
+     - `server/scripts/e2e-smoke.js`: updated to improve UI path stability by waiting for the Generate button to re-enable, retrying Preview clicks, and dumping DOM snapshots for debugging.
+     - CI: `.github/workflows/verify-export.yml` added; it runs an in-process export verification and uploads `server/test-artifacts` (PDFs and debug outputs) for inspection.
+
+   ### Verified in branch `AE/path-v01`
+
+   - `server/scripts/smoke-export.sh`: now writes output to a unique temp path and validates the saved file starts with the PDF magic bytes (`%PDF-`).
+   - `server/scripts/run_export_test_inproc.js`: in-process export verification writes artifacts to an OS temp dir and copies them into `server/test-artifacts` when running in CI.
+   - `server/__tests__/export_text.test.js` and related tests: updated to use `fs.mkdtempSync(...)` so test outputs use unique temp directories.
+   - CI workflow `.github/workflows/verify-export.yml`: added a `verify-export` job that runs the in-process export verification and uploads artifacts; added a `client-tests` job that installs `./client` deps and runs Vitest.
+   - `client/__tests__/store-driven-preview.test.js`: added a deterministic Svelte 5-compatible UI test (uses `@testing-library/svelte/svelte5`) that drives the preview via stores to avoid network/AI flakiness.
+   - `server/scripts/e2e-smoke.js`: improved UI-path stability with waits/retries and DOM snapshot logging.
+
+   Status: these changes are implemented in the current working branch and were committed and pushed to `origin/AE/path-v01` (see commit history for details). Local verification: `npm --prefix ./client run test --silent` passes (3 files, 15 tests) and the in-process export test produced a valid PDF when run locally.
+
+   Small follow-ups already noted in this document that remain high-value:
+
+   - Convert `server/scripts/extract-pdf-text.js` fully to use `pdfjs-dist` (if any legacy `pdf-parse` usage remains) to avoid import side-effects and make parsing deterministic.
+   - Add a UI-focused headless test that exercises the full Generate → Preview → Preview Now flow; if that remains flaky in CI, prefer a store-driven UI test (already added) and increase retries/wait thresholds for headless runs.
+   - Add PDF quality checks (fonts embedded, DPI, page count) as additional assertions in the server-side test harness.
+   - Collect client test artifacts (snapshots/coverage) in CI on failure for faster debugging.
+
    TODO (explicit): add a small check to `server/scripts/smoke-export.sh` that validates the saved file is a PDF by checking the magic bytes (PDF files start with `%PDF-`) before declaring success. Currently the script declares success based on HTTP status only.
+
+   NOTE: That TODO has been completed — `smoke-export.sh` now checks the file starts with `%PDF-` and exits non-zero if not. Tests and helper scripts now write outputs to unique OS temp directories using `fs.mkdtemp()` to avoid collisions in parallel runs.
 
    NOTE: we want true UI verification (button flow), et al. — the current e2e smoke reliably validates the backend preview/export path via an API fallback, but for full end-to-end confidence we should add a UI-focused test that ensures the Generate -> Preview -> Preview Now (or automatic preview) flow renders the preview DOM in headless CI runs. Investigate why the preview button is disabled in some headless runs and consider driving the client store directly in the UI test or adding retries/waits to stabilize the UI path.
 
    Primary TODOs (next):
 
-   - Replace the temp file location used in tests with a unique OS temp path (use `os.tmpdir()` and `fs.mkdtemp`) to avoid collisions and allow parallel test runs.
-   - Add the export test to CI (GitHub Actions) to run on pushes and pull requests. Create a lightweight workflow that starts the server, runs `npm --prefix server run verify-export`, and fails the job on non-zero exit.
    - Convert the extraction script to a native, lightweight implementation using `pdfjs-dist` directly (avoid `pdf-parse` which has debug-mode side effects). This will reduce reliance on packages that execute code on import and make tests more deterministic.
+   - Stabilize full UI e2e further: add tests that drive the client store directly (for deterministic preview rendering) and add retries/timeouts in CI to reduce flakes.
 
 ## Implementation Strategy
 

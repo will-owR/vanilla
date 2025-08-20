@@ -20,6 +20,8 @@ The `scripts/` directory contains utility scripts for development, testing, and 
 - `clean_samples.js`: Maintenance of sample outputs
 - `run_export_test_inproc.js`: In-process export testing
 - `run_smoke_export.sh`: Smoke tests for export functionality
+- `run_export_test_inproc.js`: In-process export testing (starts the server programmatically and writes outputs to a unique temp directory)
+- `smoke-export.sh`: Smoke tests for export functionality (resolves sample JSON relative to script and validates PDF magic bytes)
 
 Start the development server with auto-reload:
 
@@ -78,10 +80,11 @@ npm ci
 2. Run the smoke test (this resolves `puppeteer-core` from `server/node_modules` and uses the top-level smoke script):
 
 ```bash
+# If you have a running server, run the networked smoke script:
 npm run smoke:export
 ```
 
-The script will write `samples/puppeteer_smoke_test.pdf` at the workspace root `samples/` directory. If Chrome is not found, set `CHROME_PATH` to the system binary before running.
+The script by default writes to a unique temp location and now validates the saved file is a PDF by checking the `%PDF-` magic header. If Chrome is not found, set `CHROME_PATH` to the system binary before running.
 
 ## How you can run these locally (verification)
 
@@ -99,14 +102,20 @@ npm install
 npm run dev    # or run the tests which start the server in-process
 ```
 
-2. Run the smoke export and extraction verification (writes PDF and prints extracted text):
+2. Run the smoke export and extraction verification (writes PDF and prints extracted text). Note: `verify-export` expects a running server at `http://localhost:3000` unless you use the in-process helper below.
 
 ```bash
 cd /workspaces/vanilla
 npm --prefix server run verify-export
 ```
 
-3. Run the automated export test (Vitest) which asserts the PDF magic bytes and that the extracted text contains a sample poem title:
+3. Alternatively, run the in-process verification helper which starts the server programmatically and writes outputs to a unique temp directory (preferred for CI without managing separate server process):
+
+```bash
+node server/scripts/run_export_test_inproc.js
+```
+
+Run the automated export test (Vitest) which asserts the PDF magic bytes and that the extracted text contains a sample poem title:
 
 ```bash
 npx vitest run server/__tests__/export_text.test.mjs --run

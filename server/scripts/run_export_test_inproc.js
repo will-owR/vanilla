@@ -1,4 +1,5 @@
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const request = require("supertest");
 const app = require("../index");
@@ -16,8 +17,10 @@ const app = require("../index");
     const res = await request(app).post("/export").send(postData);
 
     console.log("Status:", res.status);
-    const samplesDir = path.resolve(__dirname, "..", "samples");
-    if (!fs.existsSync(samplesDir)) fs.mkdirSync(samplesDir);
+    // Use a unique temp directory to avoid collisions in concurrent runs
+    const tmpRoot = os.tmpdir();
+    const tmpDir = fs.mkdtempSync(path.join(tmpRoot, "aetherpress-"));
+    const samplesDir = tmpDir;
 
     // Save response body if it is a PDF (content-type check)
     const ct = res.headers["content-type"] || "";
@@ -27,6 +30,19 @@ const app = require("../index");
       if (res.body) {
         fs.writeFileSync(out, res.body);
         console.log("Wrote PDF to", out, "size:", fs.statSync(out).size);
+
+        // If running in CI, copy the artifact to a known location inside the repo
+        // so workflow steps can easily upload it. We avoid modifying repo files when
+        // not in CI by checking env.
+        const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
+        if (isCI) {
+          const artifactsDir = path.resolve(__dirname, "..", "test-artifacts");
+          if (!fs.existsSync(artifactsDir))
+            fs.mkdirSync(artifactsDir, { recursive: true });
+          const target = path.join(artifactsDir, filename);
+          fs.copyFileSync(out, target);
+          console.log("Copied artifact to", target);
+        }
       } else {
         console.warn("No body in response");
       }
@@ -36,6 +52,15 @@ const app = require("../index");
       const out = path.join(samplesDir, "export_request_body.json");
       fs.writeFileSync(out, JSON.stringify(res.body, null, 2));
       console.log("Wrote request/response JSON to", out);
+      const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
+      if (isCI) {
+        const artifactsDir = path.resolve(__dirname, "..", "test-artifacts");
+        if (!fs.existsSync(artifactsDir))
+          fs.mkdirSync(artifactsDir, { recursive: true });
+        const target = path.join(artifactsDir, "export_request_body.json");
+        fs.copyFileSync(out, target);
+        console.log("Copied artifact to", target);
+      }
     }
   } catch (e) {
     console.error("Error during in-process export test:", e);

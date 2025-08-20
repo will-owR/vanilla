@@ -6,7 +6,9 @@ HOST=${HOST:-http://localhost:3000}
 # Default to a unique temp file to avoid collisions in concurrent runs
 TMPDIR=$(mktemp -d 2>/dev/null || echo "/tmp")
 OUT=${OUT:-"$TMPDIR/ebook.pdf"}
-JSON_FILE="$(pwd)/server/samples/poems.json"
+# Resolve script directory and locate samples reliably (works when invoked via npm --prefix)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+JSON_FILE=${JSON_FILE:-"$SCRIPT_DIR/../samples/poems.json"}
 
 if [ ! -f "$JSON_FILE" ]; then
   echo "Missing sample JSON: $JSON_FILE"

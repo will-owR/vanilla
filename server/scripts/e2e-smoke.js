@@ -32,8 +32,7 @@ const path = require("path");
     await page.click("#prompt-textarea");
     await page.type("#prompt-textarea", "A short summer poem about sunlight");
 
-    // Click Generate button (find by exact text)
-    // Click Generate button by matching text and dispatching click in-page
+    // Click Generate button (find by exact text) and wait until the client finishes generating.
     await page.evaluate(() => {
       const btn = Array.from(document.querySelectorAll("button")).find(
         (b) => b.textContent && b.textContent.trim() === "Generate"
@@ -42,17 +41,59 @@ const path = require("path");
       btn.click();
     });
 
-    // Wait a short moment for client to process generation
-    await new Promise((r) => setTimeout(r, 2000));
-
-    // Click Preview button (we added one)
-    await page.evaluate(() => {
-      const btn = Array.from(document.querySelectorAll("button")).find(
-        (b) => b.textContent && b.textContent.trim() === "Preview"
+    // Wait until the Generate button is no longer disabled (or timeout)
+    try {
+      await page.waitForFunction(
+        () => {
+          const btn = Array.from(document.querySelectorAll("button")).find(
+            (b) => b.textContent && b.textContent.trim() === "Generate"
+          );
+          return btn && !btn.disabled;
+        },
+        { timeout: 30000 }
       );
-      if (!btn) throw new Error("Preview button not found");
-      btn.click();
-    });
+    } catch (err) {
+      console.warn(
+        "Generate button did not re-enable in time; continuing to Preview step (UI may be flaky)"
+      );
+    }
+
+    // Click Preview button (we added one). Retry a few times if preview doesn't render.
+    const maxPreviewAttempts = 3;
+    let previewClicked = false;
+    for (let attempt = 1; attempt <= maxPreviewAttempts; attempt++) {
+      try {
+        await page.evaluate(() => {
+          const btn = Array.from(document.querySelectorAll("button")).find(
+            (b) => b.textContent && b.textContent.trim() === "Preview"
+          );
+          if (!btn) throw new Error("Preview button not found");
+          btn.click();
+        });
+        previewClicked = true;
+      } catch (err) {
+        console.warn(
+          `Preview click attempt ${attempt} failed:`,
+          err && err.message ? err.message : err
+        );
+      }
+
+      // Wait for preview content to appear with a reasonable timeout
+      try {
+        await page.waitForSelector(".preview-content", { timeout: 10000 });
+        break; // success
+      } catch (err) {
+        console.warn(`Preview content not found after attempt ${attempt}`);
+        if (attempt < maxPreviewAttempts) {
+          // small pause before retrying
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+    }
+
+    if (!previewClicked) {
+      throw new Error("Preview button not clickable after retries");
+    }
 
     // Wait for preview content to appear (30s). If not found, dump body for debugging
     // and continue to the API fallback instead of aborting the whole run.

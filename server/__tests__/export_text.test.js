@@ -1,5 +1,6 @@
 import request from "supertest";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { startServer } from "../index.js";
@@ -35,8 +36,9 @@ describe("Ebook export smoke", () => {
     const magic = Buffer.from(buf).slice(0, 5).toString("utf8");
     expect(magic.startsWith("%PDF-")).toBe(true);
 
-    // Save and extract text using the local extractor script (pdfjs-dist)
-    const outPath = path.resolve("samples", "test_ebook.pdf");
+    // Save to a unique temp file and extract text using the local extractor script (pdfjs-dist)
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "aetherpress-"));
+    const outPath = path.resolve(tmpDir, "test_ebook.pdf");
     fs.writeFileSync(outPath, buf);
     const extractor = path.resolve("scripts", "extract-pdf-text.js");
     const { stdout } = await new Promise((resolve, reject) => {

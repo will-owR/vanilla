@@ -9,6 +9,7 @@
     "clean:samples": "node ./scripts/clean_samples.js",
     "smoke:export": "./scripts/run_smoke_export.sh",
     "verify-export": "bash ./scripts/smoke-export.sh && node ./scripts/extract-pdf-text.js",
+    "verify-export:inproc": "node ./scripts/run_export_test_inproc.js",
     "start": "node index.js",
     "dev": "nodemon index.js",
     "test": "vitest",
