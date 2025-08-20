@@ -3,11 +3,14 @@
   import { loadPreview } from '../lib/api';
   import { onMount } from 'svelte';
 
+  import { debounce } from '../lib/utils';
+
   let content;
   contentStore.subscribe(value => {
     content = value;
-    if (content) {
-      updatePreview(content);
+    if (content && autoPreview) {
+      // Debounced auto update to avoid rapid requests
+      debouncedUpdate(content);
     }
   });
 
@@ -16,19 +19,27 @@
     uiState = value;
   });
 
+  // Preview controls
+  let autoPreview = true;
+
   const updatePreview = async (newContent) => {
     if (!newContent) {
       previewStore.set('');
       return;
     }
     try {
+      uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
       const html = await loadPreview(newContent);
       previewStore.set(html);
+      uiStateStore.set({ status: 'success', message: 'Preview loaded' });
     } catch (error) {
       uiStateStore.set({ status: 'error', message: `Failed to load preview: ${error.message}` });
       previewStore.set('');
     }
   };
+
+  // Debounced auto update to avoid rapid requests
+  const debouncedUpdate = debounce(updatePreview, 350);
 
   onMount(() => {
     if (content) {
@@ -38,6 +49,11 @@
 </script>
 
 <div class="preview-container">
+  <div class="preview-controls">
+    <label><input type="checkbox" bind:checked={autoPreview} /> Auto-preview</label>
+    <button on:click={() => updatePreview(content)} disabled={!content || uiState.status === 'loading'}>Preview Now</button>
+  </div>
+
   {#if uiState.status === 'loading'}
     <div class="loading-overlay">
       <p>Loading Preview...</p>

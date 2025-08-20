@@ -2,6 +2,8 @@
 
 This document consolidates the individual test docs found under `server/__tests__` into a single reference.
 
+**Note:** Update TESTS.md further with a detailed list of test files and how they map to CI steps.  (TODO)
+
 ## Table of contents
 
 - Prompt API tests (`prompt.test.js`)

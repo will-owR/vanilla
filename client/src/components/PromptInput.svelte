@@ -31,6 +31,25 @@
       uiStateStore.set({ status: 'error', message: error.message || 'An unknown error occurred.' });
     }
   };
+
+  import { get } from 'svelte/store';
+
+  const handlePreviewNow = async () => {
+    const current = get(contentStore);
+    if (!current) {
+      uiStateStore.set({ status: 'error', message: 'No content to preview. Generate content first.' });
+      return;
+    }
+    try {
+      uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
+      const html = await import('../lib/api').then((m) => m.loadPreview(current));
+      const { previewStore } = await import('../stores');
+      previewStore.set(html);
+      uiStateStore.set({ status: 'success', message: 'Preview updated' });
+    } catch (err) {
+      uiStateStore.set({ status: 'error', message: err.message || 'Preview failed' });
+    }
+  };
 </script>
 
 <div class="prompt-container">
@@ -48,6 +67,9 @@
     {:else}
       Generate
     {/if}
+  </button>
+  <button on:click={handlePreviewNow} disabled={uiState.status === 'loading'}>
+    Preview
   </button>
   
   {#if uiState.status === 'error'}

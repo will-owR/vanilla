@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
@@ -31,6 +33,7 @@ afterAll(async () => {
 });
 
 describe("POST /api/export/book", () => {
+  // PDF generation and Puppeteer can take longer; allow a longer timeout (30s)
   it("returns a PDF buffer with expected poem text", async () => {
     const res = await request(app)
       .post("/api/export/book")
@@ -43,24 +46,45 @@ describe("POST /api/export/book", () => {
       })
       .send();
 
-    expect(res.status).toBe(200);
+    try {
+      expect(res.status).toBe(200);
+    } catch (err) {
+      console.error(
+        "Export response status:",
+        res.status,
+        "body length:",
+        res.body && res.body.length
+      );
+      throw err;
+    }
     expect(res.headers["content-type"]).toMatch(/application\/pdf/);
 
     const buffer = res.body;
     // Magic bytes
     expect(buffer.slice(0, 5).toString()).toBe("%PDF-");
 
-    // Write buffer to a temp file and call the extraction script to avoid
-    // importing pdf-parse directly (which can run debug code in some packages).
-    const tmpPath = "./samples/test_export_tmp.pdf";
+    // Write buffer to a unique OS temp directory and call the extraction
+    // script to avoid importing pdf-parse directly (which can run debug code
+    // in some packages). Use mkdtemp to avoid collisions in concurrent runs.
+    const tmpDir = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "aetherpress-")
+    );
+    const tmpPath = path.join(tmpDir, "export.pdf");
     await fs.promises.writeFile(tmpPath, buffer);
+    const extractorPath = path.resolve(
+      process.cwd(),
+      "scripts",
+      "extract-pdf-text.js"
+    );
     const { stdout } = await execFileAsync(
       process.execPath,
-      ["./server/scripts/extract-pdf-text.js", tmpPath],
+      [extractorPath, tmpPath],
       { cwd: process.cwd(), maxBuffer: 10 * 1024 * 1024 }
     );
     expect(stdout).toContain("A Summer Day");
-    // cleanup
-    await fs.promises.unlink(tmpPath).catch(() => {});
-  });
+    // cleanup temporary directory
+    await fs.promises
+      .rm(tmpDir, { recursive: true, force: true })
+      .catch(() => {});
+  }, 30000);
 });

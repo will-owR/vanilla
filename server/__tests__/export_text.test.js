@@ -1,9 +1,9 @@
-import request from 'supertest';
-import fs from 'fs';
-import path from 'path';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { startServer } from '../index.js';
-import appModule from '../index.js';
+import request from "supertest";
+import fs from "fs";
+import path from "path";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { startServer } from "../index.js";
+import appModule from "../index.js";
 
 beforeAll(async () => {
   // Start server programmatically and ensure it listens
@@ -20,28 +20,37 @@ afterAll(async () => {
   }
 });
 
-describe('Ebook export smoke', () => {
-  it('POST /api/export/book returns a PDF buffer and contains poem text', async () => {
-    const res = await request('http://localhost:3000')
-      .post('/api/export/book')
+describe("Ebook export smoke", () => {
+  it("POST /api/export/book returns a PDF buffer and contains poem text", async () => {
+    const res = await request("http://localhost:3000")
+      .post("/api/export/book")
       .send({})
-      .set('Content-Type', 'application/json')
+      .set("Content-Type", "application/json")
       .timeout(20000);
 
     expect(res.status).toBe(200);
-    expect(res.headers['content-type']).toMatch(/application\/pdf/);
+    expect(res.headers["content-type"]).toMatch(/application\/pdf/);
     const buf = res.body;
     // Buffer may be binary; check magic bytes
-    const magic = Buffer.from(buf).slice(0, 5).toString('utf8');
-    expect(magic.startsWith('%PDF-')).toBe(true);
+    const magic = Buffer.from(buf).slice(0, 5).toString("utf8");
+    expect(magic.startsWith("%PDF-")).toBe(true);
 
-    // Save and extract text via pdf-parse to verify content
-    const outPath = path.resolve('samples', 'test_ebook.pdf');
+    // Save and extract text using the local extractor script (pdfjs-dist)
+    const outPath = path.resolve("samples", "test_ebook.pdf");
     fs.writeFileSync(outPath, buf);
-    const pdf = await import('pdf-parse');
-    const data = fs.readFileSync(outPath);
-    const parsed = await pdf.default(data);
-    expect(parsed.text).toMatch(/A Summer Day/);
-    expect(parsed.text).toMatch(/Midsummer Night/);
+    const extractor = path.resolve("scripts", "extract-pdf-text.js");
+    const { stdout } = await new Promise((resolve, reject) => {
+      const cp = require("child_process").execFile(
+        process.execPath,
+        [extractor, outPath],
+        { cwd: process.cwd(), maxBuffer: 10 * 1024 * 1024 },
+        (err, stdout, stderr) => {
+          if (err) return reject(err);
+          resolve({ stdout, stderr });
+        }
+      );
+    });
+    expect(stdout).toMatch(/A Summer Day/);
+    expect(stdout).toMatch(/Midsummer Night/);
   }, 30000);
 });
