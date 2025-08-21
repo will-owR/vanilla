@@ -202,3 +202,55 @@ Notes for the person returning:
 - If you want me to open the PR and watch CI continuously, say "Open PR and monitor CI" and I'll start monitoring after the PR is created.
 
 End of break note.
+
+---
+
+WAYS TO PROCEED (2025-08-21)
+
+The Question:
+
+- The original workflow, ci-server-tests.yml, was to be replaced by ci-server-tests-pr.yml.  However, that should no longer be the case.  Right/wrong?  Tell me either way.
+
+The Options: 
+
+-Acknowledged — I’ll give a short recommendation and two practical ways to proceed.
+
+Quick plan: explain why completely replacing `ci-server-tests.yml` with ci-server-tests-pr.yml is usually wrong, then give two safe options (keep both vs unify into one) and my recommended choice.
+
+Short answer
+- Wrong to fully replace `ci-server-tests.yml` with ci-server-tests-pr.yml unless you explicitly want to change when/where full tests run (i.e., you want PR runs to become the canonical production runs).
+- Better: either keep them separate (clear separation of PR vs production) or merge into a single workflow that supports both triggers with conditional steps.
+
+Why not replace outright
+- `ci-server-tests.yml` is (or was) the production/push workflow — it runs on `push`/merge and can be constrained by branch protections, secrets and production expectations.
+- ci-server-tests-pr.yml was created to be PR-friendly (different triggers/permissions and possibly lighter/safer steps).
+- Replacing removes the safety separation: PRs and pushes become identical, which can expose secrets or run heavy tasks unnecessarily on PRs/forks.
+
+Practical options
+- Option A — Keep both (recommended for clarity)
+  - Keep `ci-server-tests.yml` for push/merge/production runs.
+  - Keep ci-server-tests-pr.yml for PRs (lighter or gated).
+  - Pros: simple, explicit; avoids accidental exposure of repo context in PRs.
+  - Cons: some duplication to maintain.
+- Option B — One workflow, dual triggers (my recommended single-file approach)
+  - Add both triggers to one file:
+    - `on: [push, pull_request, workflow_dispatch]`
+  - Use conditional steps or job-level `if: github.event_name == 'push'` / `github.event_name == 'pull_request'` to skip heavy steps on PRs (or to run a lighter job).
+  - Pros: single source-of-truth, easier updates.
+  - Cons: slightly more YAML complexity.
+
+When to replace (only)
+- Replace only if you want PR behavior to be identical to production pushes and you accept the security/permission implications (not typical).
+
+My recommendation
+- For an early-stage, simple path: implement Option B (single workflow with both triggers) but structure jobs to be conditional so PRs remain lightweight and maintainers can run full tests via `workflow_dispatch`. This reduces duplication while preserving safety.
+- If you prefer explicit separation while iterating fast, do Option A (keep both) — it’s simpler to reason about.
+
+Next step
+- Tell me which you want: “keep both (A)” or “unify into one (B)”. I’ll implement the chosen change on `chore/ci-artifacts-and-e2e` and push a commit.
+
+The Choice: 
+
+- “unify into one (B)”
+
+End of proceed note.

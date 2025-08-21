@@ -4,6 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [main, AE/path-v01, AE/path-v01B]
+  workflow_dispatch: {}
 
 jobs:
   server-tests:
@@ -14,13 +15,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Ensure CI dependencies
+        run: |
+          chmod +x scripts/ci-ensure-deps.sh
+          ./scripts/ci-ensure-deps.sh
+
       - name: Use Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Install system dependencies (Chrome)
+        if: false
         run: |
+          # Installation is handled by scripts/ci-ensure-deps.sh for forked CI runners
           sudo apt-get update
           sudo apt-get install -y wget gnupg --no-install-recommends
           wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-linux-signing-key.gpg
