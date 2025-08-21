@@ -126,3 +126,16 @@ See the `docs/` directory for devcontainer setup, dependency management, and arc
 
 - **Frontend**: [http://localhost:5173](http://localhost:5173)
 - **Backend API**: [http://localhost:3000](http://localhost:3000)
+
+CI and local artifact handling
+
+- The repository ignores runtime test artifacts (`test-artifacts/`, `server/test-artifacts/`, `client/test-artifacts/`) to avoid committing large or temporary files. CI jobs still upload runner-produced artifacts for debugging. To reproduce artifact generation locally, run the headless preview script or smoke-export script and check the `test-artifacts/` directory (created locally):
+
+```bash
+# generate preview artifacts (local)
+node client/scripts/headless-preview-e2e.cjs || node client/scripts/headless-preview-e2e.js
+
+# run export smoke and extract text
+bash server/scripts/smoke-export.sh
+node server/scripts/extract-pdf-text.js /tmp/your-ebook.pdf
+```

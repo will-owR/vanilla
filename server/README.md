@@ -123,6 +123,18 @@ npx vitest run server/__tests__/export_text.test.mjs --run
 npm --prefix server run test:export
 ```
 
+CI and local artifact handling
+
+- The `server` scripts may write artifacts to `server/test-artifacts/` for debugging in CI runs. These directories are ignored locally to avoid accidentally committing temporary outputs. To reproduce artifacts locally run the in-process helper or smoke scripts which will write to a temp dir and (optionally) copy to `server/test-artifacts/` for inspection.
+
+```bash
+# run in-process export test which writes artifacts to a temp dir (and may copy to server/test-artifacts)
+node server/scripts/run_export_test_inproc.js
+
+# run smoke export (networked)
+bash server/scripts/smoke-export.sh
+```
+
 Notes:
 
 - The extraction script `server/scripts/extract-pdf-text.js` uses a lightweight PDF parser to extract text for assertions.

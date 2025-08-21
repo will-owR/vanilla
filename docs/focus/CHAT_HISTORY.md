@@ -139,3 +139,9 @@ curl -s -H 'Content-Type: application/json' -d @server/samples/poems.json http:/
 Progress update will be added to this file after completing the sprint tasks.
 
 If you want the full raw chat transcript included instead of this summary, tell me and I will append the full transcript to this file and push the update.
+
+---
+
+Update (2025-08-21): accidental local test artifacts (`test-artifacts/preview.html`, `test-artifacts/snapshot.html`) that were present in the working tree have been removed from the repository and `test-artifacts/` is now added to `.gitignore`. CI still uploads server and client artifact directories for debugging; those uploads happen from runner-produced outputs and are not checked into source control.
+
+Sprint status: the 3-hour sprint tasks have been implemented and verified locally: pdf-parse imports removed from tests, shared tests updated to call the extractor script, client preview integration tests added, headless preview e2e script added and run locally (artifacts produced then removed from VCS). Remaining follow-ups: tidy any accidental temp files (done), consider regenerating package-lock files to remove historical dependency references (optional), and open PR to run CI for final validation.
