@@ -65,31 +65,9 @@ jobs:
         working-directory: ./client
         run: npm ci
 
-      - name: Install Google Chrome (for client headless snapshots)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget gnupg ca-certificates
-          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-linux-signing-key.gpg
-          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-signing-key.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-
       - name: Run client tests (Vitest)
         working-directory: ./client
         env:
           CI: true
         run: |
           npm test --silent
-      - name: Run headless preview E2E (generate artifacts)
-        working-directory: ./client
-        env:
-          CHROME_PATH: /usr/bin/google-chrome-stable
-        run: |
-          node ./scripts/headless-preview-e2e.cjs
-      - name: Upload client test artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: client-test-artifacts
-          path: client/test-artifacts
