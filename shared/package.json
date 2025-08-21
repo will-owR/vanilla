@@ -10,8 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "pdf-lib": "^1.17.1",
-    "pdf-parse": "^1.1.1"
+    "pdf-lib": "^1.17.1"    
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

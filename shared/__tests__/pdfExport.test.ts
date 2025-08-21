@@ -1,7 +1,9 @@
 /// <reference types="jest" />
 import { exportCalendarToPDF, PDFExportOptions } from "@utils/pdfExport";
 import { PDFDocument, PageSizes } from "pdf-lib";
-import pdfParse from "pdf-parse";
+import { execFileSync } from "child_process";
+import fs from "fs";
+import path from "path";
 
 // Create a minimal valid PNG buffer (1x1 pixel, black)
 const mockPngBuffer = new Uint8Array([
@@ -61,19 +63,26 @@ describe("PDF Export Utils", () => {
 
   it("should generate PDF with all required content", async () => {
     const result = await exportCalendarToPDF(mockOptions);
-    const data = await pdfParse(result);
+    // Write PDF to a temp file and extract text using the repository extractor script
+    const tmpDir = fs.mkdtempSync(path.join(process.cwd(), "tmp-pdf-"));
+    const tmpPdf = path.join(tmpDir, "out.pdf");
+    fs.writeFileSync(tmpPdf, result);
 
-    // Check for year
-    expect(data.text).toContain("2025");
-
-    // Check for selected months
-    mockOptions.selectedMonths.forEach((month: string) => {
-      expect(data.text).toContain(month);
+    const extractor = path.resolve(
+      __dirname,
+      "../../server/scripts/extract-pdf-text.js"
+    );
+    const out = execFileSync(process.execPath, [extractor, tmpPdf], {
+      encoding: "utf8",
     });
 
-    // Check for events
+    // Basic assertions on extracted text
+    expect(out).toContain("2025");
+    mockOptions.selectedMonths.forEach((month: string) => {
+      expect(out).toContain(month);
+    });
     mockOptions.events.forEach((event: { date: string; title: string }) => {
-      expect(data.text).toContain(event.title);
+      expect(out).toContain(event.title);
     });
   });
 
@@ -85,14 +94,24 @@ describe("PDF Export Utils", () => {
     };
 
     const result = await exportCalendarToPDF(options);
-    const data = await pdfParse(result);
+    const tmpDir = fs.mkdtempSync(path.join(process.cwd(), "tmp-pdf-"));
+    const tmpPdf = path.join(tmpDir, "out.pdf");
+    fs.writeFileSync(tmpPdf, result);
+
+    const extractor = path.resolve(
+      __dirname,
+      "../../server/scripts/extract-pdf-text.js"
+    );
+    const out = execFileSync(process.execPath, [extractor, tmpPdf], {
+      encoding: "utf8",
+    });
 
     // Check for included content
-    expect(data.text).toContain("March");
-    expect(data.text).toContain("Special Test Event");
+    expect(out).toContain("March");
+    expect(out).toContain("Special Test Event");
 
     // Check for excluded content
-    expect(data.text).not.toContain("January");
-    expect(data.text).not.toContain("Valentine's Day");
+    expect(out).not.toContain("January");
+    expect(out).not.toContain("Valentine's Day");
   });
 });

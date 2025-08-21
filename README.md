@@ -2,7 +2,7 @@
 
 The goal is a quick-build prototype involving a Node.js backend (for Puppeteer compatibility and potentially Express/FastAPI) and a modern frontend SPA (Svelte). This project demonstrates the foundational architecture for a quick-build prototype of AetherPress, focusing on the core loop: Prompt -> AI Processing -> Preview -> Basic Override -> PDF Export.
 
-Demo goal: produce an A4 eBook of public-domain summer poems — one poem per page with a decorative background image (see `docs/DEMO_README.md`).
+Demo goal: produce an A4 eBook of public-domain summer poems — one poem per page with a poem-describing decorative background image (see `docs/DEMO_README.md`).
 
 ## Development Philosophy
 
@@ -45,7 +45,6 @@ To empower creators (writers, poets, educators, marketers) to effortlessly desig
 - `samples/` — Sample files (e.g., PNGs, PDFs)
 - `docs/` — Project documentation
 - `shared/` — Code or assets shared between client and server (e.g., utility functions, types, or constants).
-- `scripts/` — Usually holds automation scripts (e.g., deployment, data migration, or setup scripts).
 - `config/` — Configuration files (e.g., environment settings, service credentials, or build configs).
 
 ## Technology Vibe
@@ -54,7 +53,7 @@ To empower creators (writers, poets, educators, marketers) to effortlessly desig
 - **Server:** Scalable platform (Express/Node.js). Ready to orchestrate multiple API calls.
 - **Database:** For a balance of structure and flexibility (PostgreSQL/JSONB).
   - Production deployments can use any PostgreSQL-compatible service (Azure Database, AWS RDS, etc.)
-  - Currently, SQLite3 is used for live development (Day4/testing). Per `docs/ROADMAP.md`, a Postgres migration will be performed only after a stable v0.1 release — until then, continue using SQLite3 for local/smoke tests.
+  - Currently, SQLite3 is used for live development. Per `docs/ROADMAP.md`, a Postgres migration will be performed only after a stable v0.1 release — until then, continue using SQLite3 for local/smoke tests.
   - See `/server/index.js` for the current health check implementation and TODO note.
 - **AI:**
   - **Default:** Use Google's Gemini for both text and image generation.
