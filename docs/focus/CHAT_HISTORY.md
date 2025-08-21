@@ -145,3 +145,60 @@ If you want the full raw chat transcript included instead of this summary, tell 
 Update (2025-08-21): accidental local test artifacts (`test-artifacts/preview.html`, `test-artifacts/snapshot.html`) that were present in the working tree have been removed from the repository and `test-artifacts/` is now added to `.gitignore`. CI still uploads server and client artifact directories for debugging; those uploads happen from runner-produced outputs and are not checked into source control.
 
 Sprint status: the 3-hour sprint tasks have been implemented and verified locally: pdf-parse imports removed from tests, shared tests updated to call the extractor script, client preview integration tests added, headless preview e2e script added and run locally (artifacts produced then removed from VCS). Remaining follow-ups: tidy any accidental temp files (done), consider regenerating package-lock files to remove historical dependency references (optional), and open PR to run CI for final validation.
+
+---
+
+BREAK / HANDOFF (2025-08-21)
+
+Status now:
+
+- Branch: `chore/ci-artifacts-and-e2e` (pushed to origin).
+- Local verification done: shared/client/server tests, smoke export, extractor outputs, headless preview script produced artifacts during verification and those artifacts were removed from VCS and added to `.gitignore`.
+- Package-lock regeneration attempted for `server`, `shared`, and `client` (no lockfile deltas required).
+
+Pending (to resume):
+
+1. Open the pull request for `chore/ci-artifacts-and-e2e` and let GitHub Actions run (PR URL: https://github.com/will-don-na/vanilla/pull/new/chore/ci-artifacts-and-e2e). CI must run the updated `verify-export` workflow and upload artifacts for debugging.
+2. Monitor CI jobs and triage any failures by downloading artifacts (server/client `test-artifacts`), logs, and failing test details.
+3. If CI shows dependency or lockfile issues, regenerate lockfiles and re-run affected tests; commit any necessary lockfile updates.
+
+Quick resume checklist (first 30 minutes on return):
+
+- Create the PR (if not already opened) and confirm the `verify-export` and `client-tests` jobs start.
+- Confirm artifacts are uploaded on CI (download for inspection if failures occur).
+- Run local smoke commands to reproduce failures quickly:
+
+```bash
+# run client tests
+npm --prefix ./client test
+
+# run shared tests
+npm --prefix ./shared test
+
+# run server smoke & extractor
+bash server/scripts/smoke-export.sh
+node server/scripts/extract-pdf-text.js /tmp/<your-ebook.pdf>
+
+# run headless preview (requires puppeteer-core + Chrome)
+node client/scripts/headless-preview-e2e.cjs
+```
+
+Planned 5-hour session (priority order, timeboxed):
+
+1. CI triage and fixes (1.0h): inspect artifacts/logs, fix any environment-specific failures, re-run tests locally.
+2. Stabilize UI E2E (2.0h): add retries/waits or convert flaky UI flow to store-driven deterministic test; run headless locally and in CI.
+3. PDF quality assertions (1.0h): add page count/text checks and basic font embedding checks to server export test harness.
+4. Documentation & cleanup (1.0h): ensure READMEs and PATH_V0.1 reflect final decisions and remove any leftover temp files.
+
+Acceptance criteria for the 5-hour session:
+
+- PR CI `verify-export` and `client-tests` jobs pass (or fail with artifacts available and a clear plan to fix).
+- UI preview flow stabilized (deterministic store-driven test or reliable headless flow).
+- Server export tests assert PDF magic bytes and expected text; at least one PDF quality check added.
+
+Notes for the person returning:
+
+- All edits so far are in `chore/ci-artifacts-and-e2e`. Open the PR, watch CI, and paste any failing-job logs here; I'll triage immediately.
+- If you want me to open the PR and watch CI continuously, say "Open PR and monitor CI" and I'll start monitoring after the PR is created.
+
+End of break note.
