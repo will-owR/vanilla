@@ -1,5 +1,18 @@
 import Logger from "./logger";
 
+// Phase-A branch convenience: prefer the mock adapter if it exists locally.
+// This allows us to swap in the mock without changing component imports.
+let mock;
+try {
+  // eslint-disable-next-line import/no-unresolved
+  // This dynamic require will only succeed on branches that include the mock file.
+  // Use require so bundlers that do static analysis won't break on non-branch builds.
+  // @ts-ignore
+  mock = require("../mocks/mockApi");
+} catch (e) {
+  mock = null;
+}
+
 // API utilities with retry logic
 const DEFAULT_CONFIG = {
   maxRetries: 3,
@@ -95,6 +108,7 @@ export function abortableFetch(url, options = {}) {
 
 // API endpoints
 export async function submitPrompt(prompt) {
+  if (mock && mock.submitPrompt) return mock.submitPrompt(prompt);
   Logger.debug("Submitting prompt", { prompt });
 
   try {
@@ -127,6 +141,14 @@ export async function submitPrompt(prompt) {
 }
 
 export async function loadPreview(content) {
+  if (mock && mock.loadPreview) {
+    const res = mock.loadPreview(content);
+    // mock.loadPreview might return an abortable { promise, abort } or a direct promise/string
+    if (res && typeof res.then !== "function" && res.promise) {
+      return await res.promise;
+    }
+    return await res;
+  }
   Logger.debug("Loading preview", {
     contentKeys: content ? Object.keys(content) : "no content",
   });
@@ -212,6 +234,7 @@ export async function loadPreview(content) {
 }
 
 export async function saveOverride(content, changes) {
+  if (mock && mock.saveOverride) return mock.saveOverride(content, changes);
   Logger.debug("Saving override", {
     originalContent: content ? Object.keys(content) : "no content",
     changeKeys: changes ? Object.keys(changes) : "no changes",
@@ -249,6 +272,7 @@ export async function saveOverride(content, changes) {
 }
 
 export async function exportToPdf(content) {
+  if (mock && mock.exportToPdf) return mock.exportToPdf(content);
   Logger.debug("Exporting to PDF", {
     contentKeys: content ? Object.keys(content) : "no content",
   });
@@ -291,6 +315,7 @@ export async function exportToPdf(content) {
 
 // Background export job API helpers
 export async function startExportJob(content) {
+  if (mock && mock.startExportJob) return mock.startExportJob(content);
   if (!content || !content.title || !content.body) {
     throw new Error("Export content must include title and body");
   }
@@ -306,6 +331,7 @@ export async function startExportJob(content) {
 }
 
 export async function getExportJobStatus(jobId) {
+  if (mock && mock.getExportJobStatus) return mock.getExportJobStatus(jobId);
   if (!jobId) throw new Error("jobId required");
   const response = await fetchWithRetry(
     `/api/export/job/${encodeURIComponent(jobId)}`,
