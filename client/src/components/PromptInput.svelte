@@ -160,6 +160,16 @@
     `;
   };
 
+  // Temporary debug helper: force the current prompt into previewStore
+  const forceRenderPromptPreview = () => {
+    const current = get(promptStore) || '';
+    const localContent = { title: (current || '').split('\n')[0].slice(0, 80) || 'Untitled', body: current };
+    const html = buildLocalPreviewHtml(localContent);
+    try { console.debug('[DEV] forceRenderPromptPreview: setting previewStore (force) length=', String(html).length); } catch (e) {}
+    previewStore.set(html);
+    uiStateStore.set({ status: 'success', message: 'Preview updated (forced)' });
+  };
+
   const closeTypedPromptDialog = () => {
     showTypedPromptDialog = false;
     // Return focus to the textarea for keyboard users
@@ -275,6 +285,10 @@
       {:else}
         Preview
       {/if}
+    </button>
+    <!-- Temporary test button: force the prompt text into the preview area immediately -->
+    <button data-testid="force-preview-button" class="test" on:click={forceRenderPromptPreview} title="Force prompt into preview" disabled={(uiState && uiState.status === 'loading') || isGenerating || isPreviewing}>
+      Force Preview
     </button>
     {#if previewAbortFn}
       <button data-testid="prompt-cancel-preview" on:click={() => { try { previewAbortFn(); } catch(e){} }}>
