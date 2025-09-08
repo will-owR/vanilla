@@ -35,3 +35,7 @@ export const uiStateStore = writable({ status: "idle", message: "" });
  * @type {import('svelte/store').Writable<(() => void) | null>}
  */
 export const previewAbortStore = writable(null);
+
+// Temporary store for quick verification: a plain text area that mirrors
+// forced previews. Populated by the Force Preview button.
+export const testPreviewStore = writable("");

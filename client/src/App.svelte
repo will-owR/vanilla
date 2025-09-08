@@ -4,11 +4,17 @@
   import OverrideControls from './components/OverrideControls.svelte';
   import ExportButton from './components/ExportButton.svelte';
   import StatusDisplay from './components/StatusDisplay.svelte';
+  import { testPreviewStore } from './stores';
 </script>
 
 <main>
   <header>
     <h1>AetherPress</h1>
+    <!-- Temporary test area for Phase A: shows forced preview text -->
+    <div class="test-preview-area">
+      <label for="test-preview-text">Test preview output (text):</label>
+      <textarea id="test-preview-text" readonly bind:value={$testPreviewStore} rows="4" style="width:100%"></textarea>
+    </div>
   </header>
 
   <div class="container">
