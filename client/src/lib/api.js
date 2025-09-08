@@ -100,6 +100,15 @@ async function fetchWithRetry(url, options = {}) {
 
 // Helper: returns { promise, abort } where abort() cancels the request.
 export function abortableFetch(url, options = {}) {
+  // If a branch-local mock provides an abortableFetch implementation, prefer it.
+  if (mock && mock.abortableFetch) {
+    try {
+      return mock.abortableFetch(url, options);
+    } catch (e) {
+      // fall through to real implementation on error
+    }
+  }
+
   const controller = new AbortController();
   const signal = controller.signal;
   const promise = fetchWithRetry(url, { ...options, signal });

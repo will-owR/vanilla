@@ -35,7 +35,11 @@
   onMount(() => {
     const unsubContent = contentStore.subscribe(value => {
       content = value;
-      if (content && autoPreview) {
+  // If content is a locally-created quick preview (from PromptInput),
+  // skip the network-backed autoPreview so the local preview isn't
+  // immediately overwritten.
+  const isLocalQuick = content && content.__localPreview;
+  if (content && autoPreview && !isLocalQuick) {
         // Debounced auto update to avoid rapid requests
         debouncedUpdate(content);
       }
