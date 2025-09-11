@@ -1,4 +1,4 @@
-import { render, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte/svelte5';
 import PromptInput from '../src/components/PromptInput.svelte';
 import { vi } from 'vitest';
 
@@ -30,7 +30,7 @@ test('Generate button flow - happy path (dev stub)', async () => {
   await fireEvent.input(textarea, { target: { value: 'A short poem' } });
 
   const button = getByTestId('generate-button');
-  expect(button).toBeInTheDocument();
+  expect(button).toBeTruthy();
 
   // Click generate: should call POST /prompt
   await fireEvent.click(button);

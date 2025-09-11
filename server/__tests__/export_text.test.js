@@ -3,15 +3,23 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { startServer } from "../index.js";
+import { startServer, closeServer } from "../index.js";
 import appModule from "../index.js";
+let server;
 
 beforeAll(async () => {
-  // Start server programmatically and ensure it listens
-  await startServer({ listen: true });
+  // Start server programmatically and ensure it listens on an ephemeral port
+  server = await startServer({ listen: true, port: 0 });
 });
 
 afterAll(async () => {
+  // Close the HTTP server if we started one
+  if (server) {
+    try {
+      await closeServer(server);
+    } catch (e) {}
+  }
+
   // Attempt graceful shutdown of Puppeteer/browser if exposed
   const browser = appModule.browser;
   if (browser && browser.close) {
@@ -23,7 +31,9 @@ afterAll(async () => {
 
 describe("Ebook export smoke", () => {
   it("POST /api/export/book returns a PDF buffer and contains poem text", async () => {
-    const res = await request("http://localhost:3000")
+  const port = server && typeof server.address === 'function' && server.address() ? server.address().port : null;
+    const base = port ? `http://localhost:${port}` : "http://localhost:3000";
+    const res = await request(base)
       .post("/api/export/book")
       .send({})
       .set("Content-Type", "application/json")

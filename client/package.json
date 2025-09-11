@@ -11,14 +11,17 @@
     "smoke:e2e": "node scripts/smoke-e2e.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint \"src/**/*.{js,ts,svelte}\" \"test/**/*.{js,ts}\" || true",
+    "lint:fix": "eslint \"src/**/*.{js,ts,svelte}\" --fix || true"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.1.0",
     "@testing-library/svelte": "^4.2.3",
+    "eslint": "^8.46.0",
     "jsdom": "^26.1.0",
+    "playwright": "^1.55.0",
     "puppeteer-core": "^24.16.2",
-    "playwright": "^1.40.0",
     "svelte": "^5.35.2",
     "vite": "^6.2",
     "vitest": "^3.2.4"

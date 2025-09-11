@@ -67,31 +67,22 @@ async function startServer(options = {}) {
       if (jobsModule && jobsModule.openJobsDb) {
         const jobsDbPath =
           process.env.JOBS_DB || path.join(process.cwd(), "data", "jobs.db");
-        // Open and keep a handle to reuse across requests/workers
         module.exports._jobsDb = await jobsModule.openJobsDb(jobsDbPath);
         console.log("Jobs DB opened at", jobsDbPath);
 
-        // Run one immediate recovery pass at startup so any stale 'processing'
-        // jobs from a previous crash or shutdown are returned to 'queued'
-        // before the regular recovery interval begins.
+        // Run one immediate recovery pass at startup
         try {
           const requeuedAtStart = await jobsModule.requeueStaleJobs(
             module.exports._jobsDb,
             parseInt(process.env.JOBS_STALE_MS) || 10 * 60 * 1000
           );
           if (requeuedAtStart && requeuedAtStart > 0) {
-            console.log(
-              `Startup recovery: requeued ${requeuedAtStart} stale jobs`
-            );
+            console.log(`Startup recovery: requeued ${requeuedAtStart} stale jobs`);
           }
         } catch (e) {
-          console.warn(
-            "Startup requeueStaleJobs failed",
-            e && e.message ? e.message : e
-          );
+          console.warn("Startup requeueStaleJobs failed", e && e.message ? e.message : e);
         }
 
-        // Start periodic recovery pass to requeue stale jobs
         const recoveryInterval =
           parseInt(process.env.JOBS_RECOVERY_INTERVAL_MS) || 5 * 60 * 1000; // default 5m
         module.exports._jobsRecoveryTimer = setInterval(async () => {
@@ -100,67 +91,60 @@ async function startServer(options = {}) {
               module.exports._jobsDb,
               parseInt(process.env.JOBS_STALE_MS) || 10 * 60 * 1000
             );
-            if (requeued && requeued > 0)
-              console.log(`Requeued ${requeued} stale jobs`);
+            if (requeued && requeued > 0) console.log(`Requeued ${requeued} stale jobs`);
           } catch (e) {
-            console.warn(
-              "requeueStaleJobs failed",
-              e && e.message ? e.message : e
-            );
+            console.warn("requeueStaleJobs failed", e && e.message ? e.message : e);
           }
         }, recoveryInterval);
       }
     } catch (e) {
-      console.warn(
-        "Failed to initialize jobs DB or recovery timer:",
-        e && e.message ? e.message : e
-      );
+      console.warn("Failed to initialize jobs DB or recovery timer:", e && e.message ? e.message : e);
     }
 
-    // 2. Then initialize Puppeteer (skip if explicitly disabled for tests)
-    const skipPuppeteer =
-      process.env.SKIP_PUPPETEER === "true" ||
-      process.env.SKIP_PUPPETEER === "1";
+    // 2. Initialize Puppeteer (skip if explicitly disabled for tests)
+    const skipPuppeteer = process.env.SKIP_PUPPETEER === "true" || process.env.SKIP_PUPPETEER === "1";
     if (skipPuppeteer) {
-      console.log(
-        "SKIP_PUPPETEER=true - skipping Puppeteer initialization (test/CI mode)"
-      );
+      console.log("SKIP_PUPPETEER=true - skipping Puppeteer initialization (test/CI mode)");
       serviceState.puppeteer.startupPhase = "skipped";
       serviceState.puppeteer.ready = false;
     } else {
       await startPuppeteer();
     }
 
-    // 3. Start the server only after all dependencies are ready
-    // Decide whether to call app.listen: by default true, but tests should
-    // avoid binding to the network to prevent EADDRINUSE when multiple
-    // test workers import/start the server. The caller can override via
-    // options.listen = true/false. We also auto-disable listening when
-    // running under a test runner (NODE_ENV === 'test' or Vitest worker).
-    const callerRequestedListen =
-      options.listen !== undefined ? options.listen : true;
-    const runningInTest =
-      process.env.NODE_ENV === "test" || !!process.env.VITEST_WORKER_ID;
-    const shouldListen = callerRequestedListen && !runningInTest;
+    // 3. Decide whether to call app.listen
+    const callerRequestedListen = options.listen !== undefined ? options.listen : true;
+    const runningInTest = process.env.NODE_ENV === "test" || !!process.env.VITEST_WORKER_ID;
+    const shouldListen = callerRequestedListen && (!runningInTest || options.listen === true);
 
     if (shouldListen) {
-      app.listen(PORT, "0.0.0.0", () => {
-        console.log(`Server listening on port ${PORT}`);
+      const requestedPort = options && options.port !== undefined ? options.port : process.env.PORT || PORT;
+      const bindPort = typeof requestedPort === "number" ? requestedPort : parseInt(requestedPort, 10) || PORT;
+
+      const server = app.listen(bindPort, "0.0.0.0", () => {
+        try {
+          const bound = server.address();
+          const boundPort = bound && bound.port ? bound.port : bindPort;
+          console.log(`Server listening on port ${boundPort}`);
+        } catch (e) {
+          console.log(`Server listening (port ${bindPort})`);
+        }
       });
-    } else {
-      console.log(
-        `startServer: Skipping app.listen (shouldListen=${shouldListen}, NODE_ENV=${process.env.NODE_ENV})`
-      );
-      // If running in tests, reduce startup grace to allow health checks to
-      // consider services ready immediately. This prevents test suites from
-      // failing due to the initial grace period.
-      if (runningInTest) {
-        serviceState.startupTime = Date.now() - STARTUP_GRACE_PERIOD_MS - 1000;
-      }
+
+      // Keep a reference for external shutdown hooks/tests
+      module.exports._httpServer = server;
+      return server;
     }
+
+    // If not listening (e.g. test mode), reduce startup grace to speed tests
+    if (runningInTest) {
+      serviceState.startupTime = Date.now() - STARTUP_GRACE_PERIOD_MS - 1000;
+    }
+
+    console.log(`startServer: Skipping app.listen (shouldListen=${shouldListen}, NODE_ENV=${process.env.NODE_ENV})`);
+    return null;
   } catch (err) {
     console.error("Failed to start the server:", err);
-    process.exit(1); // Exit if critical services fail to start
+    process.exit(1);
   }
 }
 
@@ -173,6 +157,40 @@ if (require.main === module) {
 module.exports = app;
 // Also expose startServer so tests can programmatically initialize DB/Puppeteer
 module.exports.startServer = startServer;
+// Expose a helper to close the HTTP server and cleanup resources
+// Helper to close a server returned by startServer and cleanup resources
+module.exports.closeServer = async function closeServer(server) {
+  try {
+    if (server && typeof server.close === "function") {
+      await new Promise((resolve, reject) => {
+        server.close((err) => {
+          if (err) return reject(err);
+          resolve();
+        });
+      });
+    }
+  } catch (e) {
+    console.warn("closeServer: error closing http server", e && e.message);
+  }
+
+  // Clear jobs recovery timer if set
+  try {
+    if (module.exports._jobsRecoveryTimer) {
+      clearInterval(module.exports._jobsRecoveryTimer);
+      module.exports._jobsRecoveryTimer = null;
+    }
+  } catch (e) {}
+
+  // Close browser if present
+  try {
+    if (browserInstance && browserInstance.close) {
+      await browserInstance.close();
+      browserInstance = null;
+    }
+  } catch (e) {
+    // ignore close errors
+  }
+};
 // Export a wrapper for previewTemplate so the module can be imported before
 // the previewTemplate binding is created during module evaluation in tests.
 module.exports.previewTemplate = (content) => {
@@ -394,7 +412,15 @@ app.use((req, res, next) => {
 // environment. This protects the dev server if you need to make forwarded
 // ports public during testing. It intentionally allows the root and health
 // routes so platform readiness and probes continue to work.
-if (process.env.DEV_AUTH_TOKEN) {
+// NOTE: Do not enable this middleware when running tests — tests expect
+// unprotected endpoints. Also avoid registering the middleware when the
+// module is required programmatically (e.g. by test runners). Only attach
+// the middleware when the server is executed directly (`node server/index.js`).
+if (
+  process.env.DEV_AUTH_TOKEN &&
+  require.main === module &&
+  !(process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID)
+) {
   app.use((req, res, next) => {
     try {
       if (req.path === "/" || req.path === "/health") return next();
