@@ -153,4 +153,15 @@ Key observations:
 4. No state management
 5. Poor user experience
 
+## Recommended Approach (Option 1)
+
+- **Option 1 — Document First, Actionables, Implement, Verify (Recommended):**
+  - Step 1: Document the desired behavior, API contract, and acceptance criteria (this file + addenda).
+  - Step 2: Break the work into clear, checkable actionables (see `GENERATE_BUTTON_STATUS.ADDENDA.md` DoD and task table).
+  - Step 3: Implement the smallest slice that satisfies one or more actionables.
+  - Step 4: Verify the implementation with the unit and integration checks defined in the addenda.
+  - Step 5: When verification passes, mark the corresponding DoD checkboxes and update the tracker with actual time and status.
+
+This repository follows Option 1 as the default workflow: document → plan → implement → verify → check-off. If a different path is chosen, note it explicitly in the addenda and the task tracker.
+
 The current state provides no value to users and requires comprehensive implementation of the specified behaviors to become useful.
