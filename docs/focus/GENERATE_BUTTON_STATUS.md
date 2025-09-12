@@ -6,7 +6,7 @@
 
 **Last Updated**: September 11, 2025
 **Implementation Stage**: Early Prototype (v0.1)
-**Overall Status**: ❌ Non-functional
+**Overall Status**: ⚠️ Partially functional — Phase A implemented (see assessment below)
 
 ## Purpose vs. Implementation Checklist
 
@@ -165,3 +165,37 @@ Key observations:
 This repository follows Option 1 as the default workflow: document → plan → implement → verify → check-off. If a different path is chosen, note it explicitly in the addenda and the task tracker.
 
 The current state provides no value to users and requires comprehensive implementation of the specified behaviors to become useful.
+
+## Phase A assessment (2025-09-12)
+
+Summary: The Phase A items defined in `GENERATE_BUTTON_STATUS.ADDENDA.md` are largely implemented in the codebase. Evidence:
+
+- API helper: `client/src/lib/api.js` implements `submitPrompt`, `loadPreview`, and related helpers.
+- Generate/preview UI: `client/src/components/PromptInput.svelte` contains a functioning Generate button, spinner, demo loader, and preview flow hooks.
+- Unit tests: `client/__tests__/generate-button.test.ts` exists and mocks a dev `/prompt` response for the happy path.
+- Dev stub: `server/index.js` contains a dev-only `POST /prompt?dev=true` handler returning deterministic preview data.
+
+Status per DoD (quick):
+
+- Button enables only when input is valid: Partial — UI prevents empty submission (checks in handler) but the button's `disabled` attribute is not strictly gated by input validity (disabled while loading). Suggest enabling client-side disable when input is empty for better UX.
+- Clicking shows immediate visual feedback within 500ms: Done — `PromptInput.svelte` sets local `isGenerating` and shows spinner immediately.
+- Duplicate clicks prevented: Done — `isGenerating` / disabled prop prevents repeat submits from the same UI instance.
+- Preview updated on success: Done — preview flows (`previewFromContent` / `loadPreview`) are wired to update the preview pane.
+- Error behavior preserves input and allows retry: Partial — server and client surface errors; input preservation is implemented, but user-facing messages and retry affordances can be improved.
+
+Remaining high-priority gaps for Phase A completion:
+
+- Client-side input validation: disable Generate when prompt is empty and surface an inline validation message.
+- Accessibility: add ARIA live region roles and ensure status updates are announced reliably for screen readers.
+- Security: ensure preview HTML is sanitized or rendered in a sandboxed iframe to avoid XSS; prefer structured JSON for preview content if possible.
+- CI wiring: add the unit tests into CI runs and add an optional dev-only integration smoke step that runs against the `?dev=true` stub.
+- Observability: add telemetry/logging hooks and health checks to measure success rate and latencies.
+
+Recommended immediate next actions (short list):
+
+1. Add client-side validation to disable the Generate button when the prompt is empty and show an inline message (small UI change in `PromptInput.svelte`).
+2. Add a small sanitization or sandbox step for preview HTML rendering and document the approach in the addenda.
+3. Ensure the existing unit tests run in CI (add to pipeline) and run the integration smoke (manual or automated) against the dev stub to mark A5 done.
+4. Add an accessibility checklist item and a small test (e.g., axe) to assert live-region announcements for status changes.
+
+If you want, I can open a branch and implement items (1) and (2) as a minimal Phase-A finishing PR.

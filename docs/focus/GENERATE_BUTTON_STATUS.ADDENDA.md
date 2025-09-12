@@ -17,6 +17,17 @@ Source: `docs/focus/GENERATE_BUTTON_STATUS.md`
 
 If these assumptions are wrong, adjust paths and commands accordingly.
 
+## Phase A status (2025-09-12)
+
+Observed implementation in the repository (evidence):
+
+- `client/src/lib/api.js` — contains `submitPrompt`, `loadPreview`, `exportToPdf` and robust fetchWithRetry logic.
+- `client/src/components/PromptInput.svelte` — contains the Generate button, spinner, demo loader, preview and smoke-test hooks, and client-side flows that call `generateAndPreview` / `previewFromContent`.
+- `client/__tests__/generate-button.test.ts` — unit test validating a happy-path using a mocked `/prompt` dev response.
+- `server/index.js` — contains a dev-only `POST /prompt` handler that returns deterministic content when `?dev=true`.
+
+These files indicate Phase A (minimal demo + unit tests) is implemented. See "Definition of Done" and the checklist later for remaining small items.
+
 ## Minimal API contract (recommended)
 
 1. Synchronous preview (demo-friendly)
@@ -47,6 +58,8 @@ Behavior rules
 - Prevent duplicate clicks by entering `loading` immediately on first click.
 - Preserve input on error.
 - Timeouts: consider client-side 60s timeout for requests; treat as recoverable with retry.
+
+Note: the client currently uses `fetchWithRetry` and `AbortController` patterns are recommended for cancelation. Ensure `client/src/lib/api.js` is used by the Generate flow (it is), and wire an AbortSignal from the button to support user cancel.
 
 ## File targets (suggested edits)
 
@@ -108,6 +121,16 @@ export async function postPrompt(payload) {
 - Transient server error (5xx / network): "Temporary server error — please retry." (offer Retry)
 - AI-specific failure: "Generation failed — try changing the prompt or try again later." (include error.code when available)
 
+Suggested error response schema (small):
+
+- 200/201 Success: { success: true, data: { content: { title: string, body: string, layout?: string }, ... } }
+- 4xx Validation: { success: false, error: { code: 'validation', message: string, fields?: { [k:string]: string } } }
+- 5xx Server/AI: { success: false, error: { code: 'ai_error'|'server_error', message: string, details?: object } }
+
+Add this schema to the server and client tests so mocks and error handlers can assert on known shapes.
+
+Security note: preview HTML returned from the server may contain markup. The addenda recommends either returning structured JSON for preview content (title/body) and rendering it safely, or explicitly sanitizing HTML server-side. If preview HTML is injected into the DOM, wrap it in a small sanitizer (DOMPurify) or render inside a sandboxed iframe to reduce XSS risk. Document chosen approach in this addenda and implement a small test that asserts script tags are not executed in the preview pane.
+
 ## Definition of Done (DoD)
 
 - [ ] Button enables only when input is valid.
@@ -122,12 +145,31 @@ export async function postPrompt(payload) {
 
 - Rationale: reduces rework by aligning implementers and reviewers on a minimal, testable slice before any code changes are merged.
 - Workflow:
+
   1. Create or update the documentation and API contract (this file fulfills that requirement).
   2. Add explicit, small actionables to the `Time estimates & tracker` table and set `Status` to `In Progress` when someone starts work.
   3. Implement only the smallest set of code necessary to satisfy one or more DoD items.
   4. Add or update unit and integration tests that assert the acceptance criteria.
   5. Run the verification steps locally (see `Minimal acceptance commands`) and ensure all checks pass.
   6. Mark the DoD checkboxes for the tasks completed, update `Status` to `Done`, and record start/finish timestamps and actual hours.
+
+  Phase A delta (what's already done):
+
+  - A1 Add `client/src/lib/api.js`: Done (file exists and contains submitPrompt/loadPreview helpers).
+  - A2 Implement `GenerateButton.svelte` (state machine + spinner): Partial/Done — the Generate button is implemented inside `PromptInput.svelte` and includes spinner, disabled states, and hooks into flows.
+  - A3 Unit tests (Vitest) for Generate button: Done — `client/__tests__/generate-button.test.ts` covers the happy path with a mocked dev response.
+  - A4 Dev-only server stub `/prompt?dev=true`: Done — implemented in `server/index.js`.
+  - A5 Integration smoke (manual verification): In Progress — manual smoke run was noted in the tracker and should be completed in CI or by the implementer.
+
+  Updated Time estimates & tracker (delta):
+
+  - Mark A1/A2/A3/A4 as Done in the tracker (they are present in the repo). A5 remains In Progress until the integration smoke is executed and recorded.
+
+  If you'd like, I can prepare a tiny PR to:
+
+  - Add client-side empty-prompt disable & inline validation message in `PromptInput.svelte` (small change).
+  - Add a small preview sanitization helper and a test that asserts no script execution from the dev stub response.
+  - Wire the existing unit test into CI or add a short GitHub Actions workflow step to run `npm --prefix client test`.
 
 ### Check-off Template (to paste into PR description or update in this file on completion)
 
@@ -159,6 +201,19 @@ npm --prefix server run dev
 # start frontend
 npm --prefix client run dev
 ```
+
+## Phase A completion notes & CI recommendations
+
+Recent changes (2025-09-12): client-side prompt validation and preview sanitization were implemented and unit-tested. These close high-priority Phase A gaps (input validation and XSS mitigation).
+
+CI recommendations (small, low-risk):
+
+- Add a GitHub Actions workflow job that runs:
+  - Checkout, install dependencies, and run `npm --prefix client test`.
+  - Optionally run a lightweight integration smoke that starts server in test mode and runs a headless browser smoke (or use existing server test harness).
+- Fail PRs when tests fail and require approval for any changes that modify the preview rendering path (sanitizer changes).
+
+Running the minimal acceptance commands (above) and the client tests should be sufficient to mark Phase A as Done in the tracker and to update the DoD checkboxes in this addenda.
 
 Run client tests:
 

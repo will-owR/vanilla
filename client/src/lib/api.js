@@ -88,7 +88,23 @@ export async function submitPrompt(prompt) {
   Logger.debug("Submitting prompt", { prompt });
 
   try {
-    const response = await fetchWithRetry("/prompt", {
+    // Use dev stub when running in dev mode so local prototyping is deterministic.
+    let promptUrl = "/prompt";
+    try {
+      const isNodeDev =
+        typeof process !== "undefined" &&
+        process.env &&
+        process.env.NODE_ENV === "development";
+      const isViteDev =
+        typeof window !== "undefined" &&
+        window &&
+        window["__VITE_DEV__"] === true;
+      if (isViteDev || isNodeDev) promptUrl = "/prompt?dev=true";
+    } catch (e) {
+      // ignore and use default
+    }
+
+    const response = await fetchWithRetry(promptUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt }),

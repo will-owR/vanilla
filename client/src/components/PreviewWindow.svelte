@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
 
   import { debounce } from '../lib/utils';
+  import { sanitizeHtml } from '../lib/sanitize';
 
   let content;
   contentStore.subscribe(value => {
@@ -111,9 +112,12 @@
         const minVisible = 300;
         if (elapsed < minVisible) await new Promise((r) => setTimeout(r, minVisible - elapsed));
 
-        // Update the local preview HTML immediately to reduce render races
-        previewHtmlLocal = normalizedHtml || '';
-        previewStore.set(html);
+  // Sanitize HTML for rendering to avoid executing scripts or event handlers.
+  // Keep previewStore set to the raw server HTML for testing/diagnostics but
+  // render a sanitized version in the DOM.
+  const safeHtml = sanitizeHtml(normalizedHtml || html || '');
+  previewHtmlLocal = safeHtml;
+  previewStore.set(html);
         try {
           if (typeof window !== 'undefined') window['__LAST_PREVIEW_HTML'] = html;
         } catch (e) {}
@@ -214,7 +218,7 @@
       {#if uiState.status === 'loading'}
         <div class="small-spinner" aria-hidden="true"></div>
       {/if}
-      {@html previewHtmlLocal}
+  {@html previewHtmlLocal}
 
       {#if !computedHasPreview && uiState.status !== 'loading'}
         <div class="placeholder-inner">

@@ -40,11 +40,15 @@
 
   let isGenerating = false;
   let isPreviewing = false;
+  let touched = false;
+
+  $: isPromptEmpty = !currentPrompt || !currentPrompt.trim();
 
   import { generateAndPreview, previewFromContent } from '../lib/flows';
 
   const handleSubmit = async () => {
     console.log('handleSubmit -> generateAndPreview: called, currentPrompt=', currentPrompt);
+    touched = true;
     if (!currentPrompt || !currentPrompt.trim()) {
       setUiError('Prompt cannot be empty.');
       return;
@@ -123,11 +127,15 @@
     id="prompt-textarea"
     data-testid="prompt-textarea"
     bind:value={currentPrompt}
-    on:input={() => promptStore.set(currentPrompt)}
+    on:input={() => { promptStore.set(currentPrompt); touched = true }}
+    on:blur={() => (touched = true)}
     rows="6"
     placeholder="e.g., A noir detective story set in a city of robots."
     disabled={uiState.status === 'loading'}
   ></textarea>
+    {#if touched && isPromptEmpty}
+      <p class="validation">Please enter a prompt before generating.</p>
+    {/if}
   <div class="controls-row">
     <button
       class="suggestion"
@@ -168,11 +176,11 @@
     <button
       data-testid="generate-button"
       on:click={handleSubmit}
-      disabled={uiState.status === 'loading' || isGenerating || isPreviewing}
+      disabled={isPromptEmpty || uiState.status === 'loading' || isGenerating || isPreviewing}
       aria-busy={isGenerating}
-      aria-disabled={uiState.status === 'loading' || isPreviewing}
+      aria-disabled={isPromptEmpty || uiState.status === 'loading' || isPreviewing}
       aria-live="polite"
-      title={uiState.status === 'loading' || isGenerating ? 'Generating... please wait' : 'Generate content from prompt'}
+      title={isPromptEmpty ? 'Enter a prompt to enable generate' : uiState.status === 'loading' || isGenerating ? 'Generating... please wait' : 'Generate content from prompt'}
     >
       {#if isGenerating}
         <span class="spinner" aria-hidden="true"></span>
