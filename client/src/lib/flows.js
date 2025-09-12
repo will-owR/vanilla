@@ -101,25 +101,47 @@ export async function generateOnly(prompt, timeoutMs = DEFAULT_TIMEOUT_MS) {
     uiStateStore.set({ status: "error", message: err.message });
     throw err;
   }
-
   setUiLoading("Generating (emergency)...");
 
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
-    const response = await withTimeout(submitPrompt(prompt), timeoutMs);
-    const content =
-      (response && response.data && response.data.content) ||
-      response.content ||
-      null;
-    if (!content) {
-      throw new Error("Invalid response structure from server.");
+    const res = await fetch("/prompt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(id);
+
+    if (!res.ok) {
+      const err = new Error(`Prompt request failed: ${res.status}`);
+      setUiError(err.message);
+      throw err;
     }
 
-    // Only update the content store; skip the preview step intentionally.
+    const data = await res.json();
+    const content =
+      (data && data.data && data.data.content) || data.content || null;
+    if (!content) {
+      const err = new Error("Invalid response structure from server.");
+      setUiError(err.message);
+      throw err;
+    }
+
     contentStore.set(content);
     uiStateStore.set({ status: "success", message: "Generated (emergency)" });
     return content;
   } catch (err) {
-    setUiError(err.message || "Emergency generation failed");
+    if (err && err.name === "AbortError") {
+      setUiError("Generation request timed out");
+    } else {
+      setUiError(err.message || "Emergency generation failed");
+    }
     throw err;
+  } finally {
+    clearTimeout(id);
   }
 }

@@ -46,11 +46,8 @@
 
   import { generateAndPreview, previewFromContent, generateOnly } from '../lib/flows';
 
-  // Respect an explicit EMERGENCY_MODE flag (docs describe how to enable).
-  const EMERGENCY_MODE = Boolean(import.meta.env?.VITE_EMERGENCY_MODE || false);
-
   const handleSubmit = async () => {
-    console.log('handleSubmit -> generate: called, currentPrompt=', currentPrompt, 'EMERGENCY_MODE=', EMERGENCY_MODE);
+    console.log('handleSubmit -> generateOnly: called, currentPrompt=', currentPrompt);
     touched = true;
     if (!currentPrompt || !currentPrompt.trim()) {
       setUiError('Prompt cannot be empty.');
@@ -58,14 +55,10 @@
     }
     isGenerating = true;
     try {
-      if (EMERGENCY_MODE) {
-        // Minimal path: generate only, skip preview to reduce dependencies
-        await generateOnly(currentPrompt);
-      } else {
-        await generateAndPreview(currentPrompt);
-      }
+      // Call the minimal direct backend flow to ensure Generate does a real POST
+      await generateOnly(currentPrompt);
     } catch (err) {
-      console.log('generate error', err);
+      console.log('generateOnly error', err);
     } finally {
       isGenerating = false;
     }
