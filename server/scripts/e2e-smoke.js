@@ -267,9 +267,10 @@ const path = require("path");
     // request so the server accepts the call. When running via the Vite proxy
     // the proxy injects this header automatically; the direct call must do it
     // explicitly.
+    /** @type {Record<string,string>} */
     const promptHeaders = { "Content-Type": "application/json" };
     if (process.env.DEV_AUTH_TOKEN) {
-      promptHeaders["x-dev-auth"] = process.env.DEV_AUTH_TOKEN;
+      promptHeaders["x-dev-auth"] = String(process.env.DEV_AUTH_TOKEN);
     }
 
     const promptResp = await fetchFn("http://localhost:3000/prompt", {
@@ -293,9 +294,10 @@ const path = require("path");
     const previewUrl = `http://localhost:3000/preview?content=${encodeURIComponent(
       JSON.stringify(content)
     )}`;
+    /** @type {Record<string,string>} */
     const previewHeaders = {};
     if (process.env.DEV_AUTH_TOKEN)
-      previewHeaders["x-dev-auth"] = process.env.DEV_AUTH_TOKEN;
+      previewHeaders["x-dev-auth"] = String(process.env.DEV_AUTH_TOKEN);
     const previewResp = await fetchFn(previewUrl, {
       method: "GET",
       headers: previewHeaders,
