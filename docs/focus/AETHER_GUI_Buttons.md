@@ -6,6 +6,18 @@ Documentation of button functionality, process flows, dependencies, and status i
 
 > Working branch: `aether/dev-v01` — this is the active development branch for GUI fixes and emergency restores. Merge final fixes back to `main` when stable.
 
+
+## What's next (options)
+
+```
+What's next (options):
+
+I can add the same working-branch note to GENERATE_BUTTON_RESTORE.md and other related docs so it's consistently visible.
+I can open a PR for aether/dev-v01 if you'd like to formalize the branch transition.
+I can proceed with the smoke test or document the env vars/rollback steps (still pending tasks from the todo list).
+```
+
+
 ## Button Inventory
 
 ### 1. Summer Suggestion
