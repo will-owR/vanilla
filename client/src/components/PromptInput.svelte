@@ -44,10 +44,13 @@
 
   $: isPromptEmpty = !currentPrompt || !currentPrompt.trim();
 
-  import { generateAndPreview, previewFromContent } from '../lib/flows';
+  import { generateAndPreview, previewFromContent, generateOnly } from '../lib/flows';
+
+  // Respect an explicit EMERGENCY_MODE flag (docs describe how to enable).
+  const EMERGENCY_MODE = Boolean(import.meta.env?.VITE_EMERGENCY_MODE || false);
 
   const handleSubmit = async () => {
-    console.log('handleSubmit -> generateAndPreview: called, currentPrompt=', currentPrompt);
+    console.log('handleSubmit -> generate: called, currentPrompt=', currentPrompt, 'EMERGENCY_MODE=', EMERGENCY_MODE);
     touched = true;
     if (!currentPrompt || !currentPrompt.trim()) {
       setUiError('Prompt cannot be empty.');
@@ -55,9 +58,14 @@
     }
     isGenerating = true;
     try {
-      await generateAndPreview(currentPrompt);
+      if (EMERGENCY_MODE) {
+        // Minimal path: generate only, skip preview to reduce dependencies
+        await generateOnly(currentPrompt);
+      } else {
+        await generateAndPreview(currentPrompt);
+      }
     } catch (err) {
-      console.log('generateAndPreview error', err);
+      console.log('generate error', err);
     } finally {
       isGenerating = false;
     }

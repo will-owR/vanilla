@@ -89,3 +89,37 @@ export async function generateAndPreview(
     throw err;
   }
 }
+
+/**
+ * Minimal generate-only flow used in EMERGENCY_MODE.
+ * Submits a prompt, updates contentStore with the returned content and
+ * sets minimal UI state. Does NOT call previewFromContent.
+ */
+export async function generateOnly(prompt, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  if (!prompt || !String(prompt).trim()) {
+    const err = new Error("Prompt cannot be empty.");
+    uiStateStore.set({ status: "error", message: err.message });
+    throw err;
+  }
+
+  setUiLoading("Generating (emergency)...");
+
+  try {
+    const response = await withTimeout(submitPrompt(prompt), timeoutMs);
+    const content =
+      (response && response.data && response.data.content) ||
+      response.content ||
+      null;
+    if (!content) {
+      throw new Error("Invalid response structure from server.");
+    }
+
+    // Only update the content store; skip the preview step intentionally.
+    contentStore.set(content);
+    uiStateStore.set({ status: "success", message: "Generated (emergency)" });
+    return content;
+  } catch (err) {
+    setUiError(err.message || "Emergency generation failed");
+    throw err;
+  }
+}
