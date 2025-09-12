@@ -42,7 +42,10 @@
   let isPreviewing = false;
   let touched = false;
 
-  $: isPromptEmpty = !currentPrompt || !currentPrompt.trim();
+  // Use the prompt store directly to determine emptiness. This avoids
+  // a subtle sync window between the local `currentPrompt` binding and
+  // `promptStore` updates when programmatic writes or test runners set the prompt.
+  $: isPromptEmpty = !$promptStore || !$promptStore.trim();
 
   import { generateAndPreview, previewFromContent, generateOnly } from '../lib/flows';
 
