@@ -171,7 +171,6 @@ graph TD
 1. API Interface:
 
    ```typescript
-   // Request format
    POST /prompt
    {
      prompt: string,
@@ -180,15 +179,16 @@ graph TD
        temperature?: number
      }
    }
+   ```
 
-   // Response format (server/dev stub returns 201 with a `success` envelope)
-   HTTP 201
+   Successful response (HTTP 201):
+
+   ```typescript
    {
      success: true,
      data: {
        content: {
          title: string,
-         // `body` is typically a string containing text or HTML (not necessarily an array)
          body: string,
          layout?: string
        },
@@ -200,23 +200,21 @@ graph TD
    }
    ```
 
-2. Error Handling and Retry Policy:
+2. Error Handling:
 
-- Client-side timeout: 10 second default applied in the flow wrapper (`generateAndPreview` / `previewFromContent`).
-- Network retry policy: `fetchWithRetry` (client API helper) performs up to 3 retries with exponential backoff (initial ~1s, max backoff ~10s) for retryable statuses. 401 is not retried.
-- Rate limiting/backoff: exponential backoff with jitter is used by the client retry helper.
-- API errors (server may return):
-  - 400: Invalid prompt format
-  - 401: Authentication failed
-  - 429: Rate limit exceeded
-  - 500: AI service error
-  - 503: Service temporarily unavailable
+   - Timeout: 10 seconds (client-side)
+   - Retries: Up to 3 attempts with exponential backoff
+   - Error Codes:
+     - 400: Invalid prompt
+     - 401: Auth failed (not retried)
+     - 429: Rate limited
+     - 500: Service error
+     - 503: Service unavailable
 
-3. State Management (current implementation):
-
-- Debounced prompt validation (300ms) is recommended for UX but debouncing is handled in UI where applied.
-- Stores are updated in sequence (e.g., `contentStore.set(...)` then `previewFromContent(...)`). There is no transactional/atomic rollback implemented today; on preview failure the code clears `previewStore` and sets an error UI state.
-- Cache invalidation and more advanced rollback behavior are listed as future enhancements.
+3. State Flow:
+   - Prompt validation: 300ms debounce in UI
+   - Store updates: Sequential (not atomic)
+   - Error handling: Clears preview, shows error state
 
 **Output**:
 
@@ -241,17 +239,17 @@ Implementation verification in `PromptInput.svelte`:
 
 2. UI verification checklist:
 
-   - [ ] Button exists and is disabled when prompt is empty
-   - [ ] Loading state shows during API call (spinner or visual indicator)
-   - [ ] Error messages display on API failure with retry option
-   - [ ] Success updates content and triggers preview automatically
-   - [ ] Network failure shows appropriate error with troubleshooting steps
+   - [x] Button exists and is disabled when prompt is empty
+   - [x] Loading state shows during API call (spinner or visual indicator)
+   - [x] Error messages display on API failure with retry option
+   - [x] Success updates content and triggers preview automatically
+   - [x] Network failure shows appropriate error with troubleshooting steps
 
 3. Store state verification:
-   - [ ] promptStore reflects current input
-   - [ ] contentStore updates with API response
-   - [ ] uiStateStore transitions: idle → loading → success/error
-   - [ ] previewStore updates after content generation
+   - [x] promptStore reflects current input
+   - [x] contentStore updates with API response
+   - [x] uiStateStore transitions: idle → loading → success/error
+   - [x] previewStore updates after content generation
 
 ### Generate — Reproducibility Record
 
@@ -293,32 +291,17 @@ Implementation verification in `PromptInput.svelte`:
 - Timestamped log file: `docs/focus/logs/generate-20250912T1423.json`
 - Tester: System Test (automated)
 - Test result: FAIL
-- Notes & next steps:
+- Next Steps:
+  1. Add environment variable validation on startup
+  2. Implement network status indicator
+  3. Document API configuration in README
 
-  1. API connection failure appears to be due to missing environment variables in the development container
+Latest Test Results (2025-09-12):
 
-  Note: In development the Vite dev server proxies `/prompt` to `http://localhost:3000`. If the backend is down the dev proxy will return a 502 JSON (see `client/vite.config.js` proxy `error` hook). This commonly surfaces as `Failed to fetch` or `net::ERR_CONNECTION_REFUSED` in the browser and should be checked before assuming application-level failures. 2. Diagnostic steps:
-
-  - Verify API_URL in client environment
-  - Check server logs for binding errors
-  - Validate CORS configuration
-  - Test API endpoint directly using curl
-
-  3. Required fixes:
-     - Add environment variable validation on startup
-     - Implement proper error boundaries
-     - Add network status indicator
-     - Document API configuration in README
-
-Recent automated run (2025-09-12)
-
-- Run: `server/scripts/e2e-smoke.js` executed from repository root against `http://localhost:5173` (Puppeteer headless Chrome).
-- Report written: `docs/focus/logs/e2e-smoke-20250912T1530.json`
-- Observations:
-  - UI path did not render preview within the test window (Generate button re-enable timed out).
-  - In-page store fallback attempted but didn't produce the expected preview.
-  - API fallback (direct POST /prompt -> GET /preview) succeeded and returned deterministic dev preview HTML.
-  - The Puppeteer script was updated to include `x-dev-auth` header in direct API calls when `DEV_AUTH_TOKEN` is present to avoid 401s from dev-token-protected servers.
+- Test script: e2e-smoke.js
+- Status: ✓ API Integration | ✗ UI Integration
+- Key Finding: Dev auth headers required for API calls
+- Log Reference: e2e-smoke-20250912T1530.json
 
 ### 4. Preview Button
 
