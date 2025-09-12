@@ -4,6 +4,8 @@
 
 Documentation of button functionality, process flows, dependencies, and status in the V0.1 implementation.
 
+> Working branch: `aether/dev-v01` — this is the active development branch for GUI fixes and emergency restores. Merge final fixes back to `main` when stable.
+
 ## Button Inventory
 
 ### 1. Summer Suggestion
