@@ -1,0 +1,13 @@
+{
+  "timestamp": "2025-09-12T15:30:00Z",
+  "script": "server/scripts/e2e-smoke.js",
+  "chromePath": "/usr/bin/google-chrome-stable",
+  "ui_preview_snippet": "Your generated preview will appear here.",
+  "api_preview_snippet": "<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    .preview { max-width: 800px; margin: 2rem auto; font-family: system-ui; }\n    .preview h1 { color: #2c3e50; }\n    .preview .content { line-height: 1.6; }\n  </style>\n</head>\n<body>\n  <div class=\"preview\">\n    <h1>Dev: A short summer poem about sunlight</h1>\n    <div class=\"content\">Deterministic dev preview for prompt: A short summer poem about sunlight</div>\n  </div>\n</body>\n</html>",
+  "result": "API fallback succeeded",
+  "notes": [
+    "Generate button did not re-enable in time (UI flaky), preview not found in UI",
+    "In-page store fallback attempted",
+    "Direct API fallback POST /prompt and GET /preview succeeded when DEV_AUTH_TOKEN header included (if required by server)"
+  ]
+}

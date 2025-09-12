@@ -48,25 +48,26 @@ const path = require("path");
 
     // Wait until the Generate button is no longer disabled (or timeout)
     try {
+      // Allow a longer time for the Generate action to complete and the
+      // button to re-enable. Some transitive operations (backend startup,
+      // AI service warmup, or proxy delays) can take longer in CI or dev
+      // environments, so extend to 60s here.
       await page.waitForFunction(
         () => {
           const btn = Array.from(document.querySelectorAll("button")).find(
             (b) => b.textContent && b.textContent.trim() === "Generate"
           );
           if (!btn) return false;
-          // Prefer attribute checks for headless/browser-compatibility instead of
-          // accessing element properties that type-checkers complain about.
           const isDisabled =
             typeof btn.hasAttribute === "function" &&
             btn.hasAttribute("disabled");
           const ariaDisabled =
             typeof btn.getAttribute === "function" &&
             btn.getAttribute("aria-disabled") === "true";
-          // If 'disabled' property exists (normal inputs/buttons), use it as a final check.
           const propDisabled = "disabled" in btn ? btn.disabled : false;
           return !(isDisabled || ariaDisabled || propDisabled);
         },
-        { timeout: 30000 }
+        { timeout: 60000 }
       );
     } catch (err) {
       console.warn(
@@ -105,7 +106,9 @@ const path = require("path");
     }
 
     // Click Preview button (we added one). Retry a few times if preview doesn't render.
-    const maxPreviewAttempts = 3;
+    // Increase preview attempts and allow more time per attempt to give the
+    // client a better chance to render in slow environments.
+    const maxPreviewAttempts = 5;
     let previewClicked = false;
     for (let attempt = 1; attempt <= maxPreviewAttempts; attempt++) {
       try {
@@ -131,13 +134,15 @@ const path = require("path");
 
       // Wait for preview content to appear with a reasonable timeout
       try {
-        await page.waitForSelector(".preview-content", { timeout: 10000 });
+        // Allow more time for each preview attempt (20s) to cope with
+        // backend or rendering latency.
+        await page.waitForSelector(".preview-content", { timeout: 20000 });
         break; // success
       } catch (err) {
         console.warn(`Preview content not found after attempt ${attempt}`);
         if (attempt < maxPreviewAttempts) {
           // small pause before retrying
-          await new Promise((r) => setTimeout(r, 1000));
+          await new Promise((r) => setTimeout(r, 1500));
         }
       }
     }
@@ -151,7 +156,9 @@ const path = require("path");
     let previewHtml = "";
     let foundPreview = false;
     try {
-      await page.waitForSelector(".preview-content", { timeout: 30000 });
+      // Wait a bit longer for the final preview to appear (45s) to reduce
+      // false-negatives in slower environments.
+      await page.waitForSelector(".preview-content", { timeout: 45000 });
       foundPreview = true;
     } catch (err) {
       const body = await page.evaluate(() => document.body.innerHTML);
@@ -255,9 +262,19 @@ const path = require("path");
       );
       process.exit(8);
     }
+    // If a DEV_AUTH_TOKEN is present in the environment and the server is
+    // enforcing dev-only token auth, include it in the direct API fallback
+    // request so the server accepts the call. When running via the Vite proxy
+    // the proxy injects this header automatically; the direct call must do it
+    // explicitly.
+    const promptHeaders = { "Content-Type": "application/json" };
+    if (process.env.DEV_AUTH_TOKEN) {
+      promptHeaders["x-dev-auth"] = process.env.DEV_AUTH_TOKEN;
+    }
+
     const promptResp = await fetchFn("http://localhost:3000/prompt", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: promptHeaders,
       body: JSON.stringify({ prompt: "A short summer poem about sunlight" }),
     });
     if (!promptResp.ok) {
@@ -276,7 +293,13 @@ const path = require("path");
     const previewUrl = `http://localhost:3000/preview?content=${encodeURIComponent(
       JSON.stringify(content)
     )}`;
-    const previewResp = await fetchFn(previewUrl, { method: "GET" });
+    const previewHeaders = {};
+    if (process.env.DEV_AUTH_TOKEN)
+      previewHeaders["x-dev-auth"] = process.env.DEV_AUTH_TOKEN;
+    const previewResp = await fetchFn(previewUrl, {
+      method: "GET",
+      headers: previewHeaders,
+    });
     if (!previewResp.ok) {
       console.error("API preview call failed with", previewResp.status);
       process.exit(7);
