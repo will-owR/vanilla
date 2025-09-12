@@ -225,6 +225,8 @@ graph TD
 
 **Canonical flow note:** The `Generate` action should be treated as a canonical flow. Extract its core logic into a shared function (for example, `generateAndPreview(prompt)`) and have other UI controls reuse it rather than re-implementing the flow.
 
+Note: An emergency-mode option is documented separately. If you need to make the `Generate` button operational immediately, see `docs/focus/GENERATE_BUTTON_RESTORE.md` for a safe, minimal recovery plan and a recommended `EMERGENCY_MODE` toggle.
+
 #### Verification Plan
 
 Implementation verification in `PromptInput.svelte`:
@@ -239,17 +241,18 @@ Implementation verification in `PromptInput.svelte`:
 
 2. UI verification checklist:
 
-   - [x] Button exists and is disabled when prompt is empty
-   - [x] Loading state shows during API call (spinner or visual indicator)
-   - [x] Error messages display on API failure with retry option
-   - [x] Success updates content and triggers preview automatically
-   - [x] Network failure shows appropriate error with troubleshooting steps
+- [x] Button exists and is disabled when prompt is empty
+- [x] Loading state shows during API call (spinner or visual indicator)
+- [x] Error messages display on API failure with retry option
+- [x] Success updates content and (when not in EMERGENCY_MODE) triggers preview automatically
+- [x] Network failure shows appropriate error with troubleshooting steps
 
 3. Store state verification:
-   - [x] promptStore reflects current input
-   - [x] contentStore updates with API response
-   - [x] uiStateStore transitions: idle → loading → success/error
-   - [x] previewStore updates after content generation
+
+- [x] promptStore reflects current input
+- [x] contentStore updates with API response
+- [x] uiStateStore transitions: idle → loading → success/error
+- [x] previewStore updates after content generation (may be intentionally skipped in EMERGENCY_MODE)
 
 ### Generate — Reproducibility Record
 
