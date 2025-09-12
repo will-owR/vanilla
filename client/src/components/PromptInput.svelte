@@ -139,7 +139,7 @@
     on:blur={() => (touched = true)}
     rows="6"
     placeholder="e.g., A noir detective story set in a city of robots."
-    disabled={uiState.status === 'loading'}
+    disabled={isGenerating || isPreviewing}
   ></textarea>
     {#if touched && isPromptEmpty}
       <p class="validation">Please enter a prompt before generating.</p>
@@ -151,11 +151,11 @@
       title="Insert summer prompt suggestion"
       aria-label="Insert a summer prompt suggestion"
       data-testid="summer-suggestion"
-      disabled={uiState.status === 'loading'}
+      disabled={isGenerating || isPreviewing}
     >
       Summer suggestion
     </button>
-  <button
+    <button
       class="demo"
       on:click={() => {
         // Populate the content store directly with a V0.1 demo payload
@@ -177,18 +177,18 @@
       }}
       title="Load full V0.1 demo content"
       data-testid="load-demo"
-      disabled={uiState.status === 'loading'}
+      disabled={isGenerating || isPreviewing}
     >
       Load V0.1 demo
     </button>
     <button
       data-testid="generate-button"
       on:click={handleSubmit}
-      disabled={isPromptEmpty || uiState.status === 'loading' || isGenerating || isPreviewing}
+      disabled={isPromptEmpty || isGenerating || isPreviewing}
       aria-busy={isGenerating}
-      aria-disabled={isPromptEmpty || uiState.status === 'loading' || isPreviewing}
+      aria-disabled={isPromptEmpty || isGenerating || isPreviewing}
       aria-live="polite"
-      title={isPromptEmpty ? 'Enter a prompt to enable generate' : uiState.status === 'loading' || isGenerating ? 'Generating... please wait' : 'Generate content from prompt'}
+      title={isPromptEmpty ? 'Enter a prompt to enable generate' : isGenerating ? 'Generating... please wait' : 'Generate content from prompt'}
     >
       {#if isGenerating}
         <span class="spinner" aria-hidden="true"></span>
