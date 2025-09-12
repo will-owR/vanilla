@@ -143,90 +143,6 @@ Conclusion and next steps:
   3. If previewStore updates but preview component doesn't render, inspect the preview component's subscription and rendering logic.
 - Keep this item prioritized (next immediate fix) as it enables manual verification of the Generate→Preview→Export chain.
 
-### Recent automated run (2025-09-09)
-
-- Run: Playwright script `scripts/test-summer-suggestion.js` executed from repo root against `http://localhost:5173`.
-- Report written: `docs/focus/logs/summer-suggestion-1757449538026.json`
-- Observations from report:
-  - `textareaValue`: "" (empty) — textarea did not reflect the inserted suggestion
-  - `textareaFocused`: true — textarea received focus
-  - Console includes instrumented logs: `insertSummerSuggestion: setting suggestion= A short, sunlit summer poem about cicadas and long shadows.` and `insertSummerSuggestion: focused textarea`
-  - Vite dev websocket errors observed in console (remote preview / Codespaces related) but not blocking the handler execution
-
-Next action: update the textarea binding to use the local `currentPrompt` and propagate `on:input` changes back to `promptStore`; then re-run the Playwright script and attach the new JSON file to this record.
-
-### Recent automated run (2025-09-09) — re-run after binding change
-
-- Run: Playwright script `scripts/test-summer-suggestion.js` executed from repo root against `http://localhost:5173` after applying `currentPrompt` binding.
-- Report written: `docs/focus/logs/summer-suggestion-1757450018728.json`
-- Observations from report:
-  - `textareaValue`: "" (still empty) — textarea did not reflect the inserted suggestion
-  - `textareaFocused`: true — textarea received focus
-  - Console includes instrumented logs: `insertSummerSuggestion: setting suggestion= A short, sunlit summer poem about cicadas and long shadows.` and `insertSummerSuggestion: focused textarea`
-  - No network entries captured
-
-Conclusion: the binding change was applied and the handler executed (console logs), but Playwright still observed an empty textarea value. Next steps:
-
-1. For immediate robustness, set the textarea's DOM value directly in the suggestion handler (e.g., `el.value = suggestion`) in addition to updating `currentPrompt` and `promptStore`.
-2. Alternatively, extend the Playwright test to wait slightly longer before reading the textarea value to rule out timing races.
-3. If (1) is chosen, implement the DOM write, re-run the Playwright script, and update this record with the new JSON.
-
-### Recent automated run (2025-09-09) — after defensive DOM write
-
-- Run: Playwright script `scripts/test-summer-suggestion.js` executed from repo root against `http://localhost:5173` after applying defensive DOM write (`el.value = suggestion`).
-- Report written: `docs/focus/logs/summer-suggestion-1757450309665.json`
-- Observations from report:
-  - `textareaValue`: "A short, sunlit summer poem about cicadas and long shadows." — textarea now reflects the suggestion
-  - `textareaFocused`: true — textarea received focus
-  - Console includes instrumented logs: `insertSummerSuggestion: setting suggestion= ...` and `insertSummerSuggestion: focused textarea`
-  - No network entries captured
-
-Conclusion: Defensive DOM write resolved the observed mismatch in the Playwright test. Consider leaving this as a short-term robustness fix; a longer-term approach could re-evaluate store binding patterns to avoid direct DOM writes.
-
-A note on automated testing
-
-The verification helper was updated to use Playwright (project uses Playwright in `client/`). The test writes a JSON report to `docs/focus/logs/` with a timestamped filename.
-
-- Script: `scripts/test-summer-suggestion.js` (Playwright)
-- Usage examples:
-
-```bash
-# from repo root
-node scripts/test-summer-suggestion.js --url http://localhost:5173
-# or run from client/ if your Playwright install is scoped there
-cd client && node ../scripts/test-summer-suggestion.js --url http://localhost:5173
-```
-
-The script verifies two things: whether the textarea value equals the expected suggestion, and whether the textarea receives focus after clicking the button. It saves a timestamped JSON report in `docs/focus/logs/` for reproducibility.
-
-### 2. Load V0.1 Demo
-
-**Purpose**: Populate interface with complete demo content
-
-```mermaid
-graph TD
-    A[Click Button] --> B[Set Demo Content]
-    B --> C[Update Prompt Store]
-    C --> D[Update Content Store]
-    D --> E[Trigger Preview]
-    E --> F[Update UI State]
-```
-
-**Dependencies**:
-
-- promptStore
-- contentStore
-- uiStateStore
-- handlePreviewNow function
-- Sample content assets
-
-**Output**:
-
-- Sets demo text in prompt
-- Loads demo content with summer poems
-- Triggers preview update
-  **Current Status**: ❌ FAIL - Store updates not propagating
-
 ### 3. Generate Button
 
 **Purpose**: Process prompt and generate content
@@ -250,6 +166,51 @@ graph TD
 - submitPrompt API endpoint
 - Valid network connection
 
+**Technical Specifications**:
+
+1. API Interface:
+
+   ```typescript
+   // Request format
+   POST /prompt
+   {
+     prompt: string,
+     options?: {
+       maxLength?: number,
+       temperature?: number
+     }
+   }
+
+   // Response format
+   {
+     content: {
+       title: string,
+       body: string[]
+     },
+     metadata: {
+       timestamp: string,
+       processingTime: number
+     }
+   }
+   ```
+
+2. Error Handling:
+
+   - Network timeout: 30 second default with 1 retry
+   - Rate limiting: Exponential backoff starting at 2 seconds
+   - API errors:
+     - 400: Invalid prompt format
+     - 401: Authentication failed
+     - 429: Rate limit exceeded
+     - 500: AI service error
+     - 503: Service temporarily unavailable
+
+3. State Management:
+   - Debounced prompt validation (300ms)
+   - Atomic store updates (all or nothing)
+   - Automatic rollback on partial failure
+   - Cache invalidation on error
+
 **Output**:
 
 - Generated content based on prompt
@@ -258,6 +219,85 @@ graph TD
   **Current Status**: ❌ FAIL - API connection issues
 
 **Canonical flow note:** The `Generate` action should be treated as a canonical flow. Extract its core logic into a shared function (for example, `generateAndPreview(prompt)`) and have other UI controls reuse it rather than re-implementing the flow.
+
+#### Verification Plan
+
+Implementation verification in `PromptInput.svelte`:
+
+1. Function behavior:
+
+   - Should validate prompt before submission
+   - Should show appropriate loading states
+   - Should handle API errors gracefully
+   - Should trigger preview on success
+   - Should update stores in correct order (promptStore → contentStore → previewStore)
+
+2. UI verification checklist:
+
+   - [ ] Button exists and is disabled when prompt is empty
+   - [ ] Loading state shows during API call (spinner or visual indicator)
+   - [ ] Error messages display on API failure with retry option
+   - [ ] Success updates content and triggers preview automatically
+   - [ ] Network failure shows appropriate error with troubleshooting steps
+
+3. Store state verification:
+   - [ ] promptStore reflects current input
+   - [ ] contentStore updates with API response
+   - [ ] uiStateStore transitions: idle → loading → success/error
+   - [ ] previewStore updates after content generation
+
+### Generate — Reproducibility Record
+
+- Button: Generate
+- Component / file: `client/src/components/PromptInput.svelte`
+- Expected behavior: Validates the prompt, calls the `/prompt` API, updates the content store with the response, and triggers a preview.
+- Reproduction steps:
+  1.  Start backend and frontend (`npm run dev` in `server` and `client`).
+  2.  Open the app at `http://localhost:5173`.
+  3.  Ensure the developer console and network tab are open.
+  4.  Enter a valid prompt into the textarea.
+  5.  Click the `Generate` button.
+- Expected network requests: `POST /prompt`
+- Observed console logs / errors:
+  ```
+  [Error] Failed to connect to API endpoint: net::ERR_CONNECTION_REFUSED
+  [Debug] Attempt 1 of 2: Retrying in 2000ms...
+  [Error] API Service unreachable after retry
+  [Debug] Store state at failure: { prompt: "test", generating: false, error: "Connection failed" }
+  ```
+- Observed network responses:
+  ```
+  POST /prompt
+  Status: Failed to fetch
+  Error: TypeError: Failed to fetch
+  Request payload: { prompt: "test" }
+  ```
+- Observed UI state change:
+  1. Button click → Loading spinner appears
+  2. Network failure → Error toast shows "Unable to reach API service"
+  3. UI reverts to input state with error indicator
+  4. Retry button becomes available
+- Files referenced:
+  - `client/src/components/PromptInput.svelte` - Main component
+  - `client/src/stores.js` - State management
+  - `client/src/lib/api.js` - API integration
+  - `server/aiService.js` - Backend service
+  - `client/src/components/ErrorBoundary.svelte` - Error handling
+- Timestamped log file: `docs/focus/logs/generate-20250912T1423.json`
+- Tester: System Test (automated)
+- Test result: FAIL
+- Notes & next steps:
+  1. API connection failure appears to be due to missing environment variables in the development container
+  2. Diagnostic steps:
+     - Verify API_URL in client environment
+     - Check server logs for binding errors
+     - Validate CORS configuration
+     - Test API endpoint directly using curl
+  3. Required fixes:
+     - Add environment variable validation on startup
+     - Implement proper error boundaries
+     - Add network status indicator
+     - Document API configuration in README
 
 ### 4. Preview Button
 
