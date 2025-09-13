@@ -16,4 +16,11 @@ export default defineConfig({
     testTimeout: 20000,
     exclude: ["**/node_modules/**", "**/dist/**", "../**"],
   },
+  resolve: {
+    alias: {
+      // During tests we prefer a lightweight JS shim for sqlite3 when native
+      // bindings are unavailable (CI or dev container without build tools).
+      sqlite3: require("node:path").resolve(__dirname, "test/sqlite3-shim"),
+    },
+  },
 });
