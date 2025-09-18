@@ -141,14 +141,41 @@ export async function generateAndPreview(
       response = await withTimeout(submitPrompt(prompt), timeoutMs);
     }
 
-    // genieServiceFE.generate returns { content, copies, meta } or submitPrompt
-    // returns the legacy shape { data: { content } } so normalize both.
-    const content =
-      (response && response.content) ||
-      (response && response.data && response.data.content) ||
-      response.content ||
-      null;
-    if (!content) {
+    // Normalize various response shapes into a usable `content` object.
+    // Possible shapes:
+    // - { content: { title, body } }
+    // - { data: { content: { title, body } } }
+    // - { content: "plain string" }
+    // - "plain string"
+    let content = null;
+    if (!response) content = null;
+    else if (typeof response === "string") {
+      content = { title: "Prompt result", body: response };
+    } else if (response.content && typeof response.content === "string") {
+      content = { title: "Prompt result", body: response.content };
+    } else if (
+      response.data &&
+      response.data.content &&
+      typeof response.data.content === "string"
+    ) {
+      content = { title: "Prompt result", body: response.data.content };
+    } else if (response.content && typeof response.content === "object") {
+      content = response.content;
+    } else if (
+      response.data &&
+      response.data.content &&
+      typeof response.data.content === "object"
+    ) {
+      content = response.data.content;
+    } else if (response.content) {
+      content = response.content;
+    } else if (response.data && response.data.content) {
+      content = response.data.content;
+    } else {
+      content = response;
+    }
+
+    if (!content || (!content.title && !content.body)) {
       throw new Error("Invalid response structure from server.");
     }
 
