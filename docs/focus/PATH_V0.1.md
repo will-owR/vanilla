@@ -234,3 +234,34 @@ Begin with Phase 1: Foundation
 1. Create HTML template structure
 2. Set up basic styling
 3. Implement initial preview route
+
+### 3-hour sprint (immediate)
+
+Goal: finish a minimal, verifiable slice that reduces test fragility and validates the preview/export fast path.
+
+Prioritized actionables (time budget: 3 hours)
+
+1. PDF parsing stabilization — 1.25h
+   - Audit and convert remaining direct `pdf-parse` test imports to use the canonical extractor script (`server/scripts/extract-pdf-text.js`) or `pdfjs-dist` where appropriate.
+   - Success criteria: tests no longer import `pdf-parse` in-process; a representative shared test uses the extractor script and asserts extracted text contains expected poem/event titles.
+   - Quick verification:
+
+```bash
+# from repo root
+node server/scripts/extract-pdf-text.js server/samples/ebook.pdf | head -n 40
+```
+
+2. Preview smoke wiring — 1.25h
+
+   - Ensure `POST /api/preview` is reachable from client test harness and add/validate a minimal Preview component skeleton (in `client/src/components/PreviewWindow.svelte`) that can render server HTML for a sample payload.
+   - Success criteria: manual call or lightweight test fetches `/api/preview` and the returned HTML contains a known poem title.
+
+3. Quick export smoke & artifact check — 0.5h
+   - Run `server/scripts/smoke-export.sh` then validate the produced file starts with `%PDF-` and run the extractor script to show expected text appears.
+   - Success criteria: `smoke-export.sh` exits 0 and extractor prints expected text snippet.
+
+Notes and constraints
+
+- These tasks are intentionally small and verifiable. They reduce CI flakiness and raise confidence in the core flow.
+- Work can be done in parallel by two contributors: (A) backend/tests and (B) frontend/preview wiring.
+- If converting tests to call the extractor script, prefer invoking the script in a subprocess from tests (spawn/exec) to avoid bringing the extractor's heavy ESM runtime into existing test runner processes.

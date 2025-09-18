@@ -142,14 +142,41 @@ export async function loadPreview(content) {
 
     Logger.debug("Requesting preview", { formattedContent });
 
-    const response = await fetchWithRetry(
-      `/preview?content=${encodeURIComponent(
-        JSON.stringify(formattedContent)
-      )}`,
+    const payloadStr = JSON.stringify(formattedContent);
+    let response;
+
+    // For large payloads, prefer POST /api/preview which returns JSON { preview }
+    if (payloadStr.length > 2000) {
+      response = await fetchWithRetry("/api/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payloadStr,
+        retryConfig: { maxRetries: 3, retryableStatuses: [500, 503] },
+      });
+      if (!response.ok) {
+        const error = new Error(`Preview failed: ${response.status}`);
+        Logger.error("Preview request failed", {
+          error,
+          status: response.status,
+        });
+        throw error;
+      }
+      const json = await response.json();
+      const previewHtml = json.preview || "";
+      Logger.info("Preview loaded successfully", {
+        contentLength: previewHtml.length,
+        layout: formattedContent.layout,
+      });
+      return previewHtml;
+    }
+
+    // Small payloads: use GET /preview query param for quickness
+    response = await fetchWithRetry(
+      `/preview?content=${encodeURIComponent(payloadStr)}`,
       {
         retryConfig: {
           maxRetries: 3,
-          retryableStatuses: [500, 503], // Server errors most likely for preview
+          retryableStatuses: [500, 503],
         },
       }
     );

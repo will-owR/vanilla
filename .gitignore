@@ -2,3 +2,8 @@ node_modules/
 data/aetherpress.db
 coverage/
 data/*.db
+
+# Test/artifact outputs produced by headless e2e and smoke scripts
+test-artifacts/
+server/test-artifacts/
+client/test-artifacts/
