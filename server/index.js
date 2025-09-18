@@ -610,7 +610,7 @@ const { generateBackgroundForPoem } = require("./imageGenerator.cjs");
 // If the client sends POST /prompt?dev=true we return a deterministic
 // mock content payload and skip DB writes and AI service calls. This keeps
 // local UI/integration tests fast and isolated.
-app.post("/prompt", (req, res, next) => {
+app.post("/prompt", async (req, res, next) => {
   try {
     const dev =
       req.query && (req.query.dev === "true" || req.query.dev === "1");
@@ -623,12 +623,27 @@ app.post("/prompt", (req, res, next) => {
         .json({ error: "Prompt is required and must be a non-empty string" });
     }
 
-    const title = `Dev: ${prompt.split(" ").slice(0, 6).join(" ")}`;
-    const body = `Deterministic dev preview for prompt: ${prompt}`;
-    return res.status(201).json({
-      success: true,
-      data: { content: { title, body, layout: "dev" } },
-    });
+    // Write prompt to repo-root samples/latest_prompt.txt per CORE_FLOW_SPEC
+    try {
+      const fsPromises = require("fs").promises;
+      const path = require("path");
+      const samplesDir = path.resolve(__dirname, "..", "samples");
+      const samplesPath = path.join(samplesDir, "latest_prompt.txt");
+      // Ensure samples directory exists
+      await fsPromises.mkdir(samplesDir, { recursive: true });
+      // Write the raw prompt text
+      await fsPromises.writeFile(samplesPath, prompt, "utf8");
+    } catch (fileErr) {
+      // Non-fatal: log and continue to return the demo payload
+      console.warn(
+        "/prompt (dev): failed to write latest_prompt.txt",
+        fileErr && fileErr.message
+      );
+    }
+
+    // Return the tripled content as specified in CORE_FLOW_SPEC
+    const tripled = [prompt, prompt, prompt].join("\n");
+    return res.status(200).json({ content: tripled });
   } catch (e) {
     return next(e);
   }
