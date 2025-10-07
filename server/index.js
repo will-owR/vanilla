@@ -665,57 +665,57 @@ app.post("/prompt", async (req, res, next) => {
   }
 
   try {
-    // Default to the demo genieService which delegates to sampleService.
-    // This keeps the frontend wiring unchanged while allowing the demo
-    // implementation to run locally without client changes.
-    const genieResult = await genieService.generate(prompt);
+    // Call orchestrator to generate content and obtain persistInstructions
+    const genieResult = await genieService.generate({ prompt });
 
-    // Ensure we have a data envelope to return
-    const data = genieResult && genieResult.data ? { ...genieResult.data } : {};
+    if (!genieResult || !genieResult.success) {
+      return res
+        .status(500)
+        .json({ success: false, error: "generation_failed" });
+    }
+
+    const data = { ...(genieResult.data || {}) };
 
     // If the orchestrator produced persistInstructions, execute them via
     // the persistence executor so files are written to disk atomically.
-    try {
-      if (data.persistInstructions && Array.isArray(data.persistInstructions)) {
+    if (
+      data.persistInstructions &&
+      Array.isArray(data.persistInstructions) &&
+      data.persistInstructions.length
+    ) {
+      try {
         const persistResults = await persistence.execute(
           data.persistInstructions
         );
         data.persisted = persistResults;
+      } catch (pe) {
+        console.warn("/prompt: persistence.execute failed", pe && pe.message);
+        data.persisted = null;
       }
-    } catch (pe) {
-      console.warn("/prompt: persistence.execute failed", pe && pe.message);
-      // non-fatal: continue returning the generated data
-      data.persisted = null;
     }
 
-    // Attempt to persist prompt and ai result to DB for compatibility with
-    // downstream flows. Failures to persist should not block the demo response.
+    // Minimal DB persistence to record prompt and ai result (non-fatal)
     try {
       const dbResult = await crud.createPrompt(prompt);
       data.promptId = dbResult && dbResult.id ? dbResult.id : null;
       try {
-        // Persist only the `content` object so stored `result` equals the
-        // API-visible `content` (this keeps DB shape compatible with tests).
         const aiResult = await crud.createAIResult(
           data.promptId,
           data.content || {}
         );
         data.resultId = aiResult && aiResult.id ? aiResult.id : null;
       } catch (e) {
-        // Non-fatal: log and continue
         console.warn(
           "/prompt: failed to create AI result record",
           e && e.message
         );
       }
     } catch (e) {
-      // Non-fatal persistence failure; continue returning the demo payload
       console.warn("/prompt: failed to persist prompt to DB", e && e.message);
     }
 
     return res.status(201).json({ success: true, data });
   } catch (err) {
-    // Surface generator errors consistently
     err.status = err.status || 500;
     err.message = `Generation Error: ${err.message}`;
     next(err);
