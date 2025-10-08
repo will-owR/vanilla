@@ -222,3 +222,43 @@ This intent-based pipeline preserves your constraint: the plumbing executes the 
 Small recommendation
 
 - Keep `previewService` minimal and focused on calling the API and updating stores. Any logic that decides file placement, naming, sanitization rules, or allowed folders belongs on the server.
+
+---
+
+## ADDENDUM: Preliminary Work for Phase 2 Alignment
+
+_Date: 2025-10-08_
+
+This addendum outlines the preliminary work required to bring `server/index.js` into alignment with the architectural principles described in this document and the broader Phase 2 objectives.
+
+**Note:** The work will be implemented in side branch `aether-rewrite/client-phase2-AAA-0`
+
+### Key Issues Identified
+
+A review of the existing server implementation confirms that `server/index.js` has accumulated responsibilities beyond its core "plumbing" role. This misalignment introduces maintenance overhead and security risks. The most critical issues are:
+
+1.  **Presentation Logic in Plumbing**: `server/index.js` is responsible for HTML templating, a presentation concern that belongs in a dedicated rendering layer.
+2.  **Security Vulnerability (XSS)**: The server directly injects AI-generated content into HTML without sanitization, creating a cross-site scripting (XSS) risk.
+3.  **Lack of Request Correlation**: Endpoints do not return a unique `requestId`, making it difficult for the client to manage concurrent requests and avoid race conditions.
+
+### Three-Task Recommendation
+
+To address these issues and align the server with Phase 2 production-readiness goals, the following three tasks are recommended:
+
+1.  **Isolate Presentation Logic (Est: 2-3 hours)**
+
+    - **Action**: Create a `server/previewRenderer.js` module to handle all HTML templating and sanitization.
+    - **Outcome**: Decouples presentation concerns from the transport layer, improving modularity and maintainability.
+
+2.  **Refactor Server Endpoints (Est: 3-4 hours)**
+
+    - **Action**: Update `server/index.js` to use the new `previewRenderer.js`. Implement `requestId` generation and include it in all API responses.
+    - **Outcome**: Enforces clear separation of concerns and provides the client with the necessary context to manage asynchronous operations reliably.
+
+3.  **Implement Robust Error Boundaries (Est: 4-6 hours)**
+    - **Action**: Introduce distinct error types for transport-level and application-level failures. Implement centralized error-handling middleware.
+    - **Outcome**: Creates a more resilient, predictable, and debuggable server architecture.
+
+**Total Estimated Time: 9-13 hours.**
+
+Completing this work is a prerequisite for meeting the quality and security standards required for Phase 2.
