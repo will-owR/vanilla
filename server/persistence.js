@@ -38,15 +38,26 @@ async function writeAtomic(targetPath, content, encoding = "utf8") {
  * Returns array of { purpose, path }
  */
 async function execute(instructions = [], _opts = {}) {
-  ensureBaseDir();
+  // Allow test-time override via environment variable so test suites that
+  // import different module instances (CJS/ESM) can still direct writes to
+  // a temporary directory. Prefer explicit PERSISTENCE_BASE_DIR, then
+  // TEST_BASE_EXPORT_DIR, otherwise fall back to the module-level setting.
+  const effectiveBase = process.env.PERSISTENCE_BASE_DIR
+    ? path.resolve(process.env.PERSISTENCE_BASE_DIR)
+    : process.env.TEST_BASE_EXPORT_DIR
+    ? path.resolve(process.env.TEST_BASE_EXPORT_DIR)
+    : BASE_EXPORT_DIR;
   // Debug: emit base dir used for persistence (useful in test logs)
   try {
-    console.log("[persistence] BASE_EXPORT_DIR=", BASE_EXPORT_DIR);
+    console.log("[persistence] effective BASE_EXPORT_DIR=", effectiveBase);
   } catch (e) {}
+  // Ensure base directory exists for this execution
+  if (!fs.existsSync(effectiveBase))
+    fs.mkdirSync(effectiveBase, { recursive: true });
   const results = [];
   for (const inst of instructions) {
     const folder = inst.folderHint || INST_DEFAULT_FOLDER(inst.purpose);
-    const safeFolder = safeJoin(BASE_EXPORT_DIR, folder);
+    const safeFolder = safeJoin(effectiveBase, folder);
     const filename = sanitizeFilename(
       inst.filenameHint || `file-${Date.now()}`
     );

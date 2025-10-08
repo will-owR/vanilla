@@ -47,6 +47,7 @@ describe("Persistence executor integration", () => {
 
     // Ensure persistence executor uses our temp dir just before making request
     persistence.setBaseExportDir(tmpExportDir);
+    process.env.PERSISTENCE_BASE_DIR = tmpExportDir;
 
     const res = await request(app).post("/prompt").send({ prompt });
     expect(res.status).toBe(201);
