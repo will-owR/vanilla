@@ -45,6 +45,9 @@ describe("Persistence executor integration", () => {
   it("writes artifacts atomically, records DB rows, and returns preview HTML for 'hello' prompt", async () => {
     const prompt = `hello ${Date.now()}`;
 
+    // Ensure persistence executor uses our temp dir just before making request
+    persistence.setBaseExportDir(tmpExportDir);
+
     const res = await request(app).post("/prompt").send({ prompt });
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty("requestId");
