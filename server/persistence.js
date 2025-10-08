@@ -5,7 +5,11 @@
 const fs = require("fs");
 const path = require("path");
 
-const BASE_EXPORT_DIR = path.resolve(__dirname, "..", "data", "exports");
+let BASE_EXPORT_DIR = path.resolve(__dirname, "..", "data", "exports");
+
+function setBaseExportDir(dir) {
+  BASE_EXPORT_DIR = path.resolve(dir);
+}
 
 function ensureBaseDir() {
   if (!fs.existsSync(BASE_EXPORT_DIR)) {
@@ -33,7 +37,7 @@ async function writeAtomic(targetPath, content, encoding = "utf8") {
  * Each instruction: { purpose, folderHint, filenameHint, content, encoding }
  * Returns array of { purpose, path }
  */
-async function execute(instructions = [], opts = {}) {
+async function execute(instructions = [], _opts = {}) {
   ensureBaseDir();
   const results = [];
   for (const inst of instructions) {
@@ -67,4 +71,4 @@ function sanitizeFilename(name) {
   return name.replace(/[\\/]+/g, "_");
 }
 
-module.exports = { execute, BASE_EXPORT_DIR };
+module.exports = { execute, BASE_EXPORT_DIR, setBaseExportDir };

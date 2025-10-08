@@ -88,7 +88,44 @@ Overall: the repo already embodies a clear adapter + application-service pattern
 
 ---
 
-If you want, I can implement any of the short checklist items (one at a time) and run a minimal test. Specify which item to implement first and I will make the change and validate it locally.
+## Progress update (as of 2025-10-08)
+
+- Implemented since the review:
+
+  - Created `server/previewRenderer.js` and removed inline HTML templating from the main handler; preview rendering is now centralized and uses a server-side sanitizer (jsdom + DOMPurify or equivalent). Files touched: `server/previewRenderer.js`, `server/index.js`.
+  - Added request correlation plumbing: a request-id middleware now generates/propagates a `requestId` into `req.requestId` and `res.locals.requestId` and sets the `X-Request-Id` response header. Several endpoints now include `requestId` in their JSON responses. Files touched: `server/index.js`, `server/genieService.js`.
+  - Centralized error handling: introduced typed error helpers and a single error middleware that produces consistent JSON error shapes and writes structured error lines to `logs/errors.log`. File touched: `server/utils/errorHandler.js`.
+  - Adjusted service behavior to preserve testable failure modes: `genieService` now prefers an incoming `requestId` and only falls back to sample generators for module-load errors; `aiService` mocks were hardened to include `metadata.tokens` and to limit stub usage. Files touched: `server/genieService.js`, `server/aiService.js`.
+  - Tests and CI: added requestId propagation tests (`server/__tests__/requestId.test.js`) and made existing server tests more resilient to `supertest` parsing quirks (falling back to `res.text` when `res.body` is empty). Many server tests were run and most are green in repeated runs.
+  - Branching & commits: work was implemented on branches `aether-rewrite/client-phase2-AAA-0` and `aether-rewrite/client-phase2-AAA` (commits pushed with messages referencing requestId, renderer, and error-handler refactors).
+
+- Current test status and open issue:
+
+  - Most server tests pass. One intermittent failing assertion remains in the new request-id tests: `/api/preview` returns a `X-Request-Id` response header but the JSON payload's `metadata` object is sometimes empty (`metadata: {}`) rather than containing `metadata.requestId`. Debug traces confirmed the header is set while the metadata object was not populated on a particular code path.
+  - This is likely a plumbing bug where a code path constructing the preview JSON omitted attaching `requestId` to the `metadata` object; the request-id middleware is working correctly (header exists). Fixing this is a small, targeted change (see next-actions).
+
+- Outstanding work (what remains) with estimates:
+
+  1. Stabilize preview metadata requestId contract and tests — ensure `metadata.requestId` is set consistently or decide that the header is the canonical location and update tests/docs. Estimate: 0.5–1.5 hours.
+  2. Finish robust error boundaries and add test coverage — tighten `TransportError`/`ServiceError` usage across handlers, add unit tests that assert error shapes and that `requestId` is present in error payloads, and remove transient debug logging. Estimate: 2–3 hours.
+  3. Implement persistence executor and intent→instruction wiring — create `server/persistence.js` (atomic writes / safe path validation) and update `/prompt` and `/genie` handlers to execute `persistInstructions` returned by the orchestrator. Add tests for intent translation and safe writes. Estimate: 3–5 hours.
+  4. Complete tests, docs, and CI adjustments — add tests for renderer XSS protections, add docs/README updates, and add CI checks (lint + tests) for the new behavior. Estimate: 2–4 hours.
+  5. (Optional) Design/implement streaming/incremental preview endpoint — SSE or fetch-stream mode, plus plumbing helper and client consumer. Spiking and prototyping this is larger and can be deferred. Estimate: 6–12 hours (spike).
+
+  - Conservative total for remaining non-optional work: ~8–14 hours.
+
+- Acceptance criteria for finishing Phase A alignment:
+
+  - `server/previewRenderer.js` is the single canonical renderer used by preview and export paths and server-side sanitization is demonstrated by unit tests.
+  - All public endpoints return `X-Request-Id` header; tests confirm the header plus (if chosen) `metadata.requestId` in JSON responses consistently.
+  - Centralized error middleware emits structured error JSON including `requestId` and is covered by tests.
+  - Persistence executor validates paths, performs atomic writes, and is exercised by unit tests.
+  - CI green for new tests and lint rules.
+
+- Immediate next action (recommended):
+  1. Trace `/api/preview` handler(s) to find the code path that constructs the `metadata` object; make the handler explicitly set `metadata.requestId = req.requestId` in all code paths OR update the test to accept the header-only contract if that is preferred. Re-run the server test suite and remove temporary debug logging once the test passes. (Estimate: 30–90 minutes)
+
+Then: take a short break.
 
 ---
 
@@ -212,53 +249,71 @@ This intent-based pipeline preserves your constraint: the plumbing executes the 
 
 ---
 
-## Practical guarantees to keep the frontend dumb
+## Update: DB-first prompt lookup, versioning, and traceability (Phase A continuation)
 
-- PromptForm only assembles JSON input (prompt, contentType, mediaType, pages) and submits to the backend.
-- Preview.svelte remains display-only: it subscribes to `previewStore` and renders loading/error/content states; it never calls fetch or writes files.
-- previewService (client-side) should be thin: call the HTTP endpoint, receive the normalized envelope (content, metadata, filenames, requestId), and write to `previewStore` only.
-- All persistence decisions, path resolution, sanitization, and atomic writes are performed server-side by the orchestrator + plumbing executor.
+The server will adopt a DB-first strategy for prompt handling to provide deterministic behavior, deduplication, and full traceability. This document section summarizes the updated design, data model, and implementation plan.
 
-Small recommendation
+Goals
 
-- Keep `previewService` minimal and focused on calling the API and updating stores. Any logic that decides file placement, naming, sanitization rules, or allowed folders belongs on the server.
+- Avoid unnecessary AI calls by returning cached results for exact prompt matches.
+- Keep a full history of generated results (versioned) and allow users to see and choose previous versions.
+- Persist request correlation (requestId) across prompts, ai_results, and artifacts for traceability.
 
----
+Design
 
-## ADDENDUM: Preliminary Work for Phase 2 Alignment
+- Prompt normalization & fingerprinting
 
-_Date: 2025-10-08_
+  - Normalize: trim + collapse whitespace, Unicode NFKC, lowercase.
+  - Compute SHA256(normalizedPrompt) as `prompt_hash` for exact matching.
+  - (Optional) Add fuzzy similarity later for semantic reuse.
 
-This addendum outlines the preliminary work required to bring `server/index.js` into alignment with the architectural principles described in this document and the broader Phase 2 objectives.
+- Versioning and retention
 
-**Note:** The work will be implemented in side branch `aether-rewrite/client-phase2-AAA-0`
+  - `prompts` table stores canonical prompt text and `prompt_hash`.
+  - `ai_results` table stores individual generated results with `version`, `request_id`, and `content` JSON.
+  - Always insert new ai_result rows for regenerations or user-edited saves; do not overwrite previous results.
+  - Default served result is the highest `version` (newest) unless user selects otherwise.
 
-### Key Issues Identified
+- Request correlation
+  - Persist `requestId` from plumbing into `ai_results.request_id`, `artifacts.request_id`, and `prompts.request_first_id` for tracing.
+  - Include requestId in response headers and JSON metadata for all generation and error responses.
 
-A review of the existing server implementation confirms that `server/index.js` has accumulated responsibilities beyond its core "plumbing" role. This misalignment introduces maintenance overhead and security risks. The most critical issues are:
+Implementation Plan (this sprint)
 
-1.  **Presentation Logic in Plumbing**: `server/index.js` is responsible for HTML templating, a presentation concern that belongs in a dedicated rendering layer.
-2.  **Security Vulnerability (XSS)**: The server directly injects AI-generated content into HTML without sanitization, creating a cross-site scripting (XSS) risk.
-3.  **Lack of Request Correlation**: Endpoints do not return a unique `requestId`, making it difficult for the client to manage concurrent requests and avoid race conditions.
+1. Database schema and migrations (server/db.js)
 
-### Three-Task Recommendation
+- Ensure `prompts.prompt_hash`, `prompts.normalized` columns exist (and add if missing).
+- Ensure `ai_results` includes `request_id` and `version` columns (add if missing).
+- Add `artifacts` table to link persisted files to ai_results for traceability.
+- Implement a safe migration helper that checks columns via `PRAGMA table_info` and adds columns only when necessary.
+- Time estimate: 30–60 minutes.
 
-To address these issues and align the server with Phase 2 production-readiness goals, the following three tasks are recommended:
+2. CRUD surface extensions (server/crud.js)
 
-1.  **Isolate Presentation Logic (Est: 2-3 hours)**
+- Add `getPromptByHash(hash)`, `createPromptWithHash(prompt, normalized, hash, requestId)`, `getLatestAIResultForPrompt(prompt_id)`, `createAIResultWithMeta(prompt_id, result, requestId, version)` and artifact insert helpers.
+- Keep legacy functions for backward compatibility and add new ones in dual-mode (callback or Promise).
+- Time estimate: 30–60 minutes.
 
-    - **Action**: Create a `server/previewRenderer.js` module to handle all HTML templating and sanitization.
-    - **Outcome**: Decouples presentation concerns from the transport layer, improving modularity and maintainability.
+3. Plumbing: POST /prompt (server/index.js)
 
-2.  **Refactor Server Endpoints (Est: 3-4 hours)**
+- On POST /prompt (no dev flag): normalize prompt, compute hash, check `getPromptByHash`.
+- If found, fetch latest ai_result for that prompt and return it (still log current request with a new requestId and return it in the response). Do not call AI.
+- If not found, call `genieService.generate(...)` to obtain content and persistIntents, then:
+  - create prompt row via `createPromptWithHash`
+  - create ai_result row with `requestId` and `version=1`
+  - execute `persistence.execute()` for persistInstructions and record artifacts via CRUD
+  - return the normalized envelope to client with `requestId` and persisted paths
+- Time estimate: 1–2 hours (includes tests).
 
-    - **Action**: Update `server/index.js` to use the new `previewRenderer.js`. Implement `requestId` generation and include it in all API responses.
-    - **Outcome**: Enforces clear separation of concerns and provides the client with the necessary context to manage asynchronous operations reliably.
+4. Tests
 
-3.  **Implement Robust Error Boundaries (Est: 4-6 hours)**
-    - **Action**: Introduce distinct error types for transport-level and application-level failures. Implement centralized error-handling middleware.
-    - **Outcome**: Creates a more resilient, predictable, and debuggable server architecture.
+- Integration test: POST same prompt twice -> assert second call returned cached ai_result and that AI provider factory was not called the second time.
+- Request correlation test: assert requestId in header = DB ai_results.request_id.
+- Persistence executor tests: ensure files written atomically and artifacts recorded in DB.
+- Time estimate: 1–3 hours.
 
-**Total Estimated Time: 9-13 hours.**
+Acceptance criteria
 
-Completing this work is a prerequisite for meeting the quality and security standards required for Phase 2.
+- Exact prompt reuse: posting same prompt twice reuses the stored ai_result (no extra AI calls) and logs a new request entry with requestId.
+- Versioning: re-generation or explicit user-save creates a new ai_result row with incremented version.
+- Traceability: requestId is present in response, in DB rows, and in artifact records for correlation.

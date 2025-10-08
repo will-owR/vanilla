@@ -78,16 +78,14 @@
   },
 
   // --- PORT FORWARDING ---
-  "forwardPorts": [5173, 5174, 3000, 5432],
+  "forwardPorts": [3000, 5173, 5174, 5432],
   "portsAttributes": {
-    "5173": {
-      "label": "client (Vite/Svelte)"
-    },
+    "3000": { "label": "server (Express/Node.js)" },
+    "5173": { "label": "client (Vite/Svelte)" },
     "5174": {
       "label": "client-v2 (Vite/Svelte)",
       "onAutoForward": "openPreview"
     },
-    "3000": { "label": "server (Express/Node.js)" },
     "5432": { "label": "database (PostgreSQL)" }
   },
 

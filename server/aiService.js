@@ -14,7 +14,14 @@ class MockAIService {
       // require lazily to avoid adding overhead in non-stub flows
       const mockProvider = require("./mockAiProvider");
       const stub = mockProvider.getTextStub(prompt);
-      if (stub && stub.response) {
+      // Use the stub only when it appears relevant to the incoming prompt.
+      // The stub file can include a `prompt` hint so we only use it for
+      // matching prompts during specialized tests.
+      if (
+        stub &&
+        stub.response &&
+        (!stub.prompt || (prompt && String(prompt).includes(stub.prompt)))
+      ) {
         const title = (
           String(stub.response).split("\n")[0] || "Mock Title"
         ).slice(0, 200);
@@ -24,6 +31,15 @@ class MockAIService {
           model: stub.model || "mock-text-1",
           status: stub.status || 200,
         };
+        // Ensure token count exists for test expectations — compute a
+        // conservative token estimate based on response length when not
+        // explicitly provided by the stub.
+        if (typeof metadata.tokens === "undefined") {
+          metadata.tokens = Math.max(
+            10,
+            Math.min(200, String(stub.response || "").length)
+          );
+        }
         return { content: { title, body, layout }, metadata };
       }
     } catch (e) {

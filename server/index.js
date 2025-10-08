@@ -25,6 +25,7 @@ const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const puppeteer = require("puppeteer-core");
 const db = require("./db");
+const crud = require("./crud");
 const fs = require("fs");
 const path = require("path");
 const imageRewrite = require("./utils/imageRewrite");
@@ -33,6 +34,11 @@ const { v4: uuidv4 } = require("uuid");
 const EXPORT_USE_LOCAL_IMAGES =
   process.env.EXPORT_USE_LOCAL_IMAGES === "1" ||
   process.env.EXPORT_USE_LOCAL_IMAGES === "true";
+
+// Bind the port from environment with a sensible default to avoid runtime
+// ReferenceError when a bare `PORT` identifier is used later in the module.
+const PORT = Number(process.env.PORT) || 3000;
+
 const app = express();
 
 // Request ID middleware: attach a stable requestId to every request so that
@@ -41,14 +47,21 @@ const app = express();
 // metadata. We also expose the ID as `X-Request-Id` response header.
 app.use((req, res, next) => {
   try {
-    const headerId = req.headers["x-request-id"] || req.headers["x-requestid"];
-    const requestId = headerId || require("uuid").v4();
-    req.requestId = requestId;
-    res.locals.requestId = requestId;
-    res.setHeader("X-Request-Id", requestId);
+    // Normalize the request id in one place so both legacy `req.id` and the
+    // canonical `req.requestId` are always populated. Prefer any incoming
+    // X-Request-Id header or an existing req.requestId, otherwise generate.
+    const incoming = req.requestId || req.headers["x-request-id"];
+    const id = incoming || uuidv4();
+    req.requestId = id;
+    req.id = id; // legacy alias for older code
+    res.setHeader("X-Request-Id", id);
+    // Also expose to downstream middleware via res.locals
+    res.locals.requestId = id;
   } catch (e) {
-    // If UUID generation fails for any reason, continue without blocking
+    // Ensure we never leave the binding undefined
     req.requestId = req.requestId || "";
+    req.id = req.id || req.requestId;
+    res.locals.requestId = res.locals.requestId || req.requestId || "";
   }
   next();
 });
@@ -417,16 +430,21 @@ if (!fs.existsSync(logsDir)) {
 // Request ID middleware - help trace requests through proxies
 app.use((req, res, next) => {
   try {
-    req.id = uuidv4();
-    res.setHeader("X-Request-Id", req.id);
-    // Allow these headers to be visible to browser clients
-    const existing = res.getHeader("Access-Control-Expose-Headers");
-    const expose = existing
-      ? `${existing},X-Request-Id,X-Backend-Error`
-      : "X-Request-Id,X-Backend-Error";
-    res.setHeader("Access-Control-Expose-Headers", expose);
+    // Normalize the request id in one place so both legacy `req.id` and the
+    // canonical `req.requestId` are always populated. Prefer any incoming
+    // X-Request-Id header or an existing req.requestId, otherwise generate.
+    const incoming = req.requestId || req.headers["x-request-id"];
+    const id = incoming || uuidv4();
+    req.requestId = id;
+    req.id = id; // legacy alias for older code
+    res.setHeader("X-Request-Id", id);
+    // Also expose to downstream middleware via res.locals
+    res.locals.requestId = id;
   } catch (e) {
-    // Don't block requests if UUID generation fails
+    // Ensure we never leave the binding undefined
+    req.requestId = req.requestId || "";
+    req.id = req.id || req.requestId;
+    res.locals.requestId = res.locals.requestId || req.requestId || "";
   }
   next();
 });
@@ -623,11 +641,9 @@ app.get("/test-error", (req, res, next) => {
   next(err);
 });
 
-// Centralized error handler (moved to the end of the file so it can catch
-// errors from routes defined below). See the bottom of this file for the
-// actual handler implementation.
-
-const crud = require("./crud");
+// Centralized error handler (use consolidated middleware)
+const { errorMiddleware } = require("./utils/errorHandler");
+app.use(errorMiddleware);
 
 // Ebook renderer helper
 const { renderBookToPDF } = require("./ebook");
@@ -682,9 +698,43 @@ app.post("/prompt", async (req, res, next) => {
   }
 
   try {
-    // Call orchestrator to generate content and obtain persistInstructions
-    // Pass requestId into the orchestrator so the same id can be returned
-    // as part of the generation metadata and used for persistence traces.
+    // Normalize prompt and compute hash for exact lookups
+    const normalize = (s) =>
+      String(s || "")
+        .trim()
+        .replace(/\s+/g, " ")
+        .normalize("NFKC")
+        .toLowerCase();
+    const normalized = normalize(prompt);
+    const crypto = require("crypto");
+    const hash = crypto.createHash("sha256").update(normalized).digest("hex");
+
+    // Check DB for existing prompt by hash
+    const existingPrompt = await crud.getPromptByHash(hash);
+    if (existingPrompt && existingPrompt.id) {
+      // Found a cached prompt — return its latest AI result if available
+      const latest = await crud.getLatestAIResultForPrompt(existingPrompt.id);
+      if (latest && latest.result) {
+        // Attach a fresh requestId to the response (plumbing-level id)
+        return res.status(200).json({
+          success: true,
+          requestId: req.requestId,
+          data: {
+            content: latest.result.content || latest.result.content || {},
+            metadata: {
+              ...((latest.result && latest.result.metadata) || {}),
+              requestId: req.requestId,
+            },
+            persisted: [],
+            cached: true,
+            ai_result_id: latest.id,
+            prompt_id: existingPrompt.id,
+          },
+        });
+      }
+    }
+
+    // Not cached: call orchestrator to generate
     const genieResult = await genieService.generate({
       prompt,
       requestId: req.requestId,
@@ -698,8 +748,28 @@ app.post("/prompt", async (req, res, next) => {
 
     const data = { ...(genieResult.data || {}) };
 
-    // If the orchestrator produced persistInstructions, execute them via
-    // the persistence executor so files are written to disk atomically.
+    // Persist prompt row (with normalized and hash) and record first request id
+    const p = await crud.createPromptWithHash(
+      prompt,
+      normalized,
+      hash,
+      req.requestId
+    );
+    data.promptId = p && p.id ? p.id : null;
+
+    // Determine next version: 1 by default
+    const version = 1;
+
+    // Create ai_result with request id and version
+    const ar = await crud.createAIResultWithMeta(
+      data.promptId,
+      data,
+      req.requestId,
+      version
+    );
+    data.resultId = ar && ar.id ? ar.id : null;
+
+    // Execute persistence instructions if any
     if (
       data.persistInstructions &&
       Array.isArray(data.persistInstructions) &&
@@ -710,30 +780,29 @@ app.post("/prompt", async (req, res, next) => {
           data.persistInstructions
         );
         data.persisted = persistResults;
+        // Record artifacts into DB
+        if (
+          Array.isArray(persistResults) &&
+          persistResults.length &&
+          data.resultId
+        ) {
+          for (const pr of persistResults) {
+            try {
+              await crud.createArtifact(
+                data.resultId,
+                pr.purpose,
+                pr.path,
+                req.requestId
+              );
+            } catch (e) {
+              console.warn("Failed to record artifact in DB:", e && e.message);
+            }
+          }
+        }
       } catch (pe) {
         console.warn("/prompt: persistence.execute failed", pe && pe.message);
         data.persisted = null;
       }
-    }
-
-    // Minimal DB persistence to record prompt and ai result (non-fatal)
-    try {
-      const dbResult = await crud.createPrompt(prompt);
-      data.promptId = dbResult && dbResult.id ? dbResult.id : null;
-      try {
-        const aiResult = await crud.createAIResult(
-          data.promptId,
-          data.content || {}
-        );
-        data.resultId = aiResult && aiResult.id ? aiResult.id : null;
-      } catch (e) {
-        console.warn(
-          "/prompt: failed to create AI result record",
-          e && e.message
-        );
-      }
-    } catch (e) {
-      console.warn("/prompt: failed to persist prompt to DB", e && e.message);
     }
 
     // Include the requestId in the JSON response so clients can correlate
@@ -905,6 +974,16 @@ app.get("/preview", async (req, res) => {
             : typeof contentObj,
       });
     }
+
+    // Debug: log requestId and content for preview requests to help
+    // diagnose intermittent metadata absences in tests.
+    // eslint-disable-next-line no-console
+    // console.error(
+    //   "/api/preview -> requestId:",
+    //   req.requestId,
+    //   "contentKeys:",
+    //   Object.keys(contentObj)
+    // );
 
     res.send(previewTemplate(contentObj));
   } catch (err) {
@@ -2750,104 +2829,3 @@ process.on("SIGHUP", () => gracefulShutdown("SIGHUP"));
 // Export helpers for external scripts/tests to call without forcing process.exit
 module.exports.closeServices = closeServices;
 module.exports.gracefulShutdown = gracefulShutdown;
-
-// Centralized error handler (placed at end to capture errors from all routes)
-app.use((err, req, res, _next) => {
-  const timestamp = new Date().toISOString();
-  // Mark `_next` as used to satisfy linters while keeping the signature
-  // as an Express error handler (arity 4). This preserves error-handler
-  // behavior without introducing a runtime side-effect.
-  void _next;
-  const requestId =
-    req && req.requestId ? req.requestId : req && req.id ? req.id : "-";
-  console.error("--- Error Handler ---");
-  console.error("Time:", timestamp);
-  console.error("RequestId:", requestId);
-  console.error("Method:", req && req.method);
-  console.error("URL:", req && req.originalUrl);
-  console.error("Body:", req && req.body);
-  console.error("Error Stack:", err && err.stack ? err.stack : err);
-
-  // Append a compact structured error line to server-logs/errors.log for quick lookups
-  try {
-    const logLine = JSON.stringify({
-      t: timestamp,
-      id: requestId,
-      method: req && req.method,
-      url: req && req.originalUrl,
-      status: err && err.status ? err.status : 500,
-      message: err && err.message ? err.message : String(err),
-      stack: err && err.stack ? err.stack.split("\n")[0] : null,
-    });
-    try {
-      fs.appendFileSync(path.join(logsDir, "errors.log"), logLine + "\n");
-    } catch (e) {
-      console.warn(
-        "Failed to append to errors.log:",
-        e && e.message ? e.message : e
-      );
-    }
-  } catch (e) {
-    console.warn(
-      "Failed to build error log line:",
-      e && e.message ? e.message : e
-    );
-  }
-
-  // Surface a short error header to aid proxied requests / reverse-proxies
-  try {
-    res.setHeader(
-      "X-Backend-Error",
-      err && err.message ? String(err.message).slice(0, 200) : "error"
-    );
-    res.setHeader("X-Request-Id", requestId);
-  } catch (e) {
-    // ignore header-setting errors in error handler
-  }
-
-  // Differentiate error response by environment
-  const isDev = process.env.NODE_ENV !== "production";
-  const payload = {
-    error: isDev && err && err.message ? err.message : "Internal Server Error",
-    requestId,
-    ...(isDev && err && { stack: err.stack }),
-  };
-
-  // Ensure a JSON content-type so test clients and API consumers get a parsable body
-  try {
-    if (res.headersSent) {
-      // Attempt to write JSON fragment if headers already sent
-      try {
-        res.write(JSON.stringify(payload));
-        res.end();
-      } catch (e) {
-        try {
-          res.end();
-        } catch (er) {
-          void er; // ignore warn logging errors
-        }
-      }
-      return;
-    }
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    // Use Express's json helper so supertest and other clients receive a
-    // correctly serialized JSON body that is parsed automatically.
-    res.status(err && err.status ? err.status : 500).json(payload);
-  } catch (e) {
-    // Last-resort safe response
-    try {
-      if (!res.headersSent) {
-        res.setHeader("Content-Type", "application/json; charset=utf-8");
-        res.status(500).send(JSON.stringify({ error: "error-handler-failed" }));
-      } else {
-        try {
-          res.end();
-        } catch (er) {
-          void er;
-        }
-      }
-    } catch (ee) {
-      void ee; // ignore final shutdown errors
-    }
-  }
-});

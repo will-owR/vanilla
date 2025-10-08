@@ -11,11 +11,16 @@ function escapeHtml(str = "") {
 }
 
 async function generateFromPrompt(payload = {}) {
+  void payload;
   // reference payload so linters don't flag unused param
-  const _received = payload || null;
+  //  const _received = payload || null;
   const text = "Hello, world!";
 
-  const content = { title: "Hello", body: text };
+  const content = {
+    title: "Hello",
+    body: text,
+    html: `<pre>${escapeHtml(text)}</pre>`,
+  };
 
   const persistIntents = [
     {

@@ -1,5 +1,7 @@
 // Error handling utilities for AetherPress
 const { v4: uuidv4 } = require("uuid");
+const fs = require("fs");
+const path = require("path");
 
 const ERROR_TYPES = {
   VALIDATION: "VALIDATION_ERROR",
@@ -108,33 +110,110 @@ function sendServiceUnavailableError(res, message, details = null) {
  * Enhanced error middleware that maintains backward compatibility
  */
 function errorMiddleware(err, req, res, next) {
-  // Log error details
+  // Preserve previous logging behavior while centralizing the response
+  // generation and file-based error append so the index.js file stays small.
   console.error("--- Error Handler ---");
   console.error("Time:", new Date().toISOString());
-  console.error("Method:", req.method);
-  console.error("URL:", req.originalUrl);
-  console.error("Body:", req.body);
-  console.error("Error Stack:", err.stack);
+  console.error("Method:", req && req.method);
+  console.error("URL:", req && req.originalUrl);
+  console.error("Body:", req && req.body);
+  console.error("Error Stack:", err && err.stack ? err.stack : err);
 
   const isDev = process.env.NODE_ENV !== "production";
   const status = err.status || 500;
+  const requestId =
+    (req && req.requestId) ||
+    (res && res.locals && res.locals.requestId) ||
+    "-";
 
-  // Create enhanced error response while maintaining backward compatibility
-  const requestId = (res && res.locals && res.locals.requestId) || null;
-  const response = {
-    error: isDev ? err.message : "Internal Server Error",
-    ...(isDev && { stack: err.stack }),
-    // Add new format properties as extensions
-    ...createErrorResponse(
-      isDev ? err.message : "Internal Server Error",
-      ERROR_TYPES.PROCESSING,
-      status,
-      isDev ? err.stack : null,
-      requestId
-    ),
-  };
+  // Append a compact structured error line to server-logs/errors.log for quick lookups
+  try {
+    const logsDir = path.resolve(__dirname, "..", "logs");
+    if (!fs.existsSync(logsDir)) {
+      try {
+        fs.mkdirSync(logsDir);
+      } catch (e) {
+        // ignore mkdir errors
+      }
+    }
 
-  res.status(status).json(response);
+    const logLine = JSON.stringify({
+      t: new Date().toISOString(),
+      id: requestId,
+      method: req && req.method,
+      url: req && req.originalUrl,
+      status: status,
+      message: err && err.message ? err.message : String(err),
+      stack: err && err.stack ? err.stack.split("\n")[0] : null,
+    });
+    try {
+      fs.appendFileSync(path.join(logsDir, "errors.log"), logLine + "\n");
+    } catch (e) {
+      console.warn(
+        "Failed to append to errors.log:",
+        e && e.message ? e.message : e
+      );
+    }
+  } catch (e) {
+    console.warn(
+      "Failed to build error log line:",
+      e && e.message ? e.message : e
+    );
+  }
+
+  // Surface a short error header to aid proxied requests / reverse-proxies
+  try {
+    res.setHeader(
+      "X-Backend-Error",
+      err && err.message ? String(err.message).slice(0, 200) : "error"
+    );
+    res.setHeader("X-Request-Id", requestId);
+  } catch (e) {
+    // ignore header-setting errors in error handler
+  }
+
+  // Build a structured response including the requestId
+  const response = createErrorResponse(
+    isDev ? err && err.message : "Internal Server Error",
+    ERROR_TYPES.PROCESSING,
+    status,
+    isDev ? err && err.stack : null,
+    requestId
+  );
+
+  // Ensure a JSON content-type so test clients and API consumers get a parsable body
+  try {
+    if (res.headersSent) {
+      try {
+        res.write(JSON.stringify(response));
+        res.end();
+      } catch (e) {
+        try {
+          res.end();
+        } catch (er) {
+          void er; // ignore
+        }
+      }
+      return;
+    }
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.status(status).json(response);
+  } catch (e) {
+    try {
+      if (!res.headersSent) {
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.status(500).send(JSON.stringify({ error: "error-handler-failed" }));
+      } else {
+        try {
+          res.end();
+        } catch (er) {
+          void er;
+        }
+      }
+    } catch (ee) {
+      void ee;
+    }
+  }
 }
 
 // Error classes

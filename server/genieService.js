@@ -30,6 +30,9 @@ async function generate(payload) {
   // can be correlated end-to-end. Fall back to generated id when not present.
   const requestId = (input && input.requestId) || makeRequestId();
 
+  // Server-side sanitizer for any HTML content returned by application services
+  const { sanitizeHtml } = require("./sanitizer");
+
   // Minimal default selector set: adjust if client uses different keys
   const DEFAULTS = { preset: "default" };
 
@@ -59,10 +62,15 @@ async function generate(payload) {
         metadata = {},
         persistIntents = [],
       } = hw.data || {};
+      const safeTitleHw = sanitizeHtml(String(content.title || ""));
+      const safeBodyHw =
+        content && content.html
+          ? sanitizeHtml(String(content.html))
+          : sanitizeHtmlSimple(String(content.body || ""));
       const safeContent = {
         ...content,
-        title: sanitizeHtmlSimple(String(content.title || "")),
-        body: sanitizeHtmlSimple(String(content.body || "")),
+        title: safeTitleHw,
+        body: safeBodyHw,
       };
       const persistInstructions = (persistIntents || []).map((intent, idx) => ({
         purpose: intent.purpose,
@@ -95,9 +103,16 @@ async function generate(payload) {
     const aiResult = await ai.generateContent(promptText);
     svcRes = { success: true, data: { ...aiResult, persistIntents: [] } };
   } catch (e) {
-    // If AI service is unavailable or throws synchronously during require,
-    // fall back to the deterministic sampleService.
-    svcRes = await sampleService.generateFromPrompt(input);
+    // If AI service is unavailable (module missing) fall back to deterministic sampleService.
+    // However, runtime errors produced by the AI provider should be propagated
+    // so callers (and tests) can observe failure modes explicitly.
+    if (e && e.code === "MODULE_NOT_FOUND") {
+      svcRes = await sampleService.generateFromPrompt(input);
+    } else {
+      // Re-throw to allow upper layers (plumbing) to surface a 5xx
+      // when the application service fails unexpectedly.
+      throw e;
+    }
   }
   if (!svcRes || !svcRes.success) {
     return { success: false, error: "application-service-failed", requestId };
@@ -109,11 +124,18 @@ async function generate(payload) {
     persistIntents = [],
   } = svcRes.data || {};
 
-  // Defensive sanitization on content fields
+  // Defensive sanitization on content fields. If the application service
+  // produced safe HTML (content.html), prefer that for `body` so clients
+  // receive display-ready HTML. Sanitize with the server-side sanitizer.
+  const safeTitle = sanitizeHtml(String(content.title || ""));
+  const safeBody =
+    content && content.html
+      ? sanitizeHtml(String(content.html))
+      : sanitizeHtmlSimple(String(content.body || ""));
   const safeContent = {
     ...content,
-    title: sanitizeHtmlSimple(String(content.title || "")),
-    body: sanitizeHtmlSimple(String(content.body || "")),
+    title: safeTitle,
+    body: safeBody,
   };
 
   // Convert intents -> instructions
