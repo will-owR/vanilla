@@ -95,7 +95,13 @@ describe("Persistence executor integration", () => {
     // importing the app's db instance which may live in another module
     // system context during tests.
     const sqlite3 = require("sqlite3").verbose();
-    const dbPath = path.join(__dirname, "..", "data", "your-database-name.db");
+    const dbPath = path.join(
+      __dirname,
+      "..",
+      "..",
+      "data",
+      "your-database-name.db"
+    );
     const dbConn = new sqlite3.Database(dbPath);
     const artifactRows = await new Promise((resolve, reject) => {
       dbConn.all(
