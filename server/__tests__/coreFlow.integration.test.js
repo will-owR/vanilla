@@ -25,9 +25,10 @@ test("Core flow: prompt -> preview -> export", async () => {
   const req = request(app);
 
   // 1) POST /prompt
+  const uniquePrompt = `Integration test prompt ${Date.now()}`;
   const promptRes = await req
     .post("/prompt")
-    .send({ prompt: "Integration test prompt" })
+    .send({ prompt: uniquePrompt })
     .timeout(15000);
   expect(promptRes.status).toBe(201);
   expect(promptRes.body).toHaveProperty("data");

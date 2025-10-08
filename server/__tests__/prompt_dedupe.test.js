@@ -8,7 +8,7 @@ describe("Prompt dedupe/cache behavior", () => {
   });
 
   it("returns cached result for exact prompt hash on second submission", async () => {
-    const prompt = "A unique prompt for dedupe test";
+    const prompt = `A unique prompt for dedupe test ${Date.now()}`;
 
     // Spy on aiService factory so we can assert whether AI was called
     // aiService factory will be stubbed below to intercept AI calls

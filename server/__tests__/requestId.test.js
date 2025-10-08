@@ -8,7 +8,9 @@ describe("Request ID propagation", () => {
   });
 
   it("includes requestId on successful /prompt responses and in metadata", async () => {
-    const res = await request(app).post("/prompt").send({ prompt: "Test" });
+    const res = await request(app)
+      .post("/prompt")
+      .send({ prompt: `Test ${Date.now()}` });
     expect(res.status).toBe(201);
     // Top-level requestId may be present on the envelope; application
     // services will also include requestId in metadata. Assert that at least one of those locations contains a requestId string.

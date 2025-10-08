@@ -43,7 +43,7 @@ describe("Persistence executor integration", () => {
   });
 
   it("writes artifacts atomically, records DB rows, and returns preview HTML for 'hello' prompt", async () => {
-    const prompt = "hello";
+    const prompt = `hello ${Date.now()}`;
 
     const res = await request(app).post("/prompt").send({ prompt });
     expect(res.status).toBe(201);
@@ -114,8 +114,11 @@ describe("Persistence executor integration", () => {
       await db.run("DELETE FROM artifacts WHERE ai_result_id = ?", [
         aiResultId,
       ]);
-      // Optionally remove the ai_result and prompt rows as well
+      // Remove the ai_result and prompt rows as well
       await db.run("DELETE FROM ai_results WHERE id = ?", [aiResultId]);
+      if (data && data.promptId) {
+        await db.run("DELETE FROM prompts WHERE id = ?", [data.promptId]);
+      }
     } catch (e) {
       // ignore cleanup errors
     }
