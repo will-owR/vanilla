@@ -33,7 +33,9 @@
     "sharp": "^0.34.3",
     "sqlite3": "^5.1.7",
     "undici": "^6.2.5",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "isomorphic-dompurify": "^0.16.0",
+    "jsdom": "^22.1.0"
   },
   "optionalDependencies": {
     "bullmq": "^1.91.1",

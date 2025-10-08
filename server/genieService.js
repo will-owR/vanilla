@@ -26,7 +26,9 @@ async function generate(payload) {
   const input =
     typeof payload === "string" ? { prompt: payload } : payload || {};
 
-  const requestId = makeRequestId();
+  // Prefer any incoming requestId provided by plumbing so logs and persistence
+  // can be correlated end-to-end. Fall back to generated id when not present.
+  const requestId = (input && input.requestId) || makeRequestId();
 
   // Minimal default selector set: adjust if client uses different keys
   const DEFAULTS = { preset: "default" };
@@ -83,8 +85,20 @@ async function generate(payload) {
     // else fallthrough to normal sampleService path
   }
 
-  // Call application service to produce intents and content
-  const svcRes = await sampleService.generateFromPrompt(input);
+  // Call AI application service by default to produce content/metadata. Fall
+  // back to sampleService only if AI provider is not available.
+  let svcRes;
+  try {
+    const aiFactory = require("./aiService").createAIService;
+    const ai = aiFactory();
+    // ai.generateContent returns { content, metadata }
+    const aiResult = await ai.generateContent(promptText);
+    svcRes = { success: true, data: { ...aiResult, persistIntents: [] } };
+  } catch (e) {
+    // If AI service is unavailable or throws synchronously during require,
+    // fall back to the deterministic sampleService.
+    svcRes = await sampleService.generateFromPrompt(input);
+  }
   if (!svcRes || !svcRes.success) {
     return { success: false, error: "application-service-failed", requestId };
   }

@@ -15,9 +15,16 @@ const ERROR_TYPES = {
  * @param {string} code - Error type code
  * @param {number} status - HTTP status code
  * @param {any} details - Technical details (only included in development)
+ * @param {string} requestId - Optional request ID
  * @returns {Object} Formatted error response
  */
-function createErrorResponse(message, code, status, details = null) {
+function createErrorResponse(
+  message,
+  code,
+  status,
+  details = null,
+  requestId = null
+) {
   const isDev = process.env.NODE_ENV !== "production";
   const errorResponse = {
     error: {
@@ -25,7 +32,7 @@ function createErrorResponse(message, code, status, details = null) {
       code,
       status,
       timestamp: new Date().toISOString(),
-      requestId: uuidv4(),
+      requestId: requestId || uuidv4(),
     },
   };
 
@@ -41,11 +48,13 @@ function createErrorResponse(message, code, status, details = null) {
  * Sends a validation error response (400)
  */
 function sendValidationError(res, message, details = null) {
+  const requestId = (res && res.locals && res.locals.requestId) || null;
   const response = createErrorResponse(
     message,
     ERROR_TYPES.VALIDATION,
     400,
-    details
+    details,
+    requestId
   );
   res.status(400).json(response);
 }
@@ -54,11 +63,13 @@ function sendValidationError(res, message, details = null) {
  * Sends a processing error response (500)
  */
 function sendProcessingError(res, message, details = null) {
+  const requestId = (res && res.locals && res.locals.requestId) || null;
   const response = createErrorResponse(
     message,
     ERROR_TYPES.PROCESSING,
     500,
-    details
+    details,
+    requestId
   );
   res.status(500).json(response);
 }
@@ -67,11 +78,13 @@ function sendProcessingError(res, message, details = null) {
  * Sends a not found error response (404)
  */
 function sendNotFoundError(res, message, details = null) {
+  const requestId = (res && res.locals && res.locals.requestId) || null;
   const response = createErrorResponse(
     message,
     ERROR_TYPES.NOT_FOUND,
     404,
-    details
+    details,
+    requestId
   );
   res.status(404).json(response);
 }
@@ -80,11 +93,13 @@ function sendNotFoundError(res, message, details = null) {
  * Sends a service unavailable error response (503)
  */
 function sendServiceUnavailableError(res, message, details = null) {
+  const requestId = (res && res.locals && res.locals.requestId) || null;
   const response = createErrorResponse(
     message,
     ERROR_TYPES.SERVICE_UNAVAILABLE,
     503,
-    details
+    details,
+    requestId
   );
   res.status(503).json(response);
 }
@@ -105,6 +120,7 @@ function errorMiddleware(err, req, res, next) {
   const status = err.status || 500;
 
   // Create enhanced error response while maintaining backward compatibility
+  const requestId = (res && res.locals && res.locals.requestId) || null;
   const response = {
     error: isDev ? err.message : "Internal Server Error",
     ...(isDev && { stack: err.stack }),
@@ -113,11 +129,43 @@ function errorMiddleware(err, req, res, next) {
       isDev ? err.message : "Internal Server Error",
       ERROR_TYPES.PROCESSING,
       status,
-      isDev ? err.stack : null
+      isDev ? err.stack : null,
+      requestId
     ),
   };
 
   res.status(status).json(response);
+}
+
+// Error classes
+class TransportError extends Error {
+  constructor(
+    message,
+    status = 500,
+    code = ERROR_TYPES.PROCESSING,
+    details = null
+  ) {
+    super(message);
+    this.name = "TransportError";
+    this.status = status;
+    this.code = code;
+    if (details) this.details = details;
+  }
+}
+
+class ServiceError extends Error {
+  constructor(
+    message,
+    status = 500,
+    code = ERROR_TYPES.PROCESSING,
+    details = null
+  ) {
+    super(message);
+    this.name = "ServiceError";
+    this.status = status;
+    this.code = code;
+    if (details) this.details = details;
+  }
 }
 
 module.exports = {
@@ -128,4 +176,6 @@ module.exports = {
   sendNotFoundError,
   sendServiceUnavailableError,
   errorMiddleware,
+  TransportError,
+  ServiceError,
 };

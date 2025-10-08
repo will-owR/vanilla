@@ -27,14 +27,31 @@ const puppeteer = require("puppeteer-core");
 const db = require("./db");
 const fs = require("fs");
 const path = require("path");
-const { v4: uuidv4 } = require("uuid");
 const imageRewrite = require("./utils/imageRewrite");
 const persistence = require("./persistence");
+const { v4: uuidv4 } = require("uuid");
 const EXPORT_USE_LOCAL_IMAGES =
   process.env.EXPORT_USE_LOCAL_IMAGES === "1" ||
   process.env.EXPORT_USE_LOCAL_IMAGES === "true";
 const app = express();
-const PORT = process.env.PORT || 3000;
+
+// Request ID middleware: attach a stable requestId to every request so that
+// client and server logs can be correlated. Existing handlers and services
+// can opt-in to use `req.requestId` when persisting records or returning
+// metadata. We also expose the ID as `X-Request-Id` response header.
+app.use((req, res, next) => {
+  try {
+    const headerId = req.headers["x-request-id"] || req.headers["x-requestid"];
+    const requestId = headerId || require("uuid").v4();
+    req.requestId = requestId;
+    res.locals.requestId = requestId;
+    res.setHeader("X-Request-Id", requestId);
+  } catch (e) {
+    // If UUID generation fails for any reason, continue without blocking
+    req.requestId = req.requestId || "";
+  }
+  next();
+});
 
 async function rewriteImagesForExportAsync(html) {
   if (!EXPORT_USE_LOCAL_IMAGES) return html;
@@ -666,7 +683,12 @@ app.post("/prompt", async (req, res, next) => {
 
   try {
     // Call orchestrator to generate content and obtain persistInstructions
-    const genieResult = await genieService.generate({ prompt });
+    // Pass requestId into the orchestrator so the same id can be returned
+    // as part of the generation metadata and used for persistence traces.
+    const genieResult = await genieService.generate({
+      prompt,
+      requestId: req.requestId,
+    });
 
     if (!genieResult || !genieResult.success) {
       return res
@@ -714,7 +736,11 @@ app.post("/prompt", async (req, res, next) => {
       console.warn("/prompt: failed to persist prompt to DB", e && e.message);
     }
 
-    return res.status(201).json({ success: true, data });
+    // Include the requestId in the JSON response so clients can correlate
+    // results and ignore stale/late responses.
+    return res
+      .status(201)
+      .json({ success: true, requestId: req.requestId, data });
   } catch (err) {
     err.status = err.status || 500;
     err.message = `Generation Error: ${err.message}`;
@@ -726,26 +752,9 @@ app.post("/prompt", async (req, res, next) => {
 // Import error handling utilities
 const { sendValidationError } = require("./utils/errorHandler");
 
-const previewTemplate = (content) => `
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    .preview { max-width: 800px; margin: 2rem auto; font-family: system-ui; }
-    .preview h1 { color: #2c3e50; }
-    .preview .content { line-height: 1.6; }
-  </style>
-</head>
-<body>
-  <div class="preview">
-    <h1>${content.title}</h1>
-    <div class="content">${content.body}</div>
-  </div>
-</body>
-</html>
-`;
-
-// NOTE: image rewrite is handled by `rewriteImagesForExportAsync` above.
+// Use the centralized preview renderer to produce sanitized HTML.
+const { renderPreview } = require("./previewRenderer");
+const previewTemplate = (content) => renderPreview(content);
 
 app.get("/preview", async (req, res) => {
   const { content, resultId, promptId } = req.query;
@@ -907,8 +916,12 @@ app.get("/preview", async (req, res) => {
 app.post("/genie", async (req, res) => {
   try {
     const prompt = req.body && req.body.prompt;
-    const result = await serviceImpl.generate(prompt);
-    return res.status(201).json(result);
+    const result = await serviceImpl.generate(
+      typeof prompt === "string" ? prompt : prompt
+    );
+    // Attach the requestId at the plumbing level so callers always see it
+    // regardless of concrete service behavior.
+    return res.status(201).json({ ...result, requestId: req.requestId });
   } catch (err) {
     console.error("/genie error", err && err.message);
     const status = err && err.status ? err.status : 500;
@@ -979,7 +992,10 @@ app.post("/api/preview", (req, res) => {
       });
     }
 
-    res.json({ preview: previewTemplate(contentObj), metadata: {} });
+    res.json({
+      preview: previewTemplate(contentObj),
+      metadata: { requestId: req.requestId },
+    });
   } catch (err) {
     sendValidationError(res, "Invalid content format", { error: err.message });
   }
@@ -1326,7 +1342,9 @@ app.post("/api/prompts", (req, res, next) => {
   (async () => {
     try {
       const result = await crud.createPrompt(prompt);
-      res.status(201).json({ success: true, data: result });
+      res
+        .status(201)
+        .json({ success: true, requestId: req.requestId, data: result });
     } catch (err) {
       if (err.code === "SQLITE_CONSTRAINT") {
         err.status = 409;
@@ -1559,6 +1577,7 @@ app.post("/api/ai_results", (req, res, next) => {
       const resultObj = await crud.createAIResult(prompt_id, result);
       res.status(201).json({
         success: true,
+        requestId: req.requestId,
         data: { ...resultObj, created_at: new Date().toISOString() },
       });
     } catch (err) {
@@ -1812,7 +1831,9 @@ app.post("/api/overrides", (req, res, next) => {
   (async () => {
     try {
       const result = await crud.createOverride(ai_result_id, override);
-      res.status(201).json({ success: true, data: result });
+      res
+        .status(201)
+        .json({ success: true, requestId: req.requestId, data: result });
     } catch (err) {
       if (err.code === "SQLITE_FOREIGN_KEY") {
         err.status = 404;
@@ -1999,7 +2020,9 @@ app.post("/api/pdf_exports", (req, res, next) => {
   (async () => {
     try {
       const result = await crud.createPDFExport(ai_result_id, file_path);
-      res.status(201).json({ success: true, data: result });
+      res
+        .status(201)
+        .json({ success: true, requestId: req.requestId, data: result });
     } catch (err) {
       if (err.code === "SQLITE_FOREIGN_KEY") {
         err.status = 404;
@@ -2735,7 +2758,8 @@ app.use((err, req, res, _next) => {
   // as an Express error handler (arity 4). This preserves error-handler
   // behavior without introducing a runtime side-effect.
   void _next;
-  const requestId = req && req.id ? req.id : "-";
+  const requestId =
+    req && req.requestId ? req.requestId : req && req.id ? req.id : "-";
   console.error("--- Error Handler ---");
   console.error("Time:", timestamp);
   console.error("RequestId:", requestId);
