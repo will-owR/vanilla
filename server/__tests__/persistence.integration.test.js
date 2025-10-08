@@ -61,7 +61,12 @@ describe("Persistence executor integration", () => {
     const persisted = data.persisted;
     const paths = persisted.map((p) => p.path);
     for (const p of persisted) {
-      expect(p.path.startsWith(tmpExportDir)).toBe(true);
+      const resolvedTarget = path.resolve(p.path);
+      const resolvedBase = path.resolve(tmpExportDir);
+      const inside =
+        resolvedTarget === resolvedBase ||
+        resolvedTarget.startsWith(resolvedBase + path.sep);
+      expect(inside).toBe(true);
       expect(fs.existsSync(p.path)).toBe(true);
     }
 

@@ -39,6 +39,10 @@ async function writeAtomic(targetPath, content, encoding = "utf8") {
  */
 async function execute(instructions = [], _opts = {}) {
   ensureBaseDir();
+  // Debug: emit base dir used for persistence (useful in test logs)
+  try {
+    console.log("[persistence] BASE_EXPORT_DIR=", BASE_EXPORT_DIR);
+  } catch (e) {}
   const results = [];
   for (const inst of instructions) {
     const folder = inst.folderHint || INST_DEFAULT_FOLDER(inst.purpose);
