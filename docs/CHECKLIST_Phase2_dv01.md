@@ -11,12 +11,14 @@ Branch: aether-rewrite/client-phase2-AAA
 ### Phase A: Minimalist Essential (V0.1)
 
 - [x] Core Entry Point
+
   - [x] Clean, single-page layout
   - [x] Basic container structure
   - [ ] "Generate" button implementation (partially complete)
   - Acceptance: Direct visual verification (ie, helloWorldService)
 
 - [x] Basic Container Components
+
   - [x] Text presentation container (`PreviewWindow.svelte`)
   - [x] Form input structure (`PromptForm.svelte`)
   - [x] Store architecture (`promptStore.js`)
@@ -174,96 +176,98 @@ End of CHECKLIST_Phase2_dv01
 
 ---
 
-## ADDENDUM - Backend Interface Implementation Status (2025-10-09)
-
-### Current Implementation Status (Phase A)
-
-- [x] Core Entry Point
-  - [x] Clean, single-page layout (implemented in client-v2)
-  - [x] Basic container structure
-  - [-] "Generate" button implementation (partially complete)
-
-- [x] Basic Container Components
-  - [x] Text presentation container (`PreviewWindow.svelte`)
-  - [x] Form input structure (`PromptForm.svelte`)
-  - [x] Store architecture (`promptStore.js`)
+## ADDENDUM - Frontend Implementation Architecture (2025-10-09)
 
 ### Critical Missing Connections
 
-1. Form to Store Connection:
+Following the plumbing/application services separation principle:
 
-   ```javascript
+1. Service Layer (Business Logic)
+
+   ```typescript
+   // Need: promptService.js
+   interface PromptService {
+     submit(prompt: string): Promise<GenerationResult>;
+     getLatest(): Promise<StoredPrompt | null>;
+     validate(prompt: string): ValidationResult;
+   }
+   ```
+
+   - Why: Business logic for prompt handling should be isolated from transport
+   - Responsibility: Input validation, state management, result processing
+
+2. Transport Layer (Plumbing)
+
+   ```typescript
+   // Need: transportAdapter.js
+   interface TransportAdapter {
+     post(endpoint: string, payload: any): Promise<Response>;
+     get(endpoint: string): Promise<Response>;
+   }
+   ```
+
+   - Why: HTTP/network concerns should be separate from business logic
+   - Responsibility: Request/response handling, error wrapping
+
+3. Store Integration (Business Logic)
+
+   ```typescript
+   // Need: Enhanced promptStore.js
+   interface PromptStore {
+     submit(prompt: string): Promise<void>;
+     updatePreview(content: PreviewContent): void;
+     handleError(error: ServiceError): void;
+   }
+   ```
+
+   - Why: State management should be isolated from UI and transport
+   - Responsibility: Store updates, state transitions
+
+4. UI Event Flow (Plumbing)
+
+   ```typescript
    // In PromptForm.svelte
-   // Event exists but isn't handled:
-   dispatch("submit", { prompt: value });
+   // Event dispatch only - no direct service calls
+   dispatch("submit", { prompt });
 
-   // Needs parent handler in preview.svelte:
-   <PromptForm on:submit={handleSubmit} />;
+   // In parent component
+   // Connect UI events to service layer
+   <PromptForm on:submit={promptService.handleSubmit} />;
    ```
 
-2. Store to API Connection:
+   - Why: Components should be pure UI, delegating to services
+   - Responsibility: User interaction and display only
 
-   ```javascript
-   // In promptStore.js
-   // Need to implement:
-   async function submitPrompt(prompt) {
-     const response = await fetch("/api/prompt", {
-       method: "POST",
-       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({ prompt }),
-     });
-     const data = await response.json();
-     // Update store with response
-     update((state) => ({ ...state, preview: data.content }));
-   }
-   ```
+### Implementation Priority Order
 
-3. Request Correlation Implementation:
+1. Service Layer
 
-   ```javascript
-   // In promptStore.js
-   // Need to track requestIds:
-   let currentRequestId = null;
+   - Define service interfaces
+   - Implement concrete services
+   - Add validation and error handling
 
-   // In store update logic:
-   if (data.metadata.requestId !== currentRequestId) {
-     return; // Ignore stale responses
-   }
-   ```
+2. Transport Layer
 
-4. Error State Connection:
-   ```javascript
-   // In promptStore.js
-   // Need error handling:
-   try {
-     // API call logic
-   } catch (error) {
-     update((state) => ({ ...state, error: error.message }));
-   }
-   ```
+   - Implement transport adapter
+   - Add request/response mapping
+   - Configure endpoints and proxy
 
-### Implementation Notes
+3. Store Integration
 
-1. Backend Infrastructure Ready:
+   - Enhance store with service connection
+   - Add state management
+   - Implement error handling
 
-   - All endpoints implemented (/prompt, /preview)
-   - Request correlation with requestId in place
-   - Error handling and sanitization ready
-   - Preview rendering system complete
+4. UI Connection
+   - Wire up event handlers
+   - Connect to services
+   - Add loading states
 
-2. Required Frontend Connections:
+### Note on Separation
 
-   - Connect PromptForm submit to store action
-   - Implement API calls in store
-   - Add requestId tracking
-   - Wire error handling to UI
-   - Connect preview updates to PreviewWindow
+- UI components remain "dumb" - they dispatch events only
+- Services handle all business logic and state management
+- Transport layer handles all network/IO operations
+- Clear boundaries prevent mixing of concerns
 
-3. Priority Order:
-   1. Basic form submission flow
-   2. Store API integration
-   3. Request correlation
-   4. Error handling
-   5. Preview updates
-
-All backend plumbing is in place per PATH_FORWARD_Plumbing_Separation.md. Frontend needs the above connections to complete the implementation.
+---
