@@ -15,7 +15,7 @@
 </script>
 
 <main style="padding:24px;height:100vh">
-  <h1>client-v2 — Preview (Phase A)</h1>
+  <h1>AetherPress — Preview (client-v2)</h1>
   <div style="margin-top:12px">
     <PromptForm
       prompt={$promptStore.prompt}
