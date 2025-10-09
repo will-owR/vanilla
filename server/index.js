@@ -807,6 +807,9 @@ app.post("/prompt", async (req, res, next) => {
 
     // Include the requestId in the JSON response so clients can correlate
     // results and ignore stale/late responses.
+    // Ensure metadata.requestId is always present for traceability
+    if (!data.metadata || typeof data.metadata !== "object") data.metadata = {};
+    if (!data.metadata.requestId) data.metadata.requestId = req.requestId;
     return res
       .status(201)
       .json({ success: true, requestId: req.requestId, data });
