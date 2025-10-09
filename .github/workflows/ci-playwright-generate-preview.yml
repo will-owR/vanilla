@@ -24,12 +24,12 @@ jobs:
       - name: Install root and client dependencies
         run: |
           npm ci --no-audit --no-fund
-          cd client && npm ci --no-audit --no-fund
+          cd client-v2 && npm ci --no-audit --no-fund
 
       - name: Start server and client in background
         run: |
           (cd server && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm run dev > /tmp/server.log 2>&1 &) || true
-          (cd client && npm run dev > /tmp/client.log 2>&1 &) || true
+          (cd client-v2 && npm run dev > /tmp/client.log 2>&1 &) || true
           sleep 4
 
       - name: Install Playwright
@@ -41,7 +41,7 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p docs/focus/logs
-          node ./scripts/test-generate-preview.js --url http://localhost:5173
+          node ./scripts/test-generate-preview.js --url http://localhost:5174
 
       - name: Upload artifacts
         if: always()
