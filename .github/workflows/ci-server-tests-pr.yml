@@ -34,6 +34,9 @@ jobs:
       - name: Install server deps
         run: npm --prefix server ci
 
+      - name: Clean server export directory
+        run: node ./server/scripts/clean_exports.js
+
       - name: Run server tests
         env:
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"

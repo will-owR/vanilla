@@ -188,6 +188,10 @@ node server/scripts/extract-pdf-text.js /tmp/your-ebook.pdf
 Note: runtime server logs are now written to `server/logs/` (ignored by `server/.gitignore`).
 ```
 
+Note about persisted export artifacts
+
+- The repository intentionally ignores the runtime export output directory `data/exports/` (see `server/.gitignore`) to avoid committing generated or large binary artifacts. During tests and CI runs we ensure test hygiene by wiping this folder before test runs. The server includes a small cleanup utility at `server/scripts/clean_exports.js` which removes and recreates `data/exports/` in a safe way. Locally, the server package exposes a pretest helper (`npm run pretest:run`) and a `pretest` lifecycle script can be used to invoke it automatically before `npm test`.
+
 ## How to verify V0.1 (quick)
 
 Use these commands to run the deterministic smoke checks and produce artifacts you can inspect locally or upload from CI.

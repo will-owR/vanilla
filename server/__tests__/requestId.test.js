@@ -87,4 +87,33 @@ describe("Request ID propagation", () => {
     expect(html).not.toContain("<script>");
     expect(html).not.toContain("onerror");
   });
+
+  it("sets X-Request-Id header equal to metadata.requestId on successful /prompt", async () => {
+    const res = await request(app)
+      .post("/prompt")
+      .send({ prompt: `HeaderEquality ${Date.now()}` });
+    expect(res.status).toBe(201);
+
+    const headerId = res.headers["x-request-id"] || res.headers["x-requestid"];
+    expect(typeof headerId).toBe("string");
+
+    let body = res.body;
+    if ((!body || Object.keys(body).length === 0) && res.text) {
+      try {
+        body = JSON.parse(res.text);
+      } catch (e) {
+        body = res.body;
+      }
+    }
+
+    const metaId =
+      (body &&
+        body.data &&
+        body.data.metadata &&
+        body.data.metadata.requestId) ||
+      (body && body.requestId);
+
+    expect(typeof metaId).toBe("string");
+    expect(metaId).toBe(headerId);
+  });
 });

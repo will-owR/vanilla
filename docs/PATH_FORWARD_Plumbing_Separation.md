@@ -146,3 +146,19 @@ Overall: the repo already embodies a clear adapter + application-service pattern
 ---
 
 (Other items from the original checklist such as a formal migration UX for versioning and additional export parity checks have either been partially implemented or are lower priority and can be scheduled as part of Phase B.)
+
+## ADDENDUM — Completed items (2025-10-09)
+
+Since the earlier review, the following checklist items have been implemented and validated through unit/integration tests and CI hygiene updates:
+
+- Request correlation: `requestId` is generated and returned consistently. The server sets the `X-Request-Id` response header and also populates `metadata.requestId` on generation endpoints (e.g., `POST /prompt`). Unit tests now assert header/header-body parity for `POST /prompt` and preview endpoints.
+
+- Persistence executor: Implemented `server/persistence.js` that performs safe path validation, atomic writes (tmp + rename), and sanitizes filename hints. An integration test (`server/__tests__/persistence.integration.test.js`) verifies files are written atomically, artifact DB rows are created and correlated with `requestId`, and no `.tmp` leftovers remain.
+
+- Negative safety tests: Added focused negative tests (`server/__tests__/persistence.negative.test.js`) that assert attempts to traverse outside the configured base export directory via `folderHint` or `filenameHint` are rejected or sanitized.
+
+- Test and CI hygiene: Added `server/scripts/clean_exports.js`, added a `pretest` lifecycle hook in `server/package.json` to call the cleaner locally prior to tests, and updated CI workflows to run the same cleanup script before invoking server tests. The repository `.gitignore` now includes `data/exports/` so generated artifacts are not committed.
+
+- Documentation & README updates: `README.md` now documents that `data/exports/` is ignored, the `clean_exports` utility exists, and CI runs the cleaner step before tests to maintain deterministic test runs.
+
+These changes close out the ADDENDUM items from the original plumbing separation review. Remaining follow-ups are documentation polish and adding any additional CI enforcement if desired.
