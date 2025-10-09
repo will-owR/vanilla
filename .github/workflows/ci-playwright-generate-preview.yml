@@ -24,7 +24,7 @@ jobs:
       - name: Install root and client dependencies
         run: |
           npm ci --no-audit --no-fund
-          cd client-v2 && npm ci --no-audit --no-fund
+          cd client-v2 && npm install --no-audit --no-fund
 
       - name: Start server and client in background
         run: |
