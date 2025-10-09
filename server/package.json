@@ -4,6 +4,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
+    "pretest:run": "node ./scripts/clean_exports.js",
     "start:ci": "ts-node ./bin/www.ts",
     "dev:ci": "DEBUG=* ts-node ./bin/www.ts",
     "lint": "eslint . --ext .ts",
