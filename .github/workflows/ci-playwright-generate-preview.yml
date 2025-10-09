@@ -24,13 +24,13 @@ jobs:
       - name: Install root and client dependencies
         run: |
           npm ci --no-audit --no-fund
-          cd client && npm ci --no-audit --no-fund
+          cd client-v2 && npm install --no-audit --no-fund
 
       - name: Start server and client in background
         run: |
           (cd server && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm run dev > /tmp/server.log 2>&1 &) || true
-          (cd client && npm run dev > /tmp/client.log 2>&1 &) || true
-          sleep 4
+          (cd client-v2 && npm run dev > /tmp/client.log 2>&1 &) || true
+          sleep 8
 
       - name: Install Playwright
         run: |

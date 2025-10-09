@@ -57,3 +57,6 @@ server/tmp-e2e-exports/
 client/.vite/
 # Ignore generated Prisma client in dev environment
 server/prisma/prisma-client.js
+
+# Ignore default export directory produced by persistence executor
+data/exports/

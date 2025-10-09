@@ -30,28 +30,14 @@
       errorMsg = "Please enter a prompt";
       return;
     }
-    loading = true;
-    dispatch("loading", { loading: true });
-    try {
-      // Use the dev query param so the server's deterministic handler will run in dev
-      const res = await fetch("/prompt?dev=true", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
-      const json = await res.json();
-      const html = extractHtmlFromResponse(json);
-      if (!html) throw new Error("Invalid response from server");
-      dispatch("result", { html });
-    } catch (e) {
-      const msg = e && e.message ? e.message : String(e);
-      errorMsg = msg;
-      dispatch("error", { error: msg });
-    } finally {
-      loading = false;
-      dispatch("loading", { loading: false });
-      await tick();
-    }
+    // Emit a submit event and let the application-level store/service
+    // handle network calls and preview updates. This keeps the component
+    // free of IO and aligned with the 'dumb frontend' guideline.
+    const payload = {
+      prompt: prompt.trim(),
+      // expose other selections in future (contentType, mediaType, pages)
+    };
+    dispatch("submit", payload);
   }
 
   function onKeydown(e) {
@@ -167,6 +153,10 @@
   </div>
   {#if loading}
     <div class="loading">Generating…</div>
+  {/if}
+
+  {#if errorMsg}
+    <div role="alert" class="error">{errorMsg}</div>
   {/if}
 </div>
 

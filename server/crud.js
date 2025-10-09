@@ -463,3 +463,132 @@ exports.deletePDFExport = (id, cb) => {
   const op = withDbRetry(db.run.bind(db), [sql, [id]]);
   return op.then((stmt) => ({ changes: stmt ? stmt.changes : 0 }));
 };
+
+// New helper functions
+exports.getPromptByText = (prompt, cb) => {
+  const sql = `SELECT * FROM prompts WHERE prompt = ? ORDER BY created_at DESC LIMIT 1`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.get.bind(db), [sql, [prompt]], cb);
+  }
+  const op = withDbRetry(db.get.bind(db), [sql, [prompt]]);
+  return op.then((row) => (row && typeof row === "object" ? row : null));
+};
+
+// New: getPromptByHash
+exports.getPromptByHash = (hash, cb) => {
+  const sql = `SELECT * FROM prompts WHERE prompt_hash = ? LIMIT 1`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.get.bind(db), [sql, [hash]], cb);
+  }
+  return withDbRetry(db.get.bind(db), [sql, [hash]]).then((row) => row || null);
+};
+
+// New: createPromptWithHash
+exports.createPromptWithHash = (prompt, normalized, hash, requestId, cb) => {
+  const sql = `INSERT INTO prompts (prompt, normalized_text, prompt_hash, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)`;
+  if (typeof cb === "function") {
+    return withDbRetry(
+      db.run.bind(db),
+      [sql, [prompt, normalized, hash]],
+      function (err) {
+        try {
+          cb.call(this, err, this ? { id: this.lastID } : null);
+        } catch (e) {
+          console.error("[DB CALLBACK ERROR]", e);
+        }
+      }
+    );
+  }
+  return withDbRetry(db.run.bind(db), [sql, [prompt, normalized, hash]]).then(
+    (stmt) => ({ id: stmt ? stmt.lastID : null })
+  );
+};
+
+// New: getLatestAIResultForPrompt
+exports.getLatestAIResultForPrompt = (prompt_id, cb) => {
+  const sql = `SELECT * FROM ai_results WHERE prompt_id = ? ORDER BY version DESC, created_at DESC LIMIT 1`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.get.bind(db), [sql, [prompt_id]], (err, row) => {
+      if (err) return cb(err);
+      try {
+        if (row && row.result) row.result = JSON.parse(row.result);
+        cb(null, row || null);
+      } catch (e) {
+        cb(new Error("Invalid JSON in database"));
+      }
+    });
+  }
+  return withDbRetry(db.get.bind(db), [sql, [prompt_id]]).then((row) =>
+    row ? { ...row, result: JSON.parse(row.result) } : null
+  );
+};
+
+// New: createAIResultWithMeta (adds request_id and version handling)
+exports.createAIResultWithMeta = async (
+  prompt_id,
+  result,
+  request_id,
+  version,
+  cb
+) => {
+  // Note: we intentionally serialize only the `content` portion below
+
+  // Store the AI result's content payload (consistent with legacy behavior)
+  const toStore = result && result.content ? result.content : result;
+  const sql = `INSERT INTO ai_results (prompt_id, result, request_id, version, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`;
+  let jsonToStore;
+  try {
+    jsonToStore = JSON.stringify(toStore);
+  } catch (e) {
+    if (cb)
+      return cb(
+        new Error(
+          "Invalid result object for JSON serialization - content portion"
+        )
+      );
+    return Promise.reject(
+      new Error(
+        "Invalid result object for JSON serialization - content portion"
+      )
+    );
+  }
+  if (typeof cb === "function") {
+    return withDbRetry(
+      db.run.bind(db),
+      [sql, [prompt_id, jsonToStore, request_id, version]],
+      function (err) {
+        try {
+          cb.call(this, err, this ? { id: this.lastID } : null);
+        } catch (e) {
+          console.error("[DB CALLBACK ERROR]", e);
+        }
+      }
+    );
+  }
+  return withDbRetry(db.run.bind(db), [
+    sql,
+    [prompt_id, jsonToStore, request_id, version],
+  ]).then((stmt) => ({ id: stmt ? stmt.lastID : null }));
+};
+
+// New: record artifact
+exports.createArtifact = (ai_result_id, purpose, path, request_id, cb) => {
+  const sql = `INSERT INTO artifacts (ai_result_id, purpose, path, request_id, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`;
+  if (typeof cb === "function") {
+    return withDbRetry(
+      db.run.bind(db),
+      [sql, [ai_result_id, purpose, path, request_id]],
+      function (err) {
+        try {
+          cb.call(this, err, this ? { id: this.lastID } : null);
+        } catch (e) {
+          console.error("[DB CALLBACK ERROR]", e);
+        }
+      }
+    );
+  }
+  return withDbRetry(db.run.bind(db), [
+    sql,
+    [ai_result_id, purpose, path, request_id],
+  ]).then((stmt) => ({ id: stmt ? stmt.lastID : null }));
+};

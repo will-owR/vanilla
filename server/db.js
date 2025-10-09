@@ -99,6 +99,62 @@ async function initializeDb() {
           for (const sql of createTables) {
             await runPromise(db, sql);
           }
+
+          // --- Migrations / Add columns if missing ---
+          // prompts: add prompt_hash, normalized_text
+          const promptCols = await new Promise((res, rej) =>
+            db.all("PRAGMA table_info('prompts')", (err, rows) => {
+              if (err) return rej(err);
+              res(rows.map((r) => r.name));
+            })
+          );
+          if (!promptCols.includes("prompt_hash")) {
+            await runPromise(
+              db,
+              `ALTER TABLE prompts ADD COLUMN prompt_hash TEXT`
+            );
+          }
+          if (!promptCols.includes("normalized_text")) {
+            await runPromise(
+              db,
+              `ALTER TABLE prompts ADD COLUMN normalized_text TEXT`
+            );
+          }
+
+          // ai_results: add request_id and version
+          const aiCols = await new Promise((res, rej) =>
+            db.all("PRAGMA table_info('ai_results')", (err, rows) => {
+              if (err) return rej(err);
+              res(rows.map((r) => r.name));
+            })
+          );
+          if (!aiCols.includes("request_id")) {
+            await runPromise(
+              db,
+              `ALTER TABLE ai_results ADD COLUMN request_id TEXT`
+            );
+          }
+          if (!aiCols.includes("version")) {
+            await runPromise(
+              db,
+              `ALTER TABLE ai_results ADD COLUMN version INTEGER DEFAULT 1`
+            );
+          }
+
+          // artifacts table for persisted files
+          await runPromise(
+            db,
+            `CREATE TABLE IF NOT EXISTS artifacts (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              ai_result_id INTEGER NOT NULL,
+              purpose TEXT,
+              path TEXT NOT NULL,
+              request_id TEXT,
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY (ai_result_id) REFERENCES ai_results(id)
+            )`
+          );
+
           console.log("All tables and pragmas initialized successfully.");
           resolve();
         } catch (error) {

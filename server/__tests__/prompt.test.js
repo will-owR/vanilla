@@ -22,6 +22,7 @@ describe("API: /api/prompts", () => {
     // Deletion order matters due to foreign key constraints.
     await db.run("DELETE FROM pdf_exports");
     await db.run("DELETE FROM overrides");
+    await db.run("DELETE FROM artifacts");
     await db.run("DELETE FROM ai_results");
     await db.run("DELETE FROM prompts");
 

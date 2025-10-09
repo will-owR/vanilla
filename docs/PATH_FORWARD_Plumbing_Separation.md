@@ -88,177 +88,77 @@ Overall: the repo already embodies a clear adapter + application-service pattern
 
 ---
 
-If you want, I can implement any of the short checklist items (one at a time) and run a minimal test. Specify which item to implement first and I will make the change and validate it locally.
+## Progress update (as of 2025-10-08)
+
+- Implemented since the review (actualized):
+
+  - Created `server/previewRenderer.js` and removed inline HTML templating from the main handler; preview rendering is centralized and uses a server-side sanitizer. Files touched: `server/previewRenderer.js`, `server/index.js`, and related tests.
+  - Added request-correlation plumbing: request-id middleware that normalizes and exposes `req.requestId`, sets the `X-Request-Id` response header, and propagates `requestId` into service metadata where appropriate. Files touched: `server/index.js`, `server/genieService.js`.
+  - Centralized and hardened error handling: introduced typed error helpers and a single error middleware that produces consistent JSON error shapes and writes structured error lines to logs. File: `server/utils/errorHandler.js` (unit tests added).
+  - Adjusted application services for testability: `genieService` preserves incoming `requestId`, converts `persistIntents` → `persistInstructions`, and delegates to application services that only return intents. Files touched: `server/genieService.js`, `server/sampleService.js`.
+  - Implemented persistence executor and tests: `server/persistence.js` performs safe path validation and atomic writes (tmp + rename), and the new integration test (`server/__tests__/persistence.integration.test.js`) verifies atomic writes, absence of leftover tmp files, and that artifact DB rows are recorded and correlated with `requestId`. The test avoids module-instance DB issues by verifying artifacts using a direct sqlite3 file connection to the server DB and cleans up created files/rows after assertions.
+  - Test hardening: made prompt-related tests deterministic by using unique prompts per run to avoid cache collisions; added cleanup steps so tests do not leave DB rows or exported files behind.
+  - CI / branch hygiene: accidental test artifacts written during early development were removed from the repo; commits and PRs include these test and persistence changes.
+
+- Current test & CI status (actual):
+
+  - Server test suite runs green locally and on the dev container after the persistence and test robustness fixes. All server tests pass in the full server test run (integration and unit tests exercised).
+  - The new persistence integration test successfully asserts:
+    - Files are written atomically (tmp->rename) and contain expected content.
+    - No `.tmp-` leftovers remain in the written folders after persistence completes.
+    - Artifact rows exist in the `artifacts` table, point to the written files, and contain the `request_id` matching the HTTP response header.
+
+- Lessons learned / small follow-ups already applied:
+
+  - Tests that rely on DB state must either (a) use unique inputs and clean up, or (b) orchestrate DB initialization and teardown in a shared test fixture. We applied (a) for quick wins and wrote the persistence test to explicitly clean artifacts/ai_results/prompts it creates.
+  - Avoid importing the app's `db` module for cross-process assertions in tests — opening a direct sqlite3 connection to the DB file is a robust way to inspect persisted rows from test code and avoids module-instance mismatches in the test runner.
 
 ---
 
-## Architecture diagram
+## Outstanding work (what remains — revised)
 
-Below is a simple diagram that makes the plumbing ↔ application-service relationship explicit. The frontend's application service (e.g., `previewService`) constructs the JSON payload and calls the plumbing (HTTP client). The server's plumbing (`index.js`) resolves the chosen application implementation via `serviceAdapter` which delegates to `genieService` / `sampleService` / `aiService`. The preview updates flow back into `previewStore` and are displayed by the dumb `Preview` component.
+1. Stabilize and document the `requestId` contract across handlers and consumers (short):
 
-```mermaid
-flowchart LR
-  subgraph Frontend
-    PF[PromptForm] -->|submit JSON| AppSvc[frontend: previewService (application service)]
-    AppSvc -->|POST JSON / stream| HTTPClient[httpClient (plumbing client)]
-    PreviewComp[Preview.svelte (dumb)] -->|subscribe| PreviewStore[$previewStore]
-  end
+   - Ensure all generation and preview/export handlers consistently include `requestId` in the HTTP response header (`X-Request-Id`) and, where chosen, in the JSON `metadata` object. Tests should assert both header and metadata as part of the contract so clients can rely on either/both places.
+   - Estimate: 0.5–1.5 hours.
 
-  subgraph ClientServices
-    AppSvc -->|update| PreviewStore
-  end
+2. Robust error boundary coverage (short → medium):
 
-  subgraph Server
-    HTTPServer[/Express (server/index.js) - plumbing/transport/handlers/route/headers]
-    HTTPServer --> ServiceAdapter[serviceAdapter.js]
-    ServiceAdapter --> Genie[genieService.js / sampleService / aiService (application services)]
-    Genie -->|content payload| ServiceAdapter
-    HTTPServer --> PreviewRenderer[previewRenderer.js (presentation/sanitizer - recommended)]
-    HTTPServer --> DB[crud.js / db.js]
-    HTTPServer --> Puppeteer[Export / Puppeteer (plumbing)]
-  end
+   - Expand unit tests for `TransportError`/`ServiceError` shapes and ensure `requestId` is present in every structured error payload returned to clients. Remove any remaining ad-hoc debug logging used during test development.
+   - Estimate: 2–3 hours.
 
-  HTTPClient -->|HTTP| HTTPServer
-  PreviewStore --> PreviewComp
+3. Streaming / incremental preview design (medium):
 
-  classDef appSvc fill:#f9f,stroke:#333,stroke-width:1px;
-  class AppSvc appSvc;
-```
+   - If incremental preview UI is desired, design a streaming mode (SSE or fetch streams) and add plumbing helpers and a frontend consumer that appends to `previewStore`. This is a larger change and can be scoped as a separate sprint.
+   - Estimate: 6–12 hours (spike + prototype).
 
-ASCII fallback (if Mermaid isn't rendered):
+4. Documentation and CI additions (short):
 
-```
-Frontend PromptForm --> frontend previewService (build JSON) --> httpClient (plumbing)
-httpClient --> Express/index.js (plumbing)
-Express/index.js --> serviceAdapter --> genieService / sampleService / aiService (application services)
-application services return normalized content --> Express/index.js --> (persist via crud/db) and/or render via previewRenderer
-Express/index.js (or previewService) updates previewStore -> Preview.svelte subscribes and renders
-```
+   - Update README and the `PATH_FORWARD` doc with the finalized sanitizer behavior (server-side sanitization) and the intent→instruction contract.
+   - Add CI checks that enforce: sanitization unit tests, persistence executor tests, and lint rules for not writing files from application services.
+   - Estimate: 2–4 hours.
+
+5. Negative test for persistence safety (small, immediate):
+   - Add a focused test asserting that `persistence.execute` rejects intents whose `folderHint` or `filenameHint` would resolve outside the allowed base directory (for example, `folderHint: "../../etc"` or a filename with path separators). This guards against accidental path traversal via malicious or buggy intents.
+   - Next logical test to add: verify `persistence.execute` rejects unsafe `folderHint` values (e.g., "../../etc"). I can add this negative test next.
+   - Estimate: 0.5–1 hour.
 
 ---
 
-## Intent-based flow: service intent → orchestrator → plumbing executor
+(Other items from the original checklist such as a formal migration UX for versioning and additional export parity checks have either been partially implemented or are lower priority and can be scheduled as part of Phase B.)
 
-This project will move to an "intent-based" pattern for service outputs: application services (like `sampleService`) produce declarative intents describing what should be persisted or exported, but MUST NOT perform filesystem or IO themselves. The `genieService` acts as the orchestrator: it validates, sanitizes, assigns `requestId`, and resolves intents into authoritative `persistInstructions` that the plumbing executes.
+## ADDENDUM — Completed items (2025-10-09)
 
-Why: this keeps single responsibility boundaries clear: services decide "what" (domain), the orchestrator decides "how" (policy), and plumbing executes "where" (IO).
+Since the earlier review, the following checklist items have been implemented and validated through unit/integration tests and CI hygiene updates:
 
-Contract: sampleService (intent producer)
+- Request correlation: `requestId` is generated and returned consistently. The server sets the `X-Request-Id` response header and also populates `metadata.requestId` on generation endpoints (e.g., `POST /prompt`). Unit tests now assert header/header-body parity for `POST /prompt` and preview endpoints.
 
-- Returns: { success:true, data: { content, metadata, persistIntents: [...] } }
-- `content`: { title, body, layout?, assets? }
-- `persistIntents`: array of objects, each intent contains:
-  - purpose: string (e.g., "promptFile", "previewHtml", "asset")
-  - folderHint: string (e.g., "samples", "tmp-exports") // hint only
-  - filenameHint?: string // optional suggestion
-  - content: string | base64 // data to write
-  - encoding?: "utf8"|"base64"
+- Persistence executor: Implemented `server/persistence.js` that performs safe path validation, atomic writes (tmp + rename), and sanitizes filename hints. An integration test (`server/__tests__/persistence.integration.test.js`) verifies files are written atomically, artifact DB rows are created and correlated with `requestId`, and no `.tmp` leftovers remain.
 
-Example sampleService response (stubbed):
+- Negative safety tests: Added focused negative tests (`server/__tests__/persistence.negative.test.js`) that assert attempts to traverse outside the configured base export directory via `folderHint` or `filenameHint` are rejected or sanitized.
 
-```
-{
-  "success": true,
-  "data": {
-    "content": { "title": "Prompt: Autumn", "body": "A poem..." },
-    "metadata": { "model": "sample", "pages": 1, "contentType": "Poem", "mediaType": "eBook" },
-    "persistIntents": [
-      { "purpose": "promptFile", "folderHint": "samples", "filenameHint": "latest_prompt.txt", "content": "Write raw prompt here", "encoding": "utf8" }
-    ]
-  }
-}
-```
+- Test and CI hygiene: Added `server/scripts/clean_exports.js`, added a `pretest` lifecycle hook in `server/package.json` to call the cleaner locally prior to tests, and updated CI workflows to run the same cleanup script before invoking server tests. The repository `.gitignore` now includes `data/exports/` so generated artifacts are not committed.
 
-Contract: genieService (orchestrator)
+- Documentation & README updates: `README.md` now documents that `data/exports/` is ignored, the `clean_exports` utility exists, and CI runs the cleaner step before tests to maintain deterministic test runs.
 
-- Receives the sampleService output and the original request payload.
-- Responsibilities:
-  - Validate the content and intents.
-  - Sanitize HTML/text as required (explicitly mark sanitized vs raw).
-  - Assign `requestId` (UUID) to this generation.
-  - Resolve `persistIntents` into authoritative `persistInstructions` with server-side final paths and safe filenames. Example instruction fields:
-    { purpose, path: 'samples/latest_prompt-<requestId>.txt', content, encoding, atomic:true }
-  - Return the normalized envelope to the plumbing (HTTP handler): { success:true, data: { content, metadata, persistInstructions, requestId } }
-
-Contract: plumbing executor (HTTP handler / persistence helper)
-
-- Receives `persistInstructions` from `genieService`.
-- Responsibilities:
-  - Validate final paths are under allowed base directories (no traversal).
-  - Perform atomic writes (tmp file + rename) and return final filenames.
-  - Optionally persist traceability in DB (link requestId to filenames).
-  - Return final response to the client with `{ filenames, requestId }`.
-
-Security & safety rules (enforced by orchestrator/plumbing)
-
-- Application services must not write to disk.
-- Orchestrator/plumbing must reject any instruction that attempts to write outside allowed directories.
-- All HTML content must be sanitized by the orchestrator before being rendered or persisted as HTML. If content is returned as already-sanitized, the orchestrator must verify or re-sanitize.
-
-Implementation checklist (Phase A minimal steps)
-
-1. Change `sampleService.generateFromPrompt(prompt, opts)` to return `persistIntents` and generated `content` — do not write files.
-2. Update `genieService.generate(payload)` to forward payload to the chosen implementation and to:
-   - receive `persistIntents`,
-   - generate `requestId`,
-   - sanitize and validate content,
-   - convert intents into final `persistInstructions` with server-side paths and safe filenames,
-   - return the envelope `{ data: { content, metadata, persistInstructions, requestId } }` to the HTTP handler.
-3. Implement a small persistence helper (e.g., `server/persistence.js`) used by the HTTP layer to execute `persistInstructions` atomically and return final filenames.
-4. Update the `/prompt` and `/genie` handlers to call persistence helper and include `filenames` and `requestId` in the HTTP response.
-5. Add unit tests for intents -> instructions translation, sanitization, and persistence execution.
-
-This intent-based pipeline preserves your constraint: the plumbing executes the writes (and nothing else), while application services describe the domain intent. We'll implement these steps next unless you want a different ordering.
-
----
-
-## Practical guarantees to keep the frontend dumb
-
-- PromptForm only assembles JSON input (prompt, contentType, mediaType, pages) and submits to the backend.
-- Preview.svelte remains display-only: it subscribes to `previewStore` and renders loading/error/content states; it never calls fetch or writes files.
-- previewService (client-side) should be thin: call the HTTP endpoint, receive the normalized envelope (content, metadata, filenames, requestId), and write to `previewStore` only.
-- All persistence decisions, path resolution, sanitization, and atomic writes are performed server-side by the orchestrator + plumbing executor.
-
-Small recommendation
-
-- Keep `previewService` minimal and focused on calling the API and updating stores. Any logic that decides file placement, naming, sanitization rules, or allowed folders belongs on the server.
-
----
-
-## ADDENDUM: Preliminary Work for Phase 2 Alignment
-
-_Date: 2025-10-08_
-
-This addendum outlines the preliminary work required to bring `server/index.js` into alignment with the architectural principles described in this document and the broader Phase 2 objectives.
-
-**Note:** The work will be implemented in side branch `aether-rewrite/client-phase2-AAA-0`
-
-### Key Issues Identified
-
-A review of the existing server implementation confirms that `server/index.js` has accumulated responsibilities beyond its core "plumbing" role. This misalignment introduces maintenance overhead and security risks. The most critical issues are:
-
-1.  **Presentation Logic in Plumbing**: `server/index.js` is responsible for HTML templating, a presentation concern that belongs in a dedicated rendering layer.
-2.  **Security Vulnerability (XSS)**: The server directly injects AI-generated content into HTML without sanitization, creating a cross-site scripting (XSS) risk.
-3.  **Lack of Request Correlation**: Endpoints do not return a unique `requestId`, making it difficult for the client to manage concurrent requests and avoid race conditions.
-
-### Three-Task Recommendation
-
-To address these issues and align the server with Phase 2 production-readiness goals, the following three tasks are recommended:
-
-1.  **Isolate Presentation Logic (Est: 2-3 hours)**
-
-    - **Action**: Create a `server/previewRenderer.js` module to handle all HTML templating and sanitization.
-    - **Outcome**: Decouples presentation concerns from the transport layer, improving modularity and maintainability.
-
-2.  **Refactor Server Endpoints (Est: 3-4 hours)**
-
-    - **Action**: Update `server/index.js` to use the new `previewRenderer.js`. Implement `requestId` generation and include it in all API responses.
-    - **Outcome**: Enforces clear separation of concerns and provides the client with the necessary context to manage asynchronous operations reliably.
-
-3.  **Implement Robust Error Boundaries (Est: 4-6 hours)**
-    - **Action**: Introduce distinct error types for transport-level and application-level failures. Implement centralized error-handling middleware.
-    - **Outcome**: Creates a more resilient, predictable, and debuggable server architecture.
-
-**Total Estimated Time: 9-13 hours.**
-
-Completing this work is a prerequisite for meeting the quality and security standards required for Phase 2.
+These changes close out the ADDENDUM items from the original plumbing separation review. Remaining follow-ups are documentation polish and adding any additional CI enforcement if desired.

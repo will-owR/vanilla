@@ -2,14 +2,7 @@
 // Minimal, intent-only service. Produces content and persistIntents.
 // No filesystem IO here; persistence is executed by server/persistence.js.
 
-function escapeHtml(str = "") {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+const { generateEbookHTML } = require("./ebook");
 
 async function generateFromPrompt(payload = {}) {
   const prompt =
@@ -21,9 +14,19 @@ async function generateFromPrompt(payload = {}) {
       ? String(payload.title)
       : `Sample: ${prompt.split(/\s+/).slice(0, 6).join(" ")}`;
 
-  const generatedText = `Poem: ${prompt}`;
+  const generatedText = `Poem:\n\n${prompt}`;
 
-  const content = { title, body: generatedText };
+  // Build a single-page ebook HTML using the shared ebook helper.
+  const ebookHtml = generateEbookHTML([
+    {
+      title,
+      author: payload && payload.author ? payload.author : "",
+      content: generatedText,
+      background: null,
+    },
+  ]);
+
+  const content = { title, body: generatedText, html: ebookHtml };
 
   const persistIntents = [
     {
@@ -35,11 +38,9 @@ async function generateFromPrompt(payload = {}) {
     },
     {
       purpose: "previewHtml",
-      filenameHint: "preview.html",
+      filenameHint: "ebook.html",
       folderHint: "previews",
-      content: `<h1>${escapeHtml(title)}</h1>\n<div>${escapeHtml(
-        generatedText
-      )}</div>`,
+      content: ebookHtml,
       encoding: "utf8",
     },
   ];
