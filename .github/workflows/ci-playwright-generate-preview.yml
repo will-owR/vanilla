@@ -30,7 +30,7 @@ jobs:
         run: |
           (cd server && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm run dev > /tmp/server.log 2>&1 &) || true
           (cd client-v2 && npm run dev > /tmp/client.log 2>&1 &) || true
-          sleep 4
+          sleep 8
 
       - name: Install Playwright
         run: |
@@ -41,7 +41,7 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p docs/focus/logs
-          node ./scripts/test-generate-preview.js --url http://localhost:5174
+          node ./scripts/test-generate-preview.js --url http://localhost:5173
 
       - name: Upload artifacts
         if: always()
