@@ -77,3 +77,5 @@ Open todos
      - Add tests to assert DB rows contain the requestId: 0.25–0.5h
 
 Note: When you implement a todo above, update `docs/reference/PLUMBING_SEPARATION_REFERENCE.md` with a brief note (datetime + branch + what changed) and mark the todo here as completed.
+
+Related frontend integration design notes: `docs/FRONTEND_BACKEND_INTEGRATION.md`
