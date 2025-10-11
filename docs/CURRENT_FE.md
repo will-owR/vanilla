@@ -13,11 +13,11 @@ This document records the current frontend ↔ backend contract, the `genieServi
 - `genieService` is the orchestrator. It selects an application service to produce content and persistIntents, normalizes the shape (content, metadata, persistInstructions), sanitizes content, attaches `requestId`, and returns the envelope to plumbing.
 - Application services implement business logic. Examples in the repo:
   - `helloWorldService` — deterministic test1/demo service that returns small content and test persist intents.
-  - `sampleService` — deterministic test1/demo service used to create a one-page eBook about any media type, starting with text (poem).
-  - `basicService` — deterministic fallback service used when AI provider is missing.
-  - `defaultService` — deterministic fallback service used when unsure as to the service to interface with.
+  - `sampleService` — deterministic test2/demo service used to create a one-page eBook, on content type poem.
+  - `basicService` — deterministic fallback service used when AI provider is missing (to implement).
+  - `defaultService` — deterministic fallback service used when unsure as to the service to interface with (to implement).
   - `aiService` (guarded) — real AI provider integration; may be absent in dev.
-  - More `xServices` to come.
+  - Additional `xyzServices` to come.
 
 ## Design principle (agreed)
 
