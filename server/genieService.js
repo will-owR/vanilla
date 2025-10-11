@@ -48,72 +48,44 @@ async function generate(payload) {
     }
   }
 
-  // If prompt contains 'hello' (case-insensitive) AND selections are defaults, short-circuit
+  // --- Service Selection ---
+  // Decide which application service to call based on the prompt.
+  let svcRes;
   const promptText = input && input.prompt ? String(input.prompt) : "";
   const promptHasHello = /\bhello\b/i.test(promptText);
-  if (
+  const useHelloWorld =
     promptHasHello &&
-    isDefaultSelections(input.selections || input.options || input.settings)
-  ) {
-    const hw = await helloWorldService.generateFromPrompt(input);
-    if (hw && hw.success) {
-      const {
-        content = {},
-        metadata = {},
-        persistIntents = [],
-      } = hw.data || {};
-      const safeTitleHw = sanitizeHtml(String(content.title || ""));
-      const safeBodyHw =
-        content && content.html
-          ? sanitizeHtml(String(content.html))
-          : sanitizeHtmlSimple(String(content.body || ""));
-      const safeContent = {
-        ...content,
-        title: safeTitleHw,
-        body: safeBodyHw,
-      };
-      const persistInstructions = (persistIntents || []).map((intent, idx) => ({
-        purpose: intent.purpose,
-        filenameHint: intent.filenameHint || `artifact-${requestId}-${idx}`,
-        folderHint: intent.folderHint || "exports",
-        content: intent.content || "",
-        encoding: intent.encoding || "utf8",
-        originalIntent: intent,
-      }));
-      return {
-        success: true,
-        data: {
-          content: safeContent,
-          metadata: { ...metadata, requestId },
-          persistInstructions,
-          requestId,
-        },
-      };
+    isDefaultSelections(input.selections || input.options || input.settings);
+
+  if (useHelloWorld) {
+    svcRes = await helloWorldService.generateFromPrompt(input);
+  } else {
+    // Call AI application service by default to produce content/metadata. Fall
+    // back to sampleService only if AI provider is not available.
+    try {
+      const aiFactory = require("./aiService").createAIService;
+      const ai = aiFactory();
+      // ai.generateContent returns { content, metadata }
+      const aiResult = await ai.generateContent(promptText);
+      svcRes = { success: true, data: { ...aiResult, persistIntents: [] } };
+    } catch (e) {
+      // If AI service is unavailable (module missing) fall back to deterministic sampleService.
+      // However, runtime errors produced by the AI provider should be propagated
+      // so callers (and tests) can observe failure modes explicitly.
+      if (e && e.code === "MODULE_NOT_FOUND") {
+        svcRes = await sampleService.generateFromPrompt(input);
+      } else {
+        // Re-throw to allow upper layers (plumbing) to surface a 5xx
+        // when the application service fails unexpectedly.
+        throw e;
+      }
     }
-    // else fallthrough to normal sampleService path
   }
 
-  // Call AI application service by default to produce content/metadata. Fall
-  // back to sampleService only if AI provider is not available.
-  let svcRes;
-  try {
-    const aiFactory = require("./aiService").createAIService;
-    const ai = aiFactory();
-    // ai.generateContent returns { content, metadata }
-    const aiResult = await ai.generateContent(promptText);
-    svcRes = { success: true, data: { ...aiResult, persistIntents: [] } };
-  } catch (e) {
-    // If AI service is unavailable (module missing) fall back to deterministic sampleService.
-    // However, runtime errors produced by the AI provider should be propagated
-    // so callers (and tests) can observe failure modes explicitly.
-    if (e && e.code === "MODULE_NOT_FOUND") {
-      svcRes = await sampleService.generateFromPrompt(input);
-    } else {
-      // Re-throw to allow upper layers (plumbing) to surface a 5xx
-      // when the application service fails unexpectedly.
-      throw e;
-    }
-  }
+  // --- Common Processing ---
+  // All service responses are processed through this common block to ensure
+  // a consistent output structure.
+
   if (!svcRes || !svcRes.success) {
     return { success: false, error: "application-service-failed", requestId };
   }

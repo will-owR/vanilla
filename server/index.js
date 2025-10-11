@@ -746,73 +746,91 @@ app.post("/prompt", async (req, res, next) => {
         .json({ success: false, error: "generation_failed" });
     }
 
-    const data = { ...(genieResult.data || {}) };
+    // --- Immediate Response to Client ---
+    // Send the generated content for preview immediately. Persistence will
+    // happen asynchronously after the response is sent.
+    const dataForClient = { ...(genieResult.data || {}) };
 
-    // Persist prompt row (with normalized and hash) and record first request id
-    const p = await crud.createPromptWithHash(
-      prompt,
-      normalized,
-      hash,
-      req.requestId
-    );
-    data.promptId = p && p.id ? p.id : null;
+    // Ensure metadata.requestId is always present for traceability
+    if (!dataForClient.metadata || typeof dataForClient.metadata !== "object") {
+      dataForClient.metadata = {};
+    }
+    if (!dataForClient.metadata.requestId) {
+      dataForClient.metadata.requestId = req.requestId;
+    }
 
-    // Determine next version: 1 by default
-    const version = 1;
+    // Extract the preview HTML for the client's convenience
+    const preview =
+      dataForClient.content &&
+      (dataForClient.content.html || dataForClient.content.body);
 
-    // Create ai_result with request id and version
-    const ar = await crud.createAIResultWithMeta(
-      data.promptId,
-      data,
-      req.requestId,
-      version
-    );
-    data.resultId = ar && ar.id ? ar.id : null;
+    res.status(201).json({
+      success: true,
+      requestId: req.requestId,
+      preview, // top-level preview for convenience
+      data: { ...dataForClient, preview },
+    });
 
-    // Execute persistence instructions if any
-    if (
-      data.persistInstructions &&
-      Array.isArray(data.persistInstructions) &&
-      data.persistInstructions.length
-    ) {
+    // --- Asynchronous Persistence ---
+    // Use a timeout to ensure the response is sent before starting persistence.
+    setTimeout(async () => {
       try {
-        const persistResults = await persistence.execute(
-          data.persistInstructions
+        const data = { ...(genieResult.data || {}) };
+
+        // Persist prompt row (with normalized and hash) and record first request id
+        const p = await crud.createPromptWithHash(
+          prompt,
+          normalized,
+          hash,
+          req.requestId
         );
-        data.persisted = persistResults;
-        // Record artifacts into DB
+        data.promptId = p && p.id ? p.id : null;
+
+        // Determine next version: 1 by default
+        const version = 1;
+
+        // Create ai_result with request id and version
+        const ar = await crud.createAIResultWithMeta(
+          data.promptId,
+          data,
+          req.requestId,
+          version
+        );
+        data.resultId = ar && ar.id ? ar.id : null;
+
+        // Execute persistence instructions if any
         if (
-          Array.isArray(persistResults) &&
-          persistResults.length &&
-          data.resultId
+          data.persistInstructions &&
+          Array.isArray(data.persistInstructions) &&
+          data.persistInstructions.length
         ) {
-          for (const pr of persistResults) {
-            try {
+          const persistResults = await persistence.execute(
+            data.persistInstructions
+          );
+          data.persisted = persistResults;
+          // Record artifacts into DB
+          if (
+            Array.isArray(persistResults) &&
+            persistResults.length &&
+            data.resultId
+          ) {
+            for (const pr of persistResults) {
               await crud.createArtifact(
                 data.resultId,
                 pr.purpose,
                 pr.path,
                 req.requestId
               );
-            } catch (e) {
-              console.warn("Failed to record artifact in DB:", e && e.message);
             }
           }
         }
-      } catch (pe) {
-        console.warn("/prompt: persistence.execute failed", pe && pe.message);
-        data.persisted = null;
+      } catch (e) {
+        console.error(
+          `Asynchronous persistence failed for requestId: ${req.requestId}`,
+          e
+        );
       }
-    }
-
-    // Include the requestId in the JSON response so clients can correlate
-    // results and ignore stale/late responses.
-    // Ensure metadata.requestId is always present for traceability
-    if (!data.metadata || typeof data.metadata !== "object") data.metadata = {};
-    if (!data.metadata.requestId) data.metadata.requestId = req.requestId;
-    return res
-      .status(201)
-      .json({ success: true, requestId: req.requestId, data });
+    }, 0);
   } catch (err) {
     err.status = err.status || 500;
     err.message = `Generation Error: ${err.message}`;

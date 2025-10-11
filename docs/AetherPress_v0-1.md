@@ -141,3 +141,36 @@ The recommended solution is to refactor `genieService` to properly converge its 
 3.  **Single Return**: A single `return` statement at the end of the function will return the consistently structured object.
 
 This approach corrects the architectural flaw, makes the code more maintainable and less repetitive, and ensures that `genieService` properly fulfills its role as an orchestrator.
+
+## Troubleshooting the 'hello' Prompt Failure
+
+Even after the architectural improvements, manual testing revealed that the frontend preview area was still not updating. This prompted a deeper investigation.
+
+### Summary of Investigation
+
+1.  **Initial Fix**: The `genieService` was refactored to ensure it produced a consistent data structure, correcting the initial architectural flaw. This was implemented in the `...-sol1` branch.
+2.  **Second Finding (404 Error)**: Using browser developer tools, we discovered the client was sending requests to itself (`:5174/prompt`) instead of the backend. This was due to a missing proxy configuration.
+3.  **Second Fix**: A proxy was added to `client-v2/vite.config.js` to correctly forward requests from the frontend dev server to the backend server (`:3000`).
+4.  **Current Status**: Despite both fixes, the UI still does not update. The request is now successfully reaching the backend, but no successful response is being returned to the client. This strongly indicates a **server-side runtime error**.
+
+### Current Hypothesis
+
+The error most likely occurs in a step _after_ content generation but _before_ the final response is sent. Based on the code flow in `server/index.js`, the `persistence.execute()` service is the prime suspect. It is called after `genieService` returns but before `res.json()` is called. A failure in this persistence step would crash the request and prevent the user from ever seeing their preview.
+
+## Proposed Solution: Decouple Preview from Persistence
+
+The user's primary goal is to get a preview of the generated content quickly. The persistence of that content is a secondary, background task that should not block the user experience.
+
+### Design
+
+The solution is to modify the `POST /prompt` handler in `server/index.js` to decouple these two steps.
+
+1.  **Generate and Respond Immediately**: The handler should call `genieService` to get the content, assemble the response payload, and send it back to the client **immediately**.
+
+2.  **Persist Asynchronously**: After the response has been sent, the handler will then, asynchronously, call `persistence.execute()`. This can be done with a simple `await` or by wrapping it in a `setTimeout(..., 0)` to ensure the event loop sends the response first.
+
+### Benefits
+
+- **Improves User Experience**: The user gets their preview instantly, regardless of whether the database write succeeds or fails.
+- **Increases Robustness**: A failure in the persistence layer (a common source of errors) will no longer crash the user-facing request. The failure can be logged on the server for maintenance without impacting the user.
+- **Aligns with Intent**: This change better reflects the application's priorities: preview first, persistence second.
