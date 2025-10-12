@@ -6,22 +6,28 @@ import { previewStore } from "./storeAdapter";
 // HTML returned by the server so the PreviewWindow remains display-only.
 const store = writable({ prompt: "", loading: false, error: null });
 
-async function submitPrompt(newPrompt, opts = {}) {
-  // opts: { dev: boolean } -> when true, call /prompt?dev=true
-  const dev = opts.dev === true;
+async function submitPrompt(payload) {
+  const prompt = typeof payload === "string" ? payload : payload.prompt;
+  const serviceHint = payload.serviceHint || null;
+
   store.update((s) => ({
     ...s,
-    prompt: newPrompt,
+    prompt: prompt,
     loading: true,
     error: null,
   }));
 
   try {
-    const url = dev ? "/prompt?dev=true" : "/prompt";
+    const url = "/prompt";
+    const body = { prompt };
+    if (serviceHint) {
+      body.serviceHint = serviceHint;
+    }
+
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: newPrompt }),
+      body: JSON.stringify(body),
     });
     const json = await res.json();
 

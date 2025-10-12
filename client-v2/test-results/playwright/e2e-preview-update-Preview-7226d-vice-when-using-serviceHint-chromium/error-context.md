@@ -1,0 +1,67 @@
+# Page snapshot
+
+```yaml
+- main [ref=e3]:
+  - heading "AetherPress — Preview (client-v2)" [level=1] [ref=e4]
+  - generic [ref=e6]:
+    - generic [ref=e7]: Prompt
+    - generic [ref=e8]:
+      - textbox "Prompt" [ref=e9]
+      - button "Generate" [ref=e10]
+    - generic [ref=e11]:
+      - group "Content type" [ref=e12]:
+        - generic [ref=e13]: Content type
+        - generic [ref=e14]:
+          - radio "Poem" [checked] [ref=e15]
+          - text: Poem
+        - generic [ref=e16]:
+          - radio "Story" [ref=e17]
+          - text: Story
+        - generic [ref=e18]:
+          - radio "Essay" [ref=e19]
+          - text: Essay
+        - generic [ref=e20]:
+          - radio "Haiku" [ref=e21]
+          - text: Haiku
+      - generic [ref=e22]:
+        - generic [ref=e23]: More content types
+        - combobox "More content types" [ref=e24]:
+          - option "Choose…" [selected]
+          - option "Poem"
+          - option "Story"
+          - option "Essay"
+          - option "Haiku"
+          - option "Joke"
+      - group "Media type" [ref=e25]:
+        - generic [ref=e26]: Media type
+        - generic [ref=e27]:
+          - radio "eBook" [checked] [ref=e28]
+          - text: eBook
+        - generic [ref=e29]:
+          - radio "Wall Art" [ref=e30]
+          - text: Wall Art
+        - generic [ref=e31]:
+          - radio "Calendar" [ref=e32]
+          - text: Calendar
+        - generic [ref=e33]:
+          - radio "Wallpaper" [ref=e34]
+          - text: Wallpaper
+      - generic [ref=e35]:
+        - generic [ref=e36]: More media types
+        - combobox "More media types" [ref=e37]:
+          - option "Choose…" [selected]
+          - option "eBook"
+          - option "Wall Art"
+          - option "Calendar"
+          - option "Wallpaper"
+          - option "Poster"
+      - generic [ref=e38]:
+        - generic [ref=e39]: Pages
+        - spinbutton "Pages" [ref=e40]: "1"
+        - generic [ref=e41]:
+          - button "1" [ref=e42]
+          - button "2" [ref=e43]
+          - button "5" [ref=e44]
+        - generic [ref=e45]: (min 1, max 20)
+  - generic [ref=e48]: Your generated preview will appear here.
+```

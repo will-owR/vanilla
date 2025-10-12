@@ -14,6 +14,19 @@ This supplement provides a corrected bird's-eye view that explicitly names and d
 > - Reproduce the failure locally and capture a minimal failing test that demonstrates preview not updating.
 > - Add a fast unit/integration test that fails (watch it turn green after the fix).
 > - Prioritize root-cause fix (client-side store wiring, event dispatch, or server response shape) over non-blocking refactors.
+>
+> ---
+>
+> ### Addendum (Branch: ...-sol1-99)
+>
+> Work on this branch has focused on addressing the preview update bug by following the suggested actions. The following steps have been completed:
+>
+> 1.  **Created `testService.js`**: A new, predictable service was added to the backend to provide stable data for testing.
+> 2.  **Implemented `serviceHint`**: The `genieService` was updated to use a `serviceHint` from the request payload, allowing tests to explicitly select the `testService` and validating the existing architecture.
+> 3.  **Created E2E Test**: A new Playwright test (`preview-update.spec.mjs`) was created to automate the validation of the entire frontend-backend-frontend loop.
+> 4.  **System-wide Modifications**: Numerous changes were made to support the test, including configuring the Playwright `webServer`, updating the client's `promptStore` to send the `serviceHint`, and exposing the client stores to the test environment.
+>
+> **Current Status**: The end-to-end test is still failing. Initial investigation has ruled out caching issues and confirmed the backend is behaving as expected. The failures appear to stem from subtle race conditions in the client-side Svelte store updates and challenges in creating a stable test environment setup that can reliably handle the component's loading states.
 
 ## Corrected bird's-eye view (explicit)
 

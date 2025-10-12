@@ -5,7 +5,15 @@
 
 const sampleService = require("./sampleService");
 const helloWorldService = require("./helloWorldService");
+const testService = require("./testService"); // Import the new service
 const crypto = require("crypto");
+
+// A secure mapping from serviceHint to the actual service module.
+const serviceMap = {
+  helloWorld: helloWorldService,
+  sample: sampleService,
+  testService: testService,
+};
 
 function makeRequestId() {
   if (crypto && typeof crypto.randomUUID === "function")
@@ -30,6 +38,41 @@ async function generate(payload) {
   // can be correlated end-to-end. Fall back to generated id when not present.
   const requestId = (input && input.requestId) || makeRequestId();
 
+  // --- Service Selection ---
+  // Decide which application service to call based on the prompt.
+  let svcRes;
+  const { prompt: promptText = "", serviceHint } = input;
+
+  // If a valid serviceHint is provided, use the specified service.
+  if (serviceHint && serviceMap[serviceHint]) {
+    const selectedService = serviceMap[serviceHint];
+    svcRes = await selectedService.generateFromPrompt(input);
+  } else {
+    // --- Existing Heuristic-based Selection Logic ---
+    const promptHasHello = /\bhello\b/i.test(promptText);
+    const useHelloWorld =
+      promptHasHello &&
+      isDefaultSelections(input.selections || input.options || input.settings);
+
+    if (useHelloWorld) {
+      svcRes = await helloWorldService.generateFromPrompt(input);
+    } else {
+      // Call AI application service by default. Fall back to sampleService.
+      try {
+        const aiFactory = require("./aiService").createAIService;
+        const ai = aiFactory();
+        const aiResult = await ai.generateContent(promptText);
+        svcRes = { success: true, data: { ...aiResult, persistIntents: [] } };
+      } catch (e) {
+        if (e && e.code === "MODULE_NOT_FOUND") {
+          svcRes = await sampleService.generateFromPrompt(input);
+        } else {
+          throw e;
+        }
+      }
+    }
+  }
+
   // Server-side sanitizer for any HTML content returned by application services
   const { sanitizeHtml } = require("./sanitizer");
 
@@ -45,40 +88,6 @@ async function generate(payload) {
       );
     } catch (e) {
       return false;
-    }
-  }
-
-  // --- Service Selection ---
-  // Decide which application service to call based on the prompt.
-  let svcRes;
-  const promptText = input && input.prompt ? String(input.prompt) : "";
-  const promptHasHello = /\bhello\b/i.test(promptText);
-  const useHelloWorld =
-    promptHasHello &&
-    isDefaultSelections(input.selections || input.options || input.settings);
-
-  if (useHelloWorld) {
-    svcRes = await helloWorldService.generateFromPrompt(input);
-  } else {
-    // Call AI application service by default to produce content/metadata. Fall
-    // back to sampleService only if AI provider is not available.
-    try {
-      const aiFactory = require("./aiService").createAIService;
-      const ai = aiFactory();
-      // ai.generateContent returns { content, metadata }
-      const aiResult = await ai.generateContent(promptText);
-      svcRes = { success: true, data: { ...aiResult, persistIntents: [] } };
-    } catch (e) {
-      // If AI service is unavailable (module missing) fall back to deterministic sampleService.
-      // However, runtime errors produced by the AI provider should be propagated
-      // so callers (and tests) can observe failure modes explicitly.
-      if (e && e.code === "MODULE_NOT_FOUND") {
-        svcRes = await sampleService.generateFromPrompt(input);
-      } else {
-        // Re-throw to allow upper layers (plumbing) to surface a 5xx
-        // when the application service fails unexpectedly.
-        throw e;
-      }
     }
   }
 

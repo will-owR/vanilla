@@ -23,16 +23,19 @@
   }
 
   // Mirror test hook behavior: update body attribute when preview present
-  $: if (typeof document !== "undefined") {
-    if ($previewStore && $previewStore.length > 0) {
-      document.body.setAttribute("data-preview-ready", "1");
-    } else {
-      document.body.removeAttribute("data-preview-ready");
+  $: {
+    if (typeof document !== "undefined") {
+      if ($previewStore && $previewStore.length > 0) {
+        document.body.setAttribute("data-preview-ready", "true");
+      } else {
+        document.body.removeAttribute("data-preview-ready");
+      }
     }
   }
 
   // Dev debug overlay toggle
   let showDebug = false;
+
   onMount(() => {
     try {
       const params =
@@ -64,7 +67,11 @@
       {/if}
     </div>
   {:else if $previewStore}
-    <div class="preview-content" data-testid="preview-content">
+    <div
+      class="preview-window-content"
+      data-testid="preview-content"
+      data-preview-ready={$previewStore && $previewStore.length > 0}
+    >
       {@html $previewStore}
     </div>
   {:else}
@@ -109,7 +116,7 @@
     height: 100%;
     color: #888;
   }
-  .preview-content {
+  .preview-window-content {
     padding: 1.5rem;
     text-align: left;
     width: 100%;
@@ -143,7 +150,7 @@
   }
   /* Print-safe rules: avoid breaking preview content across pages */
   @media print {
-    .preview-content {
+    .preview-window-content {
       page-break-inside: avoid;
     }
     .preview-container {
@@ -153,7 +160,7 @@
   }
 
   /* Use a readable serif/sans stack similar to canonical client */
-  .preview-content,
+  .preview-window-content,
   .preview-container {
     font-family: Georgia, "Times New Roman", Times, serif;
     color: #111;
