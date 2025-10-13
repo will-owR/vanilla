@@ -34,4 +34,7 @@ async function generateFromPrompt(payload) {
   };
 }
 
-export { generateFromPrompt };
+// Use CommonJS exports to match the server's package.json (type: "commonjs").
+module.exports = {
+  generateFromPrompt,
+};
