@@ -8,7 +8,6 @@ const store = writable({ prompt: "", loading: false, error: null });
 
 async function submitPrompt(payload) {
   const prompt = typeof payload === "string" ? payload : payload.prompt;
-  const serviceHint = payload.serviceHint || null;
 
   store.update((s) => ({
     ...s,
@@ -18,21 +17,14 @@ async function submitPrompt(payload) {
   }));
 
   try {
-    const url = "/prompt";
-    const body = { prompt };
-    if (serviceHint) {
-      body.serviceHint = serviceHint;
-    }
+    // Delegate to storeAdapter's implementation for endpoint routing
+    const json = await storeAdapter.submitPrompt(payload);
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const json = await res.json();
-
-    // Extract HTML from a few known shapes.
+    // Extract HTML from both V1 and legacy response shapes
     const html =
+      // V1 architecture shape
+      (json && json.content && (json.content.html || json.content.body)) ||
+      // Legacy shapes
       (json &&
         json.data &&
         json.data.content &&
