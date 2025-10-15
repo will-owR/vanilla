@@ -178,21 +178,7 @@ Key Points:
 3. **POST /override** — Apply content overrides
 4. **GET /export** — Generate PDF output
 
-## Architecture Principles
 
-1. **Always-Working Frontend First**
-
-   - Consistent, working state
-   - Independent component testing
-   - Clear display/logic separation
-   - Predictable data flow
-
-2. **"Dumb" Preview Component**
-   - Display-only responsibility
-   - Store-driven updates
-   - Clean business logic separation
-
-These principles are fundamental to our architecture and must be maintained throughout both V0.1 and V1.0 development phases.
 
 ## Project Vision
 
