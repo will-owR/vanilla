@@ -84,3 +84,17 @@ Expected response snippet (success):
 
 - Keep the service deterministic and dependency-free. Do not add network calls or expensive computations.
 - Document any changes to the output shape here so tests and orchestration code remain compatible.
+
+## Pending NEW Additional Service
+
+Recap (short):
+
+- testService will emit intent objects (for example, a `persistIntent`) describing additional actions that should be taken with the generated content (save to file, store to DB, cache, etc.).
+- testService does NOT perform those actions itself — it only requests them. The orchestrator (`genieService`) and plumbing (`persistence.execute`, `crud`, or cache layer) perform the actual work.
+- For the first additional capability we will support: "save a receipt copy to file" — the agreed runtime contract is:
+  - testService emits a single `persistIntent` with `folderHint: "samples"` and a safe `filenameHint` (timestamped, e.g. `test-YYYYMMDD-HHMMSS.html`) plus the HTML content.
+  - `genieService` converts intents into `persistInstructions`, calls the persistence layer synchronously before returning the HTTP response, and attaches the persistence result (`data.persisted`) to the envelope.
+  - The persistence layer writes atomically under the `samples/` directory and returns the saved path(s) for recording; the handler may then create DB artifact rows tied to the `requestId`.
+  - Persistence failures in this test-mode should surface as request errors so tests fail fast.
+
+I will not change code yet — this text documents the plan. Say "go" when you want me to implement these changes in code and add tests.
