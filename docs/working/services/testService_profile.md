@@ -1,5 +1,7 @@
 # testService — Service Profile
 
+Date: 2025-10-15
+Branch: aether-rewrite/client-phase2-P1
 File: `server/testService.js`
 
 ## Purpose
@@ -17,20 +19,35 @@ testService is a deterministic, minimal application service used for integration
 
 ## Trigger
 
-- The orchestrator (`genieService.generate()`) will route to `testService` when either:
-  - The incoming payload contains `serviceHint: "testService"`, or
-  - In legacy checks, when `prompt === "test-preview"` (the code includes this pattern in example/specs).
+- The orchestrator (`genieService.generate()`) will route to `testService` in one of two ways:
+  - Explicit test selection: the incoming payload contains `serviceHint: "testService"` (explicitly request the test stub).
+  - Legacy/default routing: the incoming payload has `prompt === "test-preview"` AND the request's selection/defaults remain unchanged. Concretely this means the client should send the same default selection values used by the UI (for current test harnesses these are: `content-type: 0`, `media-type: 0`, `page: 1`). When both conditions (prompt and defaults) match, the orchestrator will choose `testService`.
 
 ## Sample invocation
 
 POST /api/generate
 
-Request body:
+Request body examples:
+
+1. Explicit `serviceHint` (recommended for tests):
 
 ```
 {
   "prompt": "any prompt text",
   "serviceHint": "testService"
+}
+```
+
+2. Legacy/default-trigger (prompt + defaults must match):
+
+```
+{
+  "prompt": "test-preview",
+  "selections": {
+    "content-type": 0,
+    "media-type": 0,
+    "page": 1
+  }
 }
 ```
 
