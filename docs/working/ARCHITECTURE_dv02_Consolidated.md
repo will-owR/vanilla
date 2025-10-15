@@ -71,18 +71,18 @@ Priority checklist (backend/orchestrator)
 
 ## 5. Suggested implementation plan (practical order)
 
-Phase A (0.5–2 hours each, high-impact):
+Part 1 (0.5–2 hours each, high-impact):
 
 1. Write negative persistence test to assert path traversal is rejected by `persistence.execute()` (0.5–1 hour).
 2. Add sanitizer unit tests and audit `renderPreview` usage (1–2 hours).
 3. Implement `/api/generate` thin wrapper and add `architecture-v1-flow` test scaffolding (1–2 hours).
 
-Phase B (medium):
+Part 2 (medium):
 
 4. Harden Playwright E2E harness and add focused tests for `previewStore` → `PreviewWindow` transitions (2–4 hours).
 5. Design streaming API spike and prototype (6–12 hours if pursued).
 
-Phase C (contract):
+Part 3 (contract):
 
 6. Remove legacy endpoints and simplify `storeAdapter` after migration is validated (1–2 hours plus coordination).
 
