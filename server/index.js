@@ -1029,6 +1029,69 @@ app.post("/genie", async (req, res) => {
   }
 });
 
+// Thin, staged-rollout endpoint: POST /api/generate
+// Accepts either a string payload (prompt) or an object payload and
+// delegates generation to the orchestration layer (`genieService.generate`).
+// This endpoint intentionally does not perform final persistence; it returns
+// the canonical envelope so callers (and subsequent plumbing) can decide
+// how to persist or continue the workflow.
+app.post("/api/generate", async (req, res, next) => {
+  try {
+    const payload = req.body;
+
+    // Accept shorthand string prompt or object payload
+    const input =
+      typeof payload === "string" ? { prompt: payload } : payload || {};
+
+    // Ensure a prompt is provided
+    if (!input.prompt || typeof input.prompt !== "string") {
+      return sendValidationError(
+        res,
+        "prompt is required and must be a non-empty string",
+        {
+          provided: typeof input.prompt,
+          required: "non-empty string",
+        }
+      );
+    }
+
+    // Prefer plumbing requestId but ensure one is present for correlation
+    if (!input.requestId) input.requestId = req.requestId;
+
+    const genieResult = await genieService.generate(input);
+
+    if (!genieResult || !genieResult.success) {
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error: "generation_failed",
+          requestId: req.requestId,
+        });
+    }
+
+    const dataForClient = { ...(genieResult.data || {}) };
+    if (!dataForClient.metadata || typeof dataForClient.metadata !== "object") {
+      dataForClient.metadata = {};
+    }
+    if (!dataForClient.metadata.requestId)
+      dataForClient.metadata.requestId = req.requestId;
+
+    const preview =
+      dataForClient.content &&
+      (dataForClient.content.html || dataForClient.content.body);
+
+    return res.status(201).json({
+      success: true,
+      requestId: req.requestId,
+      preview,
+      data: { ...dataForClient, preview },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.get("/genie", (req, res) => {
   try {
     const txt = serviceImpl.readLatest ? serviceImpl.readLatest() : null;
