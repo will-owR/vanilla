@@ -133,3 +133,18 @@ Core contracts — these are the glue that keeps plumbing, orchestrator, and fro
 ---
 
 _This consolidated file merges the authoritative V1 artifacts for plumbing, backend services, and frontend expectations to provide a single-stop reference for developers and reviewers._
+
+---
+
+## Verification & Confirmation
+
+I verified the consolidated contents against the codebase on 2025-10-15 by inspecting the following files and confirming the documented claims are reflected in the implementation:
+
+- `server/previewRenderer.js` and `server/sanitizer.js` (sanitization and canonical preview rendering)
+- `server/index.js` (request-id middleware, `/prompt` handler, preview/export plumbing)
+- `server/genieService.js` (orchestrator, `serviceHint`, content sanitization, persistInstructions conversion)
+- `server/persistence.js` (safe path validation and atomic writes)
+- `server/serviceAdapter.js` (service selection wiring)
+- `client-v2/src/lib/promptStore.js` and `client-v2/src/lib/storeAdapter.js` (prompt submission flow and store-driven preview updates)
+
+Confirmed on: 2025-10-15T20:30:39Z
