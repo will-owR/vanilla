@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-import { previewStore } from "./storeAdapter";
+import storeAdapter, { previewStore } from "./storeAdapter";
 
 // Minimal prompt store: manages prompt state and performs network call to
 // server when submitting prompts. It updates the shared previewStore with
@@ -17,39 +17,44 @@ async function submitPrompt(payload) {
   }));
 
   try {
-    // Delegate to storeAdapter's implementation for endpoint routing
-    const json = await storeAdapter.submitPrompt(payload);
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        typeof payload === "string" ? { prompt: payload } : payload
+      ),
+    });
 
-    // Extract HTML from both V1 and legacy response shapes
+    if (!res.ok) {
+      throw new Error(
+        `Network response was not ok: ${res.status} ${res.statusText}`
+      );
+    }
+
+    const json = await res.json();
+    console.log("Server response received:", JSON.stringify(json, null, 2));
+
     const html =
-      // V1 architecture shape
-      (json && json.content && (json.content.html || json.content.body)) ||
-      // Legacy shapes
+      (json && json.preview) ||
+      (json && json.data && json.data.preview) ||
       (json &&
         json.data &&
         json.data.content &&
         (json.data.content.html || json.data.content.body)) ||
-      (json && json.data && json.data.preview) ||
-      (json && json.preview) ||
       null;
 
-    if (!html) {
-      const err = new Error("Invalid server response: no html found");
-      store.update((s) => ({ ...s, loading: false, error: err.message }));
-      throw err;
+    if (html === null) {
+      throw new Error("Invalid server response: no html found");
     }
 
-    // Update the shared preview store with HTML for display
-    previewStore.set(html);
-
-    // Persisted artifacts (if provided) can be returned to callers
-    const persisted =
-      json && json.data && json.data.persisted ? json.data.persisted : null;
-
+    previewStore.set({ body: html });
     store.update((s) => ({ ...s, loading: false, error: null }));
 
+    const persisted =
+      json && json.data && json.data.persisted ? json.data.persisted : null;
     return { success: true, persisted, html };
   } catch (e) {
+    console.error("Error caught in promptStore.submitPrompt:", e);
     store.update((s) => ({
       ...s,
       loading: false,

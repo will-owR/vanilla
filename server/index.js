@@ -1061,13 +1061,11 @@ app.post("/api/generate", async (req, res, next) => {
     const genieResult = await genieService.generate(input);
 
     if (!genieResult || !genieResult.success) {
-      return res
-        .status(500)
-        .json({
-          success: false,
-          error: "generation_failed",
-          requestId: req.requestId,
-        });
+      return res.status(500).json({
+        success: false,
+        error: "generation_failed",
+        requestId: req.requestId,
+      });
     }
 
     const dataForClient = { ...(genieResult.data || {}) };

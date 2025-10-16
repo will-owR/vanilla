@@ -66,13 +66,13 @@
         <p>{uiState.message || "Loading Preview..."}</p>
       {/if}
     </div>
-  {:else if $previewStore}
+  {:else if $previewStore && $previewStore.body}
     <div
       class="preview-window-content"
       data-testid="preview-content"
-      data-preview-ready={$previewStore && $previewStore.length > 0}
+      data-preview-ready={$previewStore && $previewStore.body.length > 0}
     >
-      {@html $previewStore}
+      {@html $previewStore.body}
     </div>
   {:else}
     <div class="placeholder">Your generated preview will appear here.</div>
