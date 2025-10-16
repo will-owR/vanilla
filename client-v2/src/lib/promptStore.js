@@ -1,5 +1,6 @@
 import { writable } from "svelte/store";
 import { previewStore } from "./storeAdapter";
+import { extractPreviewHtml, normalizePreviewValue } from "./preview-utils";
 
 // Minimal prompt store: manages prompt state and performs network call to
 // server when submitting prompts. It updates the shared previewStore with
@@ -17,21 +18,25 @@ async function submitPrompt(payload) {
   }));
 
   try {
-    // Delegate to storeAdapter's implementation for endpoint routing
-    const json = await storeAdapter.submitPrompt(payload);
+    // Perform network call to the canonical V1 endpoint
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        typeof payload === "string" ? { prompt: payload } : payload
+      ),
+    });
 
-    // Extract HTML from both V1 and legacy response shapes
-    const html =
-      // V1 architecture shape
-      (json && json.content && (json.content.html || json.content.body)) ||
-      // Legacy shapes
-      (json &&
-        json.data &&
-        json.data.content &&
-        (json.data.content.html || json.data.content.body)) ||
-      (json && json.data && json.data.preview) ||
-      (json && json.preview) ||
-      null;
+    if (!res.ok) {
+      throw new Error(
+        `Network response was not ok: ${res.status} ${res.statusText}`
+      );
+    }
+
+    const json = await res.json();
+
+    // Extract HTML defensively using helper
+    const html = extractPreviewHtml(json);
 
     if (!html) {
       const err = new Error("Invalid server response: no html found");
@@ -39,8 +44,8 @@ async function submitPrompt(payload) {
       throw err;
     }
 
-    // Update the shared preview store with HTML for display
-    previewStore.set(html);
+    // Update the shared preview store with HTML for display using canonical shape
+    previewStore.set(normalizePreviewValue(html));
 
     // Persisted artifacts (if provided) can be returned to callers
     const persisted =

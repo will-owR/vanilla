@@ -25,7 +25,11 @@
   // Mirror test hook behavior: update body attribute when preview present
   $: {
     if (typeof document !== "undefined") {
-      if ($previewStore && $previewStore.length > 0) {
+      if (
+        $previewStore &&
+        $previewStore.body &&
+        $previewStore.body.length > 0
+      ) {
         document.body.setAttribute("data-preview-ready", "true");
       } else {
         document.body.removeAttribute("data-preview-ready");
@@ -66,13 +70,15 @@
         <p>{uiState.message || "Loading Preview..."}</p>
       {/if}
     </div>
-  {:else if $previewStore}
+  {:else if $previewStore && $previewStore.body}
     <div
       class="preview-window-content"
       data-testid="preview-content"
-      data-preview-ready={$previewStore && $previewStore.length > 0}
+      data-preview-ready={$previewStore &&
+        $previewStore.body &&
+        $previewStore.body.length > 0}
     >
-      {@html $previewStore}
+      {@html $previewStore.body}
     </div>
   {:else}
     <div class="placeholder">Your generated preview will appear here.</div>
@@ -84,11 +90,14 @@
     <h4>Preview Debug</h4>
     <div>
       <strong>Preview length:</strong>
-      {$previewStore ? $previewStore.length : 0}
+      {$previewStore && $previewStore.body ? $previewStore.body.length : 0}
     </div>
     <div style="margin-top:8px">
       <strong>Preview HTML (truncated):</strong>
-      <pre>{String($previewStore || "").substring(0, 2000)}</pre>
+      <pre>{String(($previewStore && $previewStore.body) || "").substring(
+          0,
+          2000
+        )}</pre>
     </div>
   </div>
 {/if}

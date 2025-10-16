@@ -69,13 +69,87 @@ Priority checklist (backend/orchestrator)
 
 ---
 
+## Appendix: canonical envelope, client extraction rules, and dev checklist
+
+Canonical envelope (authoritative example)
+
+```json
+{
+  "success": true,
+  "requestId": "<uuid>",
+  "preview": "<sanitized-html>",
+  "data": {
+    "content": {
+      "title": "Test Service Response",
+      "body": "<sanitized-html>",
+      "html": "<sanitized-html>"
+    },
+    "metadata": {
+      "service": "testService",
+      "timestamp": "...",
+      "requestId": "<same uuid>"
+    },
+    "persistInstructions": []
+  }
+}
+```
+
+Client extraction rules (defensive)
+
+When consuming server responses, clients MUST follow this deterministic extraction order. This prevents fragile parsing and supports both legacy and V1 envelopes:
+
+1. If present and non-empty, use `response.preview` (top-level preview).
+2. Else, if present, use `response.data.preview`.
+3. Else, if present, use `response.data.content.html`.
+4. Else, if present, use `response.data.content.body`.
+5. Else, if present, use `response.content.html` or `response.content.body` (legacy).
+6. Normalize the resulting HTML into a canonical client store shape; recommended shape: `{ body: string }`.
+
+Developer checklist (quick wins)
+
+- After editing server code (for example `server/index.js`), restart the server to pick up changes. Example dev commands:
+
+```bash
+# from repository root
+cd server
+npm run dev     # or the project's server start command
+```
+
+- Quick curl test to validate `testService` via `serviceHint`:
+
+```bash
+curl -sS -X POST http://localhost:3000/api/generate \
+	-H 'Content-Type: application/json' \
+	-d '{"serviceHint":"testService","prompt":"any text"}' | jq
+```
+
+- If you see `404` when calling `/api/generate`, confirm the server was restarted and that the robust handler (validated payload + 201 response) is present in `server/index.js`.
+
+Preview-store migration snippet (client)
+
+If your app previously stored preview HTML as a string, migrate to the recommended object shape `{ body: string }` with the following minimal client changes:
+
+1. Update `storeAdapter` to default to `{ body: "" }`.
+2. Normalize any incoming preview HTML before writing the store:
+
+```javascript
+// normalizePreviewValue(html) -> { body: html }
+previewStore.set(normalizePreviewValue(html));
+```
+
+3. Update `PreviewWindow` (or other consumers) to read `{$previewStore.body}` and render via `{@html $previewStore.body}`.
+
+This migration reduces fragile `typeof` checks and makes the `PreviewWindow` template simple and deterministic.
+
+---
+
 ## 5. Suggested implementation plan (practical order)
 
 Part 1 (0.5–2 hours each, high-impact):
 
 1. Write negative persistence test to assert path traversal is rejected by `persistence.execute()` (0.5–1 hour).
 2. Add sanitizer unit tests and audit `renderPreview` usage (1–2 hours).
-**3. Implement `/api/generate`** thin wrapper and add `architecture-v1-flow` test scaffolding (1–2 hours).
+   **3. Implement `/api/generate`** thin wrapper and add `architecture-v1-flow` test scaffolding (1–2 hours).
 
 Part 2 (medium):
 
