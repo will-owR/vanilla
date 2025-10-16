@@ -30,7 +30,7 @@
         $previewStore.body &&
         $previewStore.body.length > 0
       ) {
-        document.body.setAttribute("data-preview-ready", "true");
+        document.body.setAttribute("data-preview-ready", "1");
       } else {
         document.body.removeAttribute("data-preview-ready");
       }
@@ -71,13 +71,7 @@
       {/if}
     </div>
   {:else if $previewStore && $previewStore.body}
-    <div
-      class="preview-window-content"
-      data-testid="preview-content"
-      data-preview-ready={$previewStore &&
-        $previewStore.body &&
-        $previewStore.body.length > 0}
-    >
+    <div class="preview-content" data-testid="preview-content">
       {@html $previewStore.body}
     </div>
   {:else}
@@ -125,7 +119,7 @@
     height: 100%;
     color: #888;
   }
-  .preview-window-content {
+  .preview-content {
     padding: 1.5rem;
     text-align: left;
     width: 100%;
@@ -159,7 +153,7 @@
   }
   /* Print-safe rules: avoid breaking preview content across pages */
   @media print {
-    .preview-window-content {
+    .preview-content {
       page-break-inside: avoid;
     }
     .preview-container {
@@ -169,7 +163,7 @@
   }
 
   /* Use a readable serif/sans stack similar to canonical client */
-  .preview-window-content,
+  .preview-content,
   .preview-container {
     font-family: Georgia, "Times New Roman", Times, serif;
     color: #111;

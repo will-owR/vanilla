@@ -32,7 +32,7 @@ describe("PromptForm", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() =>
-        Promise.resolve({ json: () => Promise.resolve(fakeResponse) })
+        Promise.resolve({ ok: true, json: () => Promise.resolve(fakeResponse) })
       )
     );
 
@@ -54,6 +54,7 @@ describe("PromptForm", () => {
     // unsubscribe immediately (we just wanted the current value)
     unsub();
     expect(result.html).toContain("Hi");
-    expect(captured).toContain("Hi");
+    // previewStore now has canonical shape { body }
+    expect(captured && captured.body).toContain("Hi");
   });
 });

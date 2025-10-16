@@ -4,7 +4,7 @@
 
   // Mirror test hook behavior: set body attribute when preview present
   $: if (typeof document !== "undefined") {
-    if ($previewStore && $previewStore.length > 0) {
+    if ($previewStore && $previewStore.body && $previewStore.body.length > 0) {
       document.body.setAttribute("data-preview-ready", "1");
     } else {
       document.body.removeAttribute("data-preview-ready");
@@ -12,8 +12,8 @@
   }
 </script>
 
-{#if $previewStore && $previewStore.length > 0}
-  <div data-testid="preview-content">{@html $previewStore}</div>
+{#if $previewStore && $previewStore.body && $previewStore.body.length > 0}
+  <div data-testid="preview-content">{@html $previewStore.body}</div>
 {:else}
   <div data-testid="preview-content">No preview</div>
 {/if}

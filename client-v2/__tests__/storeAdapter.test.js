@@ -21,5 +21,12 @@ describe("storeAdapter (client-v2)", () => {
     const el = await getByTestId("preview-content");
     expect(el.innerHTML).toContain("Title");
     expect(document.body.getAttribute("data-preview-ready")).toBe("1");
+    // store is canonical shape
+    const val = previewStore;
+    // subscribe once to assert body exists
+    let cur = null;
+    const unsub = previewStore.subscribe((v) => (cur = v));
+    unsub();
+    expect(cur && cur.body).toContain("Title");
   });
 });
