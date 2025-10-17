@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Exercise 1 — Prompt → Preview</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;padding:2rem}
+    label,input,button,textarea{display:block;width:100%;margin-bottom:.5rem}
+    #preview{border:1px solid #ddd;padding:1rem;margin-top:1rem;min-height:6rem}
+  </style>
+</head>
+<body>
+  <h1>Prompt → Generate → Preview</h1>
+  <label for="prompt">Prompt</label>
+  <input id="prompt" placeholder="Enter prompt" />
+  <button id="gen">Generate</button>
+
+  <div id="status" aria-live="polite"></div>
+  <div id="preview" role="region" aria-label="preview">(empty)</div>
+
+  <script>
+    const gen = document.getElementById('gen');
+    const promptEl = document.getElementById('prompt');
+    const status = document.getElementById('status');
+    const preview = document.getElementById('preview');
+
+    gen.addEventListener('click', async ()=>{
+      status.textContent = 'Sending…';
+      preview.innerHTML = '';
+      try{
+        const res = await fetch('/api/generate', {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body: JSON.stringify({prompt: promptEl.value})
+        });
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const payload = await res.json();
+        status.textContent = 'OK — source: ' + (payload.meta?.sourceFile||'<unknown>');
+        preview.innerHTML = payload.html || ('<pre>'+JSON.stringify(payload,null,2)+'</pre>');
+      }catch(err){
+        status.textContent = 'Error: '+err.message;
+      }
+    });
+  </script>
+</body>
+</html>
