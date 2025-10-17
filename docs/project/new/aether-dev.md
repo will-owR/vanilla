@@ -1,5 +1,8 @@
 # aether-dev — technical reference (exercise_1 integration)
 
+Date: 2025-10-17 @10:00 AM
+Branch: aether_V0-1
+
 ## Purpose
 
 This document records the technical design and developer instructions for the minimalist exercise app (prompt → generate → preview) used to validate backend-driven preview updates. It complements `docs/project/new/exercise_1.md` with implementation details, run commands, and extension notes for real-world integration.

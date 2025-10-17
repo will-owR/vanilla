@@ -1,5 +1,8 @@
 # Draft: plumbing_separation
 
+Date: 2025-10-17 @10:00 AM
+Branch: aether_V0-1
+
 Status: DRAFT
 
 ## Objective

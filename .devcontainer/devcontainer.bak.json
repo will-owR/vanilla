@@ -18,20 +18,21 @@
   // Install dependencies in all workspaces (server, shared, client)
   //"postCreateCommand": "cd client && npm install && cd ../server && npm install express puppeteer && npm install --save-dev nodemon && cd ..",
 
-  "updateContentCommand": "cd client && npm install && npx playwright install --with-deps || true && cd ../server-v2 && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm install && npm install --save-dev nodemon && cd ..",
+  "updateContentCommand": "cd client && npm install && npx playwright install --with-deps || true && cd ../server && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm install && npm install --save-dev nodemon && cd ..",
 
-  "postCreateCommand": "cd client && npm install && npx playwright install --with-deps || true && cd ../server-v2 && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm install && cd .. && npm install -g concurrently",
+  "postCreateCommand": "cd client && npm install && npx playwright install --with-deps || true && cd ../server && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm install && cd .. && npm install -g concurrently",
 
   "postAttachCommand": {
-    //"client + server": "PREVIEW_CLIENT_V2_ENABLED=1 CLIENT_V2_PROXY_URL=http://127.0.0.1:5174 node server/index.js"
+    "client + server": "PREVIEW_CLIENT_V2_ENABLED=1 CLIENT_V2_PROXY_URL=http://127.0.0.1:5174 node server/index.js"
     //"server only": "cd ./server && npm run dev"
     //- "client + server": "concurrently 'cd ./client && npm run dev' 'cd ./server && npm run dev'"
+    //x "client + server": "bash ./start-app.sh"
   },
 
   // --- VS CODE CUSTOMIZATIONS ---
   "customizations": {
     "codespaces": {
-      "openFiles": ["server-v2/index.js", "client/src/index.js"]
+      "openFiles": ["server/index.js", "client/src/index.js"]
     },
     "vscode": {
       "extensions": [
@@ -80,7 +81,6 @@
   "forwardPorts": [3000, 5173, 5174, 5432],
   "portsAttributes": {
     "3000": { "label": "server (Express/Node.js)" },
-    "3001": { "label": "server-v2 (Express/Node.js)" },
     "5173": { "label": "client (Vite/Svelte)" },
     "5174": {
       "label": "client-v2 (Vite/Svelte)",

@@ -1,5 +1,8 @@
 # exercise_1 — Simple prompt → generate → preview
 
+Date: 2025-10-17 @10:00 AM
+Branch: aether_V0-1
+
 ## Goal
 
 Build a minimal, testable flow that demonstrates how a frontend prompt triggers a backend generation process which selects content from `data/content/` and the frontend preview updates without manual reload.
