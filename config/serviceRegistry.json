@@ -1,0 +1,4 @@
+{
+  "frontend": ["default_Service", "display_Service"],
+  "backend": ["sampleService", "fileService", "cacheService", "aiService"]
+}
