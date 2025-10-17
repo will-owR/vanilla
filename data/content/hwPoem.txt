@@ -1,0 +1,4 @@
+Hello, World, I'm new here.
+A simple, digital greeting clear.
+The code is run, the script's begun.
+A message printed, for everyone.
