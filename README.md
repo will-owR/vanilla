@@ -92,6 +92,16 @@ Development Guidelines:
 - **PDF Generation:** Puppeteer for HTML-to-PDF conversion
 - **Testing:** Unified Vitest setup for client and server
 
+## Unified Testing & Module System (Summary)
+
+Client tests are powered by Vitest for fast, modern Svelte development. Server tests also use Vitest for Node.js/JavaScript workflows. Regarding module formats, the backend primarily uses CommonJS (CJS) for compatibility, while the frontend uses ESM (Vite/Svelte).
+
+Postgres is the default for local and smoke tests; the migration to Postgres is in place and documented in `docs/focus/GUI_RESOLUTION.md`. Production deployments can use any PostgreSQL-compatible service (Azure, AWS RDS, etc.).
+
+Note about persisted export artifacts
+
+- The repository intentionally ignores runtime export output directories (for example `data/exports/` and `server/test-artifacts/`) to avoid committing generated or large binary artifacts. During tests and CI runs we ensure test hygiene by wiping these folders before test runs. The server includes a small cleanup utility at `server/scripts/clean_exports.js` which removes and recreates `data/exports/` in a safe way. Locally, the server package exposes a pretest helper (`npm run pretest:run`) and a `pretest` lifecycle script can be used to invoke it automatically before `npm test`.
+
 ## Testing & Verification
 
 ### Running Tests
