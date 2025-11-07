@@ -2,7 +2,19 @@
 
 This document consolidates all tests found under `server/__tests__`.
 
-**Note:** This is a living document and must reflect the current state of tests. Please update as new tests are added or existing ones are modified. (Last updated: November 2, 2025)
+**Note:** This is a living document and must reflect the current state of tests. Please update as new tests are added or existing ones are modified. (Last updated: November 7, 2025)
+
+> ERROR: Test failure observed
+>
+> - Failing test: `server/__tests__/aiService.test.js` → "API: /prompt (AI Processing Layer)" → should return a structured AI response for a valid prompt
+> - What failed: the test posted a prompt and received promptId/resultId, but a subsequent GET to `/api/prompts/:promptId` returned 404 instead of 200. The assertion expected a 200 OK and the stored prompt's data to match the original prompt.
+> - Possible cause: mixed persistence backends — the writer used the Prisma-backed `utils/dbUtils` (or another DB client) to create the prompt/result while the API GET handler used the legacy sqlite `crud` layer to read the prompt. This results in the POST and GET hitting different stores, so the GET cannot find the newly-created row.
+>
+> Recommended diagnostics:
+>
+> 1. Confirm which persistence implementation was used during the failing test (look for logs from `defaultModule` / `genieService` that indicate whether `utils/dbUtils` or `crud` was resolved).
+> 2. Re-run the test with `GENIE_PERSISTENCE_ENABLED` and `USE_PRISMA_IN_TEST` toggled to see whether forcing the legacy `crud` backend makes the GET succeed.
+> 3. As a longer-term fix, ensure read endpoints prefer `utils/dbUtils` when available or implement a unified persistence adapter so reads and writes use the same store.
 
 ## Table of Contents
 
