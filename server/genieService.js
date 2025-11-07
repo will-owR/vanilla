@@ -223,22 +223,34 @@ const genieService = {
 
       const svcOut = returned.out_envelope || returned;
 
-      // Minimal actions gate: if producer provided a non-empty actions object
-      // short-circuit and return a typed-compatible warning envelope.
+      // Minimal actions gate: if producer provided a non-empty actions
+      // object, forward to the actionsModule which will handle simple
+      // actions (print-to-file, etc). If the actions module fails the
+      // code will fall back to the DEFAULT pipeline below.
       try {
         const actions = (svcOut && svcOut.actions) || {};
         const hasActions = actions && Object.keys(actions).length > 0;
         if (hasActions) {
-          // eslint-disable-next-line no-console
-          console.warn("You need to provide instructions");
-          return {
-            success: false,
-            data: {
-              content: { title: "", body: "" },
-              copies: [],
-              metadata: { warning: "You need to provide instructions" },
-            },
-          };
+          try {
+            const actionsModule = require("./actionsModule");
+            if (typeof actionsModule.runActions === "function") {
+              const actionResult = await actionsModule.runActions({
+                actions,
+                prompt,
+                svcOut,
+                result,
+                injectedDbUtils:
+                  typeof _injectedDbUtils !== "undefined"
+                    ? _injectedDbUtils
+                    : undefined,
+              });
+              return actionResult;
+            }
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn("genieService: actionsModule failed", e && e.message);
+            // fall through to DEFAULT
+          }
         }
       } catch (e) {
         // If reading actions fails, log and continue to default
