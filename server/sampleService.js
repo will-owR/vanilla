@@ -55,6 +55,8 @@ async function generate(envelopeReq = {}, opts = {}) {
   // Populate out_envelope with canonical pages and metadata
   outEnv.pages = pages;
   outEnv.metadata = outEnv.metadata || { model: "sample-v1" };
+  // Ensure producers explicitly include an actions key (empty by default)
+  outEnv.actions = outEnv.actions || {};
 
   // Return the canonical shape: { out_envelope: { ... }, metadata? }
   const metadata = { generatedAt: new Date().toISOString() };
