@@ -56,6 +56,7 @@
 let sampleService = require("./sampleService");
 const { saveContentToFile } = require("./utils/fileUtils");
 const normalizePrompt = require("./utils/normalizePrompt");
+const { buildMockAiResponse } = require("./utils/aiMockResponse");
 // dbUtils is a Prisma-backed shim present in the repo. Lazy-require inside
 // functions that use it to avoid instantiating DB connections when not needed.
 
@@ -223,58 +224,289 @@ const genieService = {
 
       const svcOut = returned.out_envelope || returned;
 
-      // Minimal actions gate: if producer provided a non-empty actions
-      // object, forward to the actionsModule which will handle simple
-      // actions (print-to-file, etc). If the actions module fails the
-      // code will fall back to the DEFAULT pipeline below.
-      try {
-        const actions = (svcOut && svcOut.actions) || {};
-        const hasActions = actions && Object.keys(actions).length > 0;
-        if (hasActions) {
-          try {
-            const actionsModule = require("./actionsModule");
-            if (typeof actionsModule.runActions === "function") {
-              const actionResult = await actionsModule.runActions({
-                actions,
-                prompt,
-                svcOut,
-                result,
-                injectedDbUtils:
-                  typeof _injectedDbUtils !== "undefined"
-                    ? _injectedDbUtils
-                    : undefined,
-              });
-              return actionResult;
-            }
-          } catch (e) {
-            // eslint-disable-next-line no-console
-            console.warn("genieService: actionsModule failed", e && e.message);
-            // fall through to DEFAULT
-          }
-        }
-      } catch (e) {
-        // If reading actions fails, log and continue to default
-        // eslint-disable-next-line no-console
-        console.warn("genieService: actions gate read failed", e && e.message);
-      }
+      // Ensure returned content/layout and metadata defaults
+      const content = (svcOut && svcOut.content) || {};
+      if (!content.layout) content.layout = "poem-single-column";
+      const metadata = svcOut.metadata || {
+        model: "mock-1",
+        tokens: Math.max(10, Math.min(200, String(prompt || "").length)),
+      };
 
-      // Delegate the original DEFAULT behavior into the new module so it can
-      // be removed later when action dispatch is implemented.
-      const defaultModule = require("./defaultModule");
-      const { out, persistencePromise } = await defaultModule.runDefault({
-        prompt,
-        svcOut,
-        result,
-        injectedDbUtils:
-          typeof _injectedDbUtils !== "undefined"
-            ? _injectedDbUtils
-            : undefined,
-        ENABLE_PERSISTENCE,
-        AWAIT_PERSISTENCE,
+      // Normalize returned pages/copies/content into a compat shape used below
+      const normalized = {};
+      if (Array.isArray(svcOut.pages)) {
+        normalized.pages = svcOut.pages;
+        normalized.copies = svcOut.pages.map((p) => ({
+          title:
+            p.title || (p.blocks && p.blocks[0] && p.blocks[0].content) || "",
+          body: (p.blocks && p.blocks[0] && p.blocks[0].content) || "",
+          layout: p.layout || content.layout,
+        }));
+        normalized.pagesCount = svcOut.pages.length;
+      }
+      if (Array.isArray(svcOut.copies)) {
+        normalized.copies = svcOut.copies;
+        normalized.pagesCount = svcOut.copies.length;
+      }
+      if (svcOut.content) normalized.content = svcOut.content;
+      if (svcOut.metadata) normalized.metadata = svcOut.metadata;
+
+      // Build a backward-compatible output envelope and include a richer
+      // aiResponse envelope that can be multi-page. Use copies from the
+      // generator when present, otherwise generate pages via helper.
+      const pagesCount =
+        (result && typeof result.pages === "number" && result.pages) ||
+        (result && Array.isArray(result.copies) && result.copies.length) ||
+        undefined;
+
+      // Preserve canonical content when provided by the sampleService.
+      // Build aiResponse pages around that canonical content.
+      const baseContent = result && result.content ? result.content : null;
+      const mock = buildMockAiResponse(prompt, {
+        pages: pagesCount,
+        model: metadata.model,
       });
 
-      // Expose the persistence promise for tests to await (compat with prior behavior)
-      genieService._lastPersistencePromise = persistencePromise;
+      if (baseContent) {
+        // Use provided content as canonical content
+        mock.content = {
+          title: baseContent.title || mock.content.title,
+          body: baseContent.body || mock.content.body,
+          layout: baseContent.layout || mock.content.layout,
+        };
+      }
+
+      // Prefer explicit pages from sampleService (copies) when provided
+      if (result && Array.isArray(result.copies) && result.copies.length > 0) {
+        mock.aiResponse.pages = result.copies.map((c) => ({
+          title: c.title || mock.content.title,
+          body: c.body || mock.content.body,
+          layout: c.layout || mock.content.layout,
+        }));
+        mock.aiResponse.pageCount = mock.aiResponse.pages.length;
+      }
+
+      const out = {
+        success: true,
+        data: {
+          content: mock.content,
+          aiResponse: mock.aiResponse,
+          copies: result.copies || [],
+          metadata: mock.metadata,
+        },
+      };
+
+      // If persistence is enabled, attempt to persist the prompt and AI result.
+      // This is best-effort and must not block or fail the generation response.
+      if (ENABLE_PERSISTENCE) {
+        // Provide a Promise hook that tests can await to know when the
+        // persistence attempt completes. This hook is optional and only used
+        // by tests that set GENIE_PERSISTENCE_AWAIT=1.
+        let persistenceResolver;
+        let persistenceRejecter;
+        const persistencePromise = new Promise((res, rej) => {
+          persistenceResolver = res;
+          persistenceRejecter = rej;
+        });
+        // Expose test hook
+        genieService._lastPersistencePromise = persistencePromise;
+
+        const runPersistence = async () => {
+          try {
+            let dbUtils;
+            // If a test injected mock is present, prefer it. This keeps
+            // unit tests deterministic by using the mock implementations.
+            if (typeof _injectedDbUtils !== "undefined") {
+              dbUtils = _injectedDbUtils;
+            } else {
+              // By default, prefer the legacy `crud` while running under
+              // test mode to keep API endpoints consistent (many existing
+              // tests expect CRUD-backed storage). Allow overriding this
+              // behavior when an explicit environment flag requests that
+              // we exercise the Prisma-backed implementation in tests.
+              const usePrismaInTest =
+                process.env.USE_PRISMA_IN_TEST === "1" ||
+                process.env.USE_PRISMA_IN_TEST === "true";
+
+              if (process.env.NODE_ENV === "test" && !usePrismaInTest) {
+                dbUtils = require("./crud");
+              } else {
+                try {
+                  dbUtils = require("./utils/dbUtils");
+                } catch (e) {
+                  // Fallback to legacy crud if Prisma-backed dbUtils unavailable
+                  // eslint-disable-next-line no-console
+                  console.warn(
+                    "genieService: dbUtils unavailable in persistence step, falling back to legacy crud",
+                    e && e.message
+                  );
+                  dbUtils = require("./crud");
+                }
+              }
+            }
+            // Create prompt record with dedupe-on-create handling.
+            try {
+              let p;
+              try {
+                // Debug: log presence of createPrompt
+                // eslint-disable-next-line no-console
+                console.debug(
+                  "genieService: dbUtils.createPrompt available?",
+                  typeof dbUtils.createPrompt
+                );
+                p = await dbUtils.createPrompt(String(prompt));
+                // eslint-disable-next-line no-console
+                console.debug("genieService: createPrompt returned", p);
+              } catch (createErr) {
+                // If create failed due to a uniqueness/constraint error,
+                // attempt to recover by searching for an existing prompt
+                // that matches the normalized text. This avoids throwing
+                // when concurrent requests race to create the same prompt.
+                // Normalize and search recent prompts for a match.
+                try {
+                  const norm = normalizePrompt(prompt);
+                  let recent = [];
+                  try {
+                    recent = await dbUtils.getPrompts();
+                  } catch (dbErr) {
+                    // Best-effort recovery: if DB not ready or query fails,
+                    // log and continue with empty recent list so we don't
+                    // surface an unhandled rejection from persistence.
+                    // eslint-disable-next-line no-console
+                    console.warn(
+                      "genieService: recovery getPrompts failed",
+                      dbErr && dbErr.message
+                    );
+                    recent = [];
+                  }
+                  const found = (recent || []).find((r) => {
+                    try {
+                      return (
+                        typeof r.prompt === "string" &&
+                        normalizePrompt(r.prompt) === norm
+                      );
+                    } catch (e) {
+                      return false;
+                    }
+                  });
+                  if (found && found.id) {
+                    p = { id: found.id };
+                  } else {
+                    // Re-throw original create error if we couldn't recover
+                    throw createErr;
+                  }
+                } catch (recoverErr) {
+                  // Log recovery failure and rethrow original create error
+                  // eslint-disable-next-line no-console
+                  console.warn(
+                    "genieService: createPrompt failed and recovery failed",
+                    createErr && createErr.message,
+                    recoverErr && recoverErr.message
+                  );
+                  throw createErr;
+                }
+              }
+
+              if (p && p.id) out.data.promptId = p.id;
+
+              // Debug: log created prompt and verify it can be read back
+              try {
+                // If crud-like API available, attempt to read back the prompt
+                if (dbUtils && typeof dbUtils.getPromptById === "function") {
+                  const verify = await dbUtils
+                    .getPromptById(p.id)
+                    .catch(() => null);
+                  // eslint-disable-next-line no-console
+                  console.debug(
+                    "genieService: persistence created prompt result:",
+                    p,
+                    "verify:",
+                    verify
+                  );
+                } else {
+                  // eslint-disable-next-line no-console
+                  console.debug(
+                    "genieService: persistence created prompt (no getPromptById):",
+                    p
+                  );
+                }
+              } catch (e) {
+                // eslint-disable-next-line no-console
+                console.warn(
+                  "genieService: persistence verify failed",
+                  e && e.message
+                );
+              }
+
+              // Create AI result record linked to the prompt
+              try {
+                let aiRes = null;
+                if (dbUtils && typeof dbUtils.createAIResult === "function") {
+                  // Persist the full aiResponse envelope when available so the
+                  // DB retains pages and metadata for future reads.
+                  const toPersist = out.data.aiResponse || {
+                    content: out.data.content,
+                    copies: out.data.copies,
+                  };
+                  aiRes = await dbUtils.createAIResult(
+                    out.data.promptId,
+                    toPersist
+                  );
+                }
+                if (aiRes && aiRes.id) out.data.resultId = aiRes.id;
+              } catch (e) {
+                // non-fatal: log and continue
+                // eslint-disable-next-line no-console
+                console.warn(
+                  "genieService: failed to create AI result",
+                  e && e.message
+                );
+              }
+            } catch (e) {
+              // non-fatal: log and continue
+              // eslint-disable-next-line no-console
+              console.warn(
+                "genieService: failed to create prompt",
+                e && e.message
+              );
+            }
+            persistenceResolver();
+          } catch (e) {
+            // Non-fatal: log and ignore persistence failures
+            // eslint-disable-next-line no-console
+            console.warn(
+              "genieService: persistence step failed",
+              e && e.message
+            );
+            persistenceRejecter(e);
+          } finally {
+            // Clear the last persistence promise after it's settled
+            setImmediate(() => {
+              genieService._lastPersistencePromise = undefined;
+            });
+          }
+        };
+
+        if (AWAIT_PERSISTENCE) {
+          // Await persistence synchronously (test-only mode)
+          await runPersistence();
+        } else {
+          // Fire-and-forget for normal operation. Attach a catch to avoid
+          // unhandled rejections escaping if persistence fails asynchronously.
+          (async () => {
+            try {
+              await runPersistence();
+            } catch (e) {
+              // Non-fatal: log background persistence failure
+              // eslint-disable-next-line no-console
+              console.warn(
+                "genieService: background persistence failed",
+                e && e.message
+              );
+            }
+          })();
+        }
+      }
 
       return out;
     } catch (err) {
@@ -316,9 +548,7 @@ const genieService = {
       if (resultId) {
         try {
           // dbUtils.getAIResultById exists on both Prisma shim and crud
-          const row = await dbUtils.getAIResultById(
-            parseInt(String(resultId), 10)
-          );
+          const row = await dbUtils.getAIResultById(parseInt(resultId, 10));
           if (row && row.result) {
             const resultObj =
               typeof row.result === "string"
@@ -339,7 +569,7 @@ const genieService = {
       }
 
       if (promptId) {
-        const pid = parseInt(String(promptId), 10);
+        const pid = parseInt(promptId, 10);
         if (isNaN(pid)) return null;
 
         // Prefer Prisma-backed direct query when available. If Prisma is
