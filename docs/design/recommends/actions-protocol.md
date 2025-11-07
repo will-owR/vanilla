@@ -55,8 +55,8 @@ This short summary defines the two-step runtime contract for producers and the o
 ## Rollout plan (3 steps)
 
 1. Doc + producer change: update `sampleService` to include `actions: {}` in its response (no side-effects). Persist this change and update README/docs.
-2. Orchestrator safe path: add a light validator in `genieService` that recognizes `actions`, treats empty as default, and supports the minimal `persist` + `export` handlers behind a feature flag.
-3. CI/schema + expand: add AJV schema, update tests, and progressively enable support for images/webhooks after hardening.
+2. Orchestrator safe path: add a light validator in `genieService` that recognizes `actions`, and treats empty as default.
+3. CI/schema + expand: add AJV schema, update tests, and progressively enable support for images/webhooks after hardening (to be done at a much later time).
 
 ## Next steps (recommended)
 
