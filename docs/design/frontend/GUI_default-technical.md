@@ -1,285 +1,375 @@
 # GUI Default Mode - Technical Specification
 
+date: 2025-11-08
+status: active
+description: |
+Technical specification for the GUI implementation, including
+mode selection system and view management.
+
 ## Component Architecture
 
-### Structure Overview
-
-```
-ModeSelector/            # Mode selection menu component
-├── ModeOption.svelte    # Individual mode option
-└── ModeMenu.svelte      # Container for mode options
-
-ModeContent/             # Content area component
-├── DefaultMode/         # Default mode implementation
-│   ├── PromptInput.svelte
-│   └── GenerateButton.svelte
-└── future modes...      # Placeholder for future implementations
-```
-
-## Mode Management Infrastructure
-
-### State Management
+### Mode Management Structure
 
 ```typescript
-interface ModeState {
-  current: "default" | "demo" | string; // extensible for future modes
-  previousMode?: string; // for returning to previous mode
-  timestamp: number; // when mode was last changed
-  params?: Record<string, unknown>; // mode-specific parameters
+// Types and interfaces
+interface Mode {
+  id: "basic" | "demo" | "ebook";
+  label: string;
+  description: string;
+  metadata?: MetadataConfig;
 }
 
-interface DefaultModeParams {
-  promptType: "basic";
-  outputType: "book";
-  validation: "standard";
+interface MetadataConfig {
+  fields: {
+    name: string;
+    type: "text" | "number";
+    required: boolean;
+    label: string;
+  }[];
 }
+
+// Mode definitions
+const modes: Mode[] = [
+  {
+    id: "basic",
+    label: "Basic Prompt → Book",
+    description: "Simple prompt to book generation",
+  },
+  {
+    id: "demo",
+    label: "Demo Prompt → Book",
+    description: "Extended demo with metadata",
+    metadata: {
+      fields: [
+        {
+          name: "author",
+          type: "text",
+          required: true,
+          label: "Author Name",
+        },
+        {
+          name: "title",
+          type: "text",
+          required: true,
+          label: "Book Title",
+        },
+        {
+          name: "pages",
+          type: "number",
+          required: true,
+          label: "Page Count",
+        },
+      ],
+    },
+  },
+  {
+    id: "ebook",
+    label: "eBook Prompt → Book",
+    description: "Full eBook generation flow",
+  },
+];
 ```
 
 ### Component Structure
 
-#### 1. Mode Indicator Component
+```
+src/
+├── components/
+│   ├── modes/                    # Mode-specific components
+│   │   ├── ModeSelector.svelte   # Mode selection UI
+│   │   ├── BasicMode.svelte      # Basic mode view
+│   │   ├── DemoMode.svelte       # Demo mode view
+│   │   └── EbookMode.svelte      # eBook mode view
+│   ├── prompt/                   # Prompt components
+│   │   ├── PromptInput.svelte    # Main prompt input
+│   │   └── MetadataInput.svelte  # Metadata fields
+│   └── preview/                  # Preview components
+│       ├── Preview.svelte        # Preview container
+│       └── PreviewContent.svelte # Content display
+└── lib/
+    ├── stores/                  # State management
+    │   ├── modeStore.ts         # Mode selection state
+    │   ├── promptStore.ts       # Prompt content state
+    │   └── previewStore.ts      # Preview state
+    ├── services/                # API services
+    │   ├── promptService.ts     # Prompt handling
+    │   └── previewService.ts    # Preview generation
+    └── utils/                   # Utilities
+        ├── validation.ts        # Input validation
+        └── persistence.ts       # State persistence
+```
+
+## State Management
+
+### Mode Store
 
 ```typescript
-// ModeIndicator.svelte
-interface ModeIndicatorProps {
-  mode: string;
-  label: string;
-  isActive: boolean;
-  canRevert: boolean;
+// stores/modeStore.ts
+interface ModeState {
+  current: Mode;
+  history: Mode[];
+  metadata: Record<string, any>;
+}
+
+export const modeStore = writable<ModeState>({
+  current: modes[0], // Basic mode default
+  history: [],
+  metadata: {},
+});
+
+// Mode switching with history
+export function switchMode(modeId: string) {
+  return modeStore.update((state) => {
+    const newMode = modes.find((m) => m.id === modeId);
+    if (!newMode) return state;
+
+    return {
+      ...state,
+      history: [...state.history, state.current],
+      current: newMode,
+      metadata: {}, // Clear metadata on mode switch
+    };
+  });
 }
 ```
 
-#### 2. Store Definition
+### Prompt Store
 
 ```typescript
-// stores/modeStore.js
-const createModeStore = () => {
-  const { subscribe, set, update } = writable<ModeState>({
-    current: "default",
-    timestamp: Date.now(),
-    params: {
-      promptType: "basic",
-      outputType: "book",
-      validation: "standard",
-    },
-  });
+// stores/promptStore.ts
+interface PromptState {
+  content: string;
+  metadata: Record<string, any>;
+  isValid: boolean;
+  errors: string[];
+}
 
-  return {
-    subscribe,
-    setMode: (mode: string, params?: Record<string, unknown>) =>
-      update((state) => ({
-        ...state,
-        previousMode: state.current,
-        current: mode,
-        timestamp: Date.now(),
-        params,
-      })),
-    revertToDefault: () =>
-      update((state) => ({
-        current: "default",
-        timestamp: Date.now(),
-        params: {
-          promptType: "basic",
-          outputType: "book",
-          validation: "standard",
-        },
-      })),
-  };
-};
+export const promptStore = writable<PromptState>({
+  content: "",
+  metadata: {},
+  isValid: false,
+  errors: [],
+});
+
+// Validation handler
+export function validatePrompt(state: PromptState): boolean {
+  const errors = [];
+  const mode = get(modeStore).current;
+
+  // Basic content validation
+  if (!state.content.trim()) {
+    errors.push("Prompt is required");
+  }
+
+  // Metadata validation for Demo mode
+  if (mode.id === "demo") {
+    if (!state.metadata.author) errors.push("Author is required");
+    if (!state.metadata.title) errors.push("Title is required");
+    if (!state.metadata.pages) errors.push("Page count is required");
+  }
+
+  promptStore.update((s) => ({
+    ...s,
+    isValid: errors.length === 0,
+    errors,
+  }));
+
+  return errors.length === 0;
+}
 ```
 
-## Implementation Details
+## View Management
 
-### 1. Mode Indicator Integration
+### Mode Selector Implementation
 
 ```svelte
-<!-- App.svelte partial -->
-<script>
-  import { modeStore } from './stores/modeStore';
-  import ModeIndicator from './components/ModeIndicator.svelte';
+<!-- ModeSelector.svelte -->
+<script lang="ts">
+  import { modeStore, switchMode } from '../stores/modeStore';
+  import { modes } from '../config/modes';
+
+  $: activeMode = $modeStore.current;
 </script>
 
-<section>
-  <h2>AI-Powered eBook Creation</h2>
-  <ModeIndicator
-    mode={$modeStore.current}
-    label={$modeStore.current === 'default' ? 'Basic Prompt → Book' : ''}
-    isActive={true}
-    canRevert={$modeStore.current !== 'default'}
-  />
-  <!-- existing prompt form -->
-</section>
-```
+<div class="mode-selector">
+  {#each modes as mode}
+    <button
+      class="mode-option"
+      class:active={activeMode.id === mode.id}
+      on:click={() => switchMode(mode.id)}>
+      <span class="mode-label">{mode.label}</span>
+      <span class="mode-description">{mode.description}</span>
+    </button>
+  {/each}
+</div>
 
-### 2. CSS Styling
-
-```css
-.mode-indicator {
-  background: #f5f5f5;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  margin: 0.5rem 0;
-  padding: 0.75rem;
-  font-size: 0.9rem;
-  color: #666;
-  transition: background-color 0.2s ease;
-}
-
-.mode-indicator.default {
-  background: #fafafa;
-  border-style: dashed;
-}
-
-.mode-indicator:hover {
-  background: #f0f0f0;
-}
-```
-
-### 3. Mode-Specific Behavior
-
-#### Default Mode Handler
-
-```typescript
-// handlers/defaultMode.ts
-export class DefaultModeHandler {
-  validate(prompt: string): ValidationResult {
-    return {
-      isValid: prompt.length > 0,
-      message: prompt.length > 0 ? "Valid" : "Prompt required",
-    };
+<style>
+  .mode-selector {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--surface-light);
   }
 
-  process(prompt: string): Promise<ProcessingResult> {
-    return this.standardProcessing(prompt);
+  .mode-option {
+    flex: 1;
+    padding: 0.75rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    cursor: pointer;
   }
 
-  private standardProcessing(prompt: string): Promise<ProcessingResult> {
-    // Implementation of default processing logic
+  .mode-option.active {
+    background: var(--primary-light);
+    border-color: var(--primary);
   }
-}
+</style>
 ```
 
 ## API Integration
 
-### 1. Request/Response Structure
-
-```typescript
-interface DefaultModeRequest {
-  mode: "default";
-  prompt: string;
-  params: DefaultModeParams;
-}
-
-interface DefaultModeResponse {
-  status: "success" | "error";
-  result?: {
-    content: string;
-    metadata: {
-      processingTime: number;
-      wordCount: number;
-    };
-  };
-  error?: {
-    code: string;
-    message: string;
-  };
-}
-```
-
-### 2. Mode-Aware Service Calls
+### Prompt Service
 
 ```typescript
 // services/promptService.ts
-export class PromptService {
-  async submit(
-    prompt: string,
-    mode: string = "default"
-  ): Promise<ProcessingResult> {
-    const request: DefaultModeRequest = {
-      mode,
-      prompt,
-      params: {
-        promptType: "basic",
-        outputType: "book",
-        validation: "standard",
-      },
-    };
+interface PromptRequest {
+  mode: string;
+  content: string;
+  metadata?: Record<string, any>;
+}
 
-    const response = await fetch("/api/process", {
+export async function submitPrompt(request: PromptRequest) {
+  const response = await fetch("/api/prompt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error("Prompt submission failed");
+  }
+
+  return response.json();
+}
+```
+
+### Preview Service
+
+```typescript
+// services/previewService.ts
+export async function generatePreview(content: string, mode: string) {
+  // Cancel any pending preview requests
+  if (currentPreviewController) {
+    currentPreviewController.abort();
+  }
+
+  const controller = new AbortController();
+  currentPreviewController = controller;
+
+  try {
+    const response = await fetch("/api/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
+      body: JSON.stringify({ content, mode }),
+      signal: controller.signal,
     });
 
-    return response.json();
+    if (!response.ok) throw new Error("Preview generation failed");
+
+    const html = await response.text();
+    previewStore.set({ html, loading: false });
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    previewStore.update((s) => ({ ...s, error: error.message }));
   }
 }
 ```
 
-## Testing Considerations
+## Testing Strategy
 
-### 1. Unit Tests
+### Unit Tests
 
 ```typescript
-// Tests for mode management
+// tests/modes.test.ts
 describe("Mode Management", () => {
-  test("defaults to basic mode", () => {
-    const store = createModeStore();
-    expect(store.current).toBe("default");
+  test("validates demo mode metadata", () => {
+    const state = {
+      content: "Test prompt",
+      metadata: {
+        author: "Test Author",
+        title: "Test Book",
+        pages: 100,
+      },
+    };
+    expect(validatePrompt(state)).toBe(true);
   });
 
-  test("maintains mode parameters", () => {
-    const store = createModeStore();
-    expect(store.params).toHaveProperty("promptType", "basic");
+  test("handles mode switching", () => {
+    switchMode("demo");
+    const state = get(modeStore);
+    expect(state.current.id).toBe("demo");
+    expect(state.history).toHaveLength(1);
   });
 });
 ```
 
-### 2. Integration Tests
+### Integration Tests
 
 ```typescript
-describe("Default Mode Integration", () => {
-  test("processes prompt with default parameters", async () => {
-    const service = new PromptService();
-    const result = await service.submit("test prompt");
-    expect(result.status).toBe("success");
+// tests/prompt-flow.test.ts
+describe("Prompt Flow", () => {
+  test("complete demo mode flow", async () => {
+    // 1. Switch to demo mode
+    switchMode("demo");
+
+    // 2. Set prompt and metadata
+    await updatePrompt({
+      content: "Test prompt",
+      metadata: {
+        author: "Test Author",
+        title: "Test Book",
+        pages: 100,
+      },
+    });
+
+    // 3. Submit and verify
+    const result = await submitPrompt(get(promptStore));
+    expect(result.success).toBe(true);
   });
 });
 ```
 
-## Migration Strategy
+## Implementation Plan
 
-### Phase 1: Mode Infrastructure
+### Phase 1: Mode Selection
 
 1. Implement mode store
-2. Add ModeIndicator component
-3. Update App.svelte layout
-4. Add default mode handler
+2. Add mode selector component
+3. Basic mode switching
+4. Mode persistence
 
-### Phase 2: API Integration
+### Phase 2: Mode-Specific Views
 
-1. Update API endpoints for mode awareness
-2. Implement mode-specific validation
-3. Add mode-specific response handling
+1. Create view components
+2. Implement metadata handling
+3. Add validation
+4. Update preview generation
 
-### Phase 3: Testing & Validation
+### Phase 3: Integration
+
+1. Update API services
+2. Add error handling
+3. Implement caching
+4. Add loading states
+
+### Phase 4: Testing
 
 1. Unit test coverage
-2. Integration test suite
-3. UI/UX validation
+2. Integration tests
+3. E2E test flows
 4. Performance testing
 
-## Future Considerations
+---
 
-### Mode Extension Points
-
-- Mode registration system
-- Mode-specific component injection
-- Custom validation rules
-- Mode-specific API handlers
-
-### Performance Optimization
-
-- Mode switching optimization
-- Lazy loading of mode-specific code
-- Caching strategies for mode data
+This document is actively maintained.
+Last Updated: 2025-11-08
