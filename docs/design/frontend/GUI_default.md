@@ -1,163 +1,272 @@
-# GUI Default Mode Design
+# Default GUI Implementation
+
+date: 2025-11-08
+status: active
+description: |
+Technical design document for the default GUI implementation,
+including current state and planned mode selection enhancements.
 
 ## Current Implementation
 
-### Visual Layout
+### Component Structure
+
+```typescript
+// App.svelte
+export default {
+  components: {
+    PromptInput,
+    Preview,
+    StatusBar
+  }
+}
+
+// Layout hierarchy
+App
+├── StatusBar
+│   ├── AppTitle
+│   ├── HealthStatus
+│   └── UserStatus
+├── MainContent
+│   ├── Title
+│   ├── PromptInput
+│   └── GenerateButton
+└── Preview
+```
+
+### Current Layout
 
 ```
 ┌──────────────────────────────────────┐
-│        AetherPress (V0.1)           │
+│        AetherPress (V0.1)            │ <- Status Bar
 │ From Imagination to Publication...   │
 │ Current user: None                   │
 │ Backend health: ok                   │
 ├──────────────────────────────────────┤
-│     AI-Powered eBook Creation        │
+│     AI-Powered eBook Creation        │ <- Main Title
 │                                      │
 │ Enter your creative prompt:          │
 │ ┌────────────────────────────────┐   │
-│ │                                │   │
+│ │                                │   │ <- Prompt Area
 │ │     [Prompt textarea here]     │   │
 │ │                                │   │
 │ └────────────────────────────────┘   │
 │                                      │
-│         [Generate button]            │
+│         [Generate button]            │ <- Action Button
 └──────────────────────────────────────┘
 ```
 
-### Layout Structure
+### Interaction States
 
-- Header section
-  - Application title: "AetherPress (V0.1)"
-  - Motto: "From Imagination to Publication (It's a snap!)"
-  - User status
-  - Backend health status
-- Main section
-  - Section title: "AI-Powered eBook Creation"
-  - Prompt input form
-  - Generate button
-  - Results/error display area
+1. **Initial State**
+   - Empty prompt
+   - Generate button disabled
+   - No preview visible
 
-### Current Behavior
+2. **Input State**
+   - Prompt being typed
+   - Generate enabled when valid
+   - Previous preview (if any) visible
 
-- All interactions follow default behavior implicitly
-- No explicit indication of operating mode
-- Direct flow: prompt → generate → result
-- No way to distinguish or switch between different modes
+3. **Generation State**
+   - Input locked
+   - Loading indicator active
+   - Preview updating
 
-## Proposed Enhancement: Default Mode Indicator
+4. **Result State**
+   - Input unlocked
+   - Preview visible
+   - Generate available
 
-### Purpose
+## Planned Enhancement
 
-- Make the default mode explicit and visible
-- Prepare UI for future alternative modes
-- Provide visual confirmation of current operating mode
-- Enable easy return to default behavior when alternatives exist
-
-### Visual Design
-
-1. Mode Selection Menu
-
-   - Positioned directly below "AI-Powered eBook Creation"
-   - Light gray background (#f5f5f5)
-   - Currently shows only "Default" (future: Demo, Official)
-   - Single row height with comfortable padding
-   - Full width with subtle borders
-   - Prepared for additional mode options
-
-2. Content Area
-
-   - Contains the main interaction elements
-   - Light gray background when in default mode
-   - Includes prompt input and generate button
-   - Clear visual separation from menu
-   - Padding matches existing layout
-
-3. Visual Hierarchy
-   - Menu acts as mode indicator/selector
-   - Content area reflects active mode
-   - Default mode shows standard prompt interface
-   - Future modes will modify content area appearance
-
-### User Experience
-
-- Current Stage
-
-  - Acts as a status indicator
-  - Shows user they're in standard operation mode
-  - Provides context for current capabilities
-
-- Future Capability
-  - Will serve as mode selector
-  - Enables return to default behavior
-  - Provides contrast with alternative modes
-
-### Technical Considerations
-
-- Minimal impact on current functionality
-- Prepares for future mode implementations
-- Maintains clean, focused interface
-- Preserves current interaction patterns
-
-### Visual Layout (Proposed)
+### Mode Selection Addition
 
 ```
-┌──────────────────────────────────────┐
-│        AetherPress (V0.1)            │
-│ From Imagination to Publication...   │
-│ Current user: None                   │
-│ Backend health: ok                   │
-├──────────────────────────────────────┤
-│     AI-Powered eBook Creation        │
-├──────────────────────────────────────┤
-│ ╔══════════════════════════════════╗ │  Mode Selection Menu
-│ ║ [Default]                        ║ │  (gray)
-│ ╚══════════════════════════════════╝ │
-│                                      │
-│ ┌──────────────────────────────────┐ │  Content Area
-│ │                                  │ │  (light gray for
-│ │ Enter your creative prompt:      │ │   default mode)
-│ │ ┌────────────────────────────┐   │ │
-│ │ │    [Prompt textarea]       │   │ │
-│ │ └────────────────────────────┘   │ │
-│ │                                  │ │
-│ │        [Generate button]         │ │
-│ └──────────────────────────────────┘ │
-└──────────────────────────────────────┘
+┌───────────────────────────────────────────────┐
+│             AetherPress (V0.1)                │
+├───────────────────────────────────────────────┤
+│          AI-Powered eBook Creation            │
+├───────────────────────────────────────────────┤
+│ ┌─────────────┐┌─────────────┐┌─────────────┐ |
+│ │Basic Prompt ││Demo Prompt  ││eBook Prompt │ | <- Mode Selection
+│ │   → Book    ││   → Book    ││   → Book    │ |
+│ └─────────────┘└─────────────┘└─────────────┘ |
+│                                               │
+│   Enter your creative prompt:                 │
+│ ┌─────────────────────────────────────────┐   │
+│ │         [Prompt textarea here]          │   │
+│ └─────────────────────────────────────────┘   │
+│                                               │
+│              [Generate button]                │
+└───────────────────────────────────────────────┘
 ```
 
-Key Differences:
+### Mode Selection Components
 
-- Added mode indicator section (light gray)
-- Clear visual separation between title and form
-- Maintains overall card layout structure
-- New section integrates naturally with existing design
+```typescript
+interface ModeOption {
+  id: 'basic' | 'demo' | 'ebook';
+  label: string;
+  description: string;
+  icon?: string;
+}
 
-## Implementation Notes
+// ModeSelector.svelte
+export default {
+  props: {
+    modes: ModeOption[],
+    active: string
+  },
+  events: {
+    'mode:change': (mode: string) => void
+  }
+}
+```
 
-### CSS Considerations
+### Mode-Specific Features
 
-- Background color: #f5f5f5 or #fafafa (very light gray)
-- Subtle borders or shadows for definition
-- Consistent padding with existing elements
-- Clear visual hierarchy in layout
+1. **Basic Mode**
+   - Current functionality
+   - Single prompt input
+   - Direct generation
+   - Standard preview
 
-### Component Structure
+2. **Demo Mode**
+   - Extended metadata
+   - Author field
+   - Title field
+   - Page count field
 
-- New `<div>` element between title and form
-- Self-contained styling
-- Maintains current responsive behavior
-- Integrates with existing card layout
+3. **eBook Mode**
+   - Full book settings
+   - Chapter structure
+   - Front matter options
+   - Publishing metadata
 
-### Future Extensibility
+## Technical Implementation
 
-- Design accommodates future mode options
-- Clear visual pattern for mode indication
-- Easy to extend for interactive behavior
-- Maintains visual consistency when expanded
+### State Management
 
-## Next Steps
+```typescript
+interface PromptState {
+  mode: "basic" | "demo" | "ebook";
+  prompt: string;
+  metadata?: {
+    author?: string;
+    title?: string;
+    pages?: number;
+  };
+  generating: boolean;
+  error?: string;
+}
 
-1. Implement basic visual indicator
-2. Validate spacing and visual hierarchy
-3. Ensure responsive behavior
-4. Document for future mode additions
+// promptStore.ts
+export const promptStore = writable<PromptState>({
+  mode: "basic",
+  prompt: "",
+  generating: false,
+});
+```
+
+### Mode Switching Logic
+
+```typescript
+async function switchMode(newMode: string) {
+  // 1. Save current state
+  const currentState = get(promptStore);
+
+  // 2. Update mode
+  promptStore.update((s) => ({
+    ...s,
+    mode: newMode,
+    metadata: newMode === "basic" ? undefined : {},
+  }));
+
+  // 3. Load mode-specific components
+  await loadModeComponents(newMode);
+}
+```
+
+### CSS Structure
+
+```scss
+.mode-selector {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--bg-light);
+  border-bottom: 1px solid var(--border);
+
+  .mode-option {
+    flex: 1;
+    padding: 0.75rem;
+    border-radius: 4px;
+    text-align: center;
+    cursor: pointer;
+
+    &.active {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+  }
+}
+```
+
+## Implementation Plan
+
+1. **Phase 1: Mode Selection UI**
+   - Add mode selector component
+   - Implement basic switching
+   - Preserve current functionality
+   - Add visual feedback
+
+2. **Phase 2: Mode-Specific Views**
+   - Create view components
+   - Add metadata fields
+   - Implement validation
+   - Update preview handling
+
+3. **Phase 3: State Integration**
+   - Enhance state management
+   - Add persistence
+   - Implement error handling
+   - Add loading states
+
+## Testing Strategy
+
+### Unit Tests
+
+```typescript
+describe("ModeSelector", () => {
+  it("shows all available modes", () => {
+    // Test mode option rendering
+  });
+
+  it("indicates active mode", () => {
+    // Test active state
+  });
+
+  it("handles mode switching", () => {
+    // Test mode change events
+  });
+});
+```
+
+### Integration Tests
+
+- Mode switching flow
+- State preservation
+- Preview updates
+- Error handling
+
+### E2E Tests
+
+- Complete user journeys
+- Cross-mode operations
+- Error scenarios
+- Performance metrics
+
+---
+
+This document is actively maintained.
+Last Updated: 2025-11-08
