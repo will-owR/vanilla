@@ -6,6 +6,33 @@ description: |
 Technical specification for the GUI implementation, including
 mode selection system and view management.
 
+**Note: API Payload Structure**
+The API calls should be structured to handle any data configuration, current or future.
+Instead of hardcoding `{ prompt }`, we use a comprehensive payload structure:
+
+```javascript
+{
+  mode: "basic" | "demo" | "ebook",  // Identifies the context
+  prompt: string,                    // The core prompt
+  metadata: {                        // Optional structured metadata
+    title?: string,
+    author?: string,
+    pages?: number,
+    // ... any future fields
+  },
+  options?: {                        // Optional configuration
+    // ... future settings/flags
+  }
+}
+```
+
+This structure ensures:
+
+- Backward compatibility with basic mode
+- Support for current demo mode metadata
+- Extensibility for future enhancements
+- Progressive server-side feature adoption
+
 ## Component Architecture
 
 ### Mode Management Structure
