@@ -2,8 +2,9 @@
   // Basic App component for AetherPress Svelte frontend
   import { appState } from './stores/appState.js';
   import { modeStore } from './stores/modeStore.js';
-  import ModeIndicator from './components/ModeIndicator.svelte';
-
+  import { promptStore, setGenerating, setError } from './stores/promptStore.js';
+  import ModeSwitcher from './components/ModeSwitcher.svelte';
+  import MetadataSection from './components/MetadataSection.svelte';
   import { contentStore } from './stores/index.js';
   import { submitPrompt as apiSubmitPrompt } from './lib/api.js';
   import ExportButton from './components/ExportButton.svelte';
@@ -11,9 +12,11 @@
   // Fetch backend health status on mount
   let health = null;
   let apiError = null;
-  let prompt = '';
   let aiResult = '';
-  let loadingAI = false;
+  
+  // Subscribe to promptStore
+  $: prompt = $promptStore.prompt;
+  $: loadingAI = $promptStore.generating;
 
   async function checkHealth() {
     appState.update(state => ({ ...state, loading: true, error: null }));
@@ -32,7 +35,7 @@
   async function submitPrompt() {
     aiResult = '';
     apiError = null;
-    loadingAI = true;
+    setGenerating(true);
     try {
   // Use shared API helper which normalizes the response shape
   const result = await apiSubmitPrompt(prompt);
@@ -50,9 +53,10 @@
         null;
       contentStore.set(contentToStore);
     } catch (err) {
+      setError(err.message);
       apiError = err.message;
     } finally {
-      loadingAI = false;
+      setGenerating(false);
     }
   }
 
@@ -67,18 +71,18 @@
     <p>Backend health: {health ? health : 'Checking...'}</p>
   </div>
 
-  <section style="margin-top:2rem; width:100%; max-width:500px;">
+  <section class="main-content">
     <h2>AI-Powered eBook Creation</h2>
-    <ModeIndicator 
-      mode={$modeStore.current}
-      label={$modeStore.current === 'default' ? 'Basic Prompt → Book' : ''}
-      isActive={true}
-      canRevert={$modeStore.current !== 'default'}
-    />
+    <ModeSwitcher />
+    
+    {#if $modeStore.current === 'demo'}
+      <MetadataSection />
+    {/if}
+    
     <form on:submit|preventDefault={submitPrompt}>
       <label for="prompt">Enter your creative prompt:</label>
-      <textarea id="prompt" bind:value={prompt} rows="4" style="width:100%;margin-top:0.5rem;"></textarea>
-      <button type="submit" disabled={loadingAI || !prompt.trim()} style="margin-top:1rem;">Generate</button>
+      <textarea id="prompt" bind:value={prompt} rows="4" class="prompt-input"></textarea>
+      <button type="submit" disabled={loadingAI || !prompt.trim()} class="generate-button">Generate</button>
     </form>
     {#if loadingAI}
       <p>Generating with AI...</p>
@@ -140,19 +144,33 @@
   p {
     color: #444;
   }
-  section {
+  .main-content {
     background: #fff;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     padding: 2rem;
+    width: 100%;
+    max-width: 800px;
   }
-  textarea {
+
+  form {
+    margin-top: 1.5rem;
+  }
+
+  .prompt-input {
+    width: 100%;
+    margin-top: 0.5rem;
     font-size: 1rem;
     font-family: inherit;
     border-radius: 6px;
     border: 1px solid #ccc;
-    padding: 0.5rem;
+    padding: 0.75rem;
     resize: vertical;
+    min-height: 120px;
+  }
+
+  .generate-button {
+    margin-top: 1rem;
   }
   button {
     background: #ff3e00;

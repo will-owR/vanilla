@@ -79,6 +79,10 @@ App
 
 ## Planned Enhancement
 
+Note:
+[Basic] -> [Demo] -> [eBook]
+Development Path ----------------->
+
 ### Mode Selection Addition
 
 ```
