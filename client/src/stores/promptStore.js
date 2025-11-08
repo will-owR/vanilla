@@ -2,7 +2,7 @@ import { writable } from "svelte/store";
 
 // Define the initial state
 const initialState = {
-  mode: "basic",
+  mode: "demo",
   prompt: "",
   metadata: {
     title: "",

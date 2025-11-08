@@ -2,12 +2,12 @@ import { writable } from "svelte/store";
 
 const createModeStore = () => {
   const { subscribe, set, update } = writable({
-    current: "default",
+    current: "demo",
     timestamp: Date.now(),
     params: {
-      promptType: "basic",
+      promptType: "demo",
       outputType: "book",
-      validation: "standard",
+      validation: "enhanced",
     },
   });
 
@@ -23,10 +23,10 @@ const createModeStore = () => {
       })),
     revertToDefault: () =>
       update((state) => ({
-        current: "default",
+        current: "demo",
         timestamp: Date.now(),
         params: {
-          promptType: "basic",
+          promptType: "demo",
           outputType: "book",
           validation: "standard",
         },

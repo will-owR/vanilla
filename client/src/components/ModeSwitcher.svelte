@@ -3,8 +3,8 @@
     import { promptStore } from '../stores/promptStore.js';
 
     const modes = [
-        { id: 'basic', label: 'Basic Prompt → Book' },
         { id: 'demo', label: 'Demo Prompt → Book' },
+        { id: 'basic', label: 'Basic Prompt → Book' },
         { id: 'ebook', label: 'eBook Prompt → Book' }
     ];
 
