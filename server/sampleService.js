@@ -1,25 +1,6 @@
-const fs = require("fs");
-const path = require("path");
-
-// Default to the repository-level samples/ directory so the file is located at
-// <repo-root>/samples/latest_prompt.txt regardless of the server working dir.
-const DEFAULT_SAMPLES_PATH = path.resolve(
-  __dirname,
-  "..",
-  "samples",
-  "latest_prompt.txt"
-);
-
-// Atomically write to disk: write to a temp file then rename.
-function safeWriteFileSync(filePath, contents) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  const tmp = `${filePath}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, String(contents), { encoding: "utf8" });
-  fs.renameSync(tmp, filePath);
-}
+// Services MUST be pure: return canonical out_envelope and optional actions.
+// This module provides a minimal, testable implementation of the Generation
+// contract: async generate(envelopeReq) -> { out_envelope, metadata? }
 
 function buildContent(prompt, opts = {}) {
   const maxWords = opts.titleWords || 6;
@@ -31,34 +12,67 @@ function buildContent(prompt, opts = {}) {
   return { title, body };
 }
 
-function savePrompt(prompt, options = {}) {
-  const filename = options.filename || DEFAULT_SAMPLES_PATH;
-  safeWriteFileSync(filename, String(prompt));
-  return filename;
-}
-
 function makeCopies(content, n = 3) {
-  // Return n copies of the content object for the demo
-  return Array.from({ length: n }, () => content);
+  return Array.from({ length: n }, () => ({ ...content }));
 }
 
-function generateFromPrompt(prompt) {
-  const filename = savePrompt(prompt);
-  const content = buildContent(prompt);
-  const copies = makeCopies(content, 3);
-  return { filename, content, copies };
+function buildPagesFromCopies(copies) {
+  return copies.map((c, idx) => ({
+    id: `p${idx + 1}`,
+    title: c.title,
+    blocks: [
+      {
+        type: "text",
+        content: c.body,
+      },
+    ],
+  }));
 }
 
-function readLatest(options = {}) {
-  const filename = options.filename || DEFAULT_SAMPLES_PATH;
-  if (!fs.existsSync(filename)) return null;
-  return fs.readFileSync(filename, { encoding: "utf8" });
+async function generate(envelopeReq = {}, opts = {}) {
+  // Pure: do not perform any I/O or persistence here.
+  // Accept only the canonical envelope request: { in_envelope, out_envelope }
+  if (
+    !envelopeReq ||
+    typeof envelopeReq !== "object" ||
+    !envelopeReq.in_envelope
+  ) {
+    const e = new Error(
+      "Invalid input: expected { in_envelope, out_envelope }"
+    );
+    // @ts-ignore
+    e.status = 400;
+    throw e;
+  }
+
+  const inEnv = envelopeReq.in_envelope || {};
+  const outEnv = envelopeReq.out_envelope || {};
+
+  const content = buildContent(inEnv.prompt || "", opts);
+  const copies = makeCopies(content, opts.copies || 3);
+  const pages = buildPagesFromCopies(copies);
+
+  // Populate out_envelope with canonical pages and metadata
+  outEnv.pages = pages;
+  outEnv.metadata = outEnv.metadata || { model: "sample-v1" };
+  // Ensure producers explicitly include an actions key (empty by default)
+  outEnv.actions = outEnv.actions || {};
+
+  // Return the canonical shape: { out_envelope: { ... }, metadata? }
+  const metadata = { generatedAt: new Date().toISOString() };
+  return { out_envelope: outEnv, metadata };
+}
+
+// Keep a backward-compatible wrapper name for callers that used the old API.
+// Wrapper kept for API compatibility but now requires an envelope request.
+async function generateFromPrompt(envelopeReq, opts = {}) {
+  return generate(envelopeReq, opts);
 }
 
 module.exports = {
-  savePrompt,
   buildContent,
   makeCopies,
+  buildPagesFromCopies,
+  generate,
   generateFromPrompt,
-  readLatest,
 };

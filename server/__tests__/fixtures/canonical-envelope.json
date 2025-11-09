@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "metadata": { "model": "sample-v1" },
+  "pages": [
+    {
+      "id": "p1",
+      "title": "Prompt: Hello",
+      "blocks": [{ "type": "text", "content": "Hello" }]
+    }
+  ]
+}

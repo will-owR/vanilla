@@ -15,6 +15,20 @@ const serviceState = require("./index").serviceState || {};
 const fs = require("fs");
 const path = require("path");
 
+// Allow tests to use a mock PDF generator when a browser is unavailable.
+let mockPdf = null;
+try {
+  const useMock =
+    process.env.PDF_GENERATOR_IMPL === "mock" ||
+    (process.env.NODE_ENV === "test" && process.env.SKIP_PUPPETEER === "true");
+  if (useMock) {
+    // relative to server/ directory
+    mockPdf = require("./test-utils/pdfMock");
+  }
+} catch (e) {
+  mockPdf = null;
+}
+
 // PDF validation utilities use pdfjs-dist if available (devDependency).
 let pdfjs;
 try {
@@ -28,7 +42,19 @@ async function generatePdfBuffer({
   body,
   browser: providedBrowser,
   validate = false,
+  envelope,
 } = {}) {
+  if (mockPdf && typeof mockPdf.generatePdfBuffer === "function") {
+    // Delegate to mock implementation in test-mode to avoid launching a browser.
+    // Pass `envelope` through so the mock can render multi-page envelopes.
+    return mockPdf.generatePdfBuffer({
+      title,
+      body,
+      browser: providedBrowser,
+      validate,
+      envelope,
+    });
+  }
   let browser;
   let page;
   let launched = false;
@@ -71,7 +97,28 @@ async function generatePdfBuffer({
     }
 
     page = await browser.newPage();
-    const contentHtml = `<!doctype html><html><body><h1>${title}</h1><div>${body}</div></body></html>`;
+    // If a canonical envelope was provided, render one HTML page per envelope page
+    let contentHtml;
+    if (envelope && Array.isArray(envelope.pages)) {
+      const pagesHtml = envelope.pages
+        .map((p) => {
+          const blocks = (p.blocks || [])
+            .map((b) => {
+              if (b.type === "html") return String(b.content || "");
+              if (b.type === "text")
+                return `<div>${String(b.content || "")}</div>`;
+              return `<pre>${String(b.content || "")}</pre>`;
+            })
+            .join("\n");
+          return `<section style=\"page-break-after: always;\"><h1>${String(
+            p.title || ""
+          )}</h1>${blocks}</section>`;
+        })
+        .join("\n");
+      contentHtml = `<!doctype html><html><body>${pagesHtml}</body></html>`;
+    } else {
+      contentHtml = `<!doctype html><html><body><h1>${title}</h1><div>${body}</div></body></html>`;
+    }
     await page.setContent(contentHtml, { waitUntil: "networkidle0" });
     const buffer = await page.pdf({ format: "A4", printBackground: true });
     if (page && launched) await page.close();
@@ -113,6 +160,9 @@ async function generatePdfBuffer({
 module.exports = { generatePdfBuffer };
 
 async function validatePdfBuffer(buffer) {
+  if (mockPdf && typeof mockPdf.validatePdfBuffer === "function") {
+    return mockPdf.validatePdfBuffer(buffer);
+  }
   const result = { ok: true, errors: [], warnings: [], pageCount: 0 };
   if (!pdfjs) {
     result.warnings.push(

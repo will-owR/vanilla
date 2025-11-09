@@ -1,3 +1,30 @@
+# Shared artifacts and test-results
+
+This brief note explains where CI and local smoke scripts consolidate ephemeral test artifacts.
+
+Why this exists
+
+- Playwright and Puppeteer tests often generate results (traces, screenshots, small JSON files) under `test-results/` at the working directory. Different runners/scripts sometimes create `test-results/` at the repo root, `client/`, or `server/`.
+- To make artifact collection predictable, CI workflows consolidate those into `shared/test-results/` at the end of runs.
+
+What CI does
+
+- Workflows that run Playwright/Puppeteer tests now:
+  - Run the smoke script from the package directory (e.g., `client/`) so artifacts land under that package by default.
+  - After the smoke step they run a consolidation step that moves any `test-results/` folders (root, client, server) into `shared/test-results/` for easier access and artifact uploads.
+
+How to inspect locally
+
+- If you run tests locally and see `test-results/` folders at the repo root, they are ephemeral and safe to remove. Use the following to clean up:
+
+```bash
+rm -rf test-results client/test-results server/test-results
+```
+
+Or keep them but add them to your local `.gitignore` (the repo already ignores `**/test-results/`).
+
+If you'd like a different consolidation location, update the CI workflows under `.github/workflows/`.
+
 # AetherPress Shared
 
 Shared utilities, types, and constants for the AetherPress project.

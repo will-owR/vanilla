@@ -10,6 +10,8 @@ datasource db {
 model Prompt {
   id        Int      @id @default(autoincrement())
   prompt    String
+  normalizedText String?
+  normalizedHash String? @unique
   createdAt DateTime @default(now())
   aiResults AIResult[]
 }

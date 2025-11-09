@@ -71,6 +71,8 @@ services:
 
     # Set environment variables for the database from a .env file
     # This will automatically create the user and database on first run.
+    env_file:
+      - devcontainer.env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

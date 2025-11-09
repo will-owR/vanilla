@@ -7,8 +7,9 @@ import { startServer } from "../index.js";
 import appModule from "../index.js";
 
 beforeAll(async () => {
-  // Start server programmatically and ensure it listens
-  await startServer({ listen: true });
+  // Start server programmatically but do not require it to bind to the
+  // network (test runners avoid listening to prevent EADDRINUSE).
+  await startServer({ listen: false });
 });
 
 afterAll(async () => {
@@ -23,7 +24,10 @@ afterAll(async () => {
 
 describe("Ebook export smoke", () => {
   it("POST /api/export/book returns a PDF buffer and contains poem text", async () => {
-    const res = await request("http://localhost:3000")
+    // Use the exported Express app directly so tests don't rely on a
+    // real TCP bind (avoids ECONNREFUSED in CI where startServer skips
+    // listening when NODE_ENV === 'test').
+    const res = await request(appModule)
       .post("/api/export/book")
       .send({})
       .set("Content-Type", "application/json")

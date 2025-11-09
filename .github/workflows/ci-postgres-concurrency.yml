@@ -1,0 +1,155 @@
+name: CI — Postgres concurrency check
+
+on:
+  push:
+    branches: [ 'aetherV0/**' ]
+  pull_request:
+    branches: [ 'aetherV0/**' ]
+
+jobs:
+  concurrency-test:
+    name: Postgres + migration + concurrency test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aether_ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d aether_ci_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Point tests at the Postgres service
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aether_ci_test
+      # Make CI deterministic for export-related jobs
+      ALLOW_REMOTE_ASSETS: '0'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install server deps
+        run: |
+          cd server
+          npm ci
+
+      - name: Generate Prisma client
+        run: npx --prefix server prisma generate
+
+      - name: Apply Prisma migrations (deploy)
+        run: npx --prefix server prisma migrate deploy
+
+      - name: Run concurrency integration test
+        run: |
+          npx --prefix server vitest run __tests__/concurrency.integration.test.mjs --run
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+name: CI - Postgres concurrency check
+
+on:
+  pull_request:
+    branches: [ 'aetherV0/**' ]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch: {}
+
+jobs:
+  postgres-concurrency:
+    name: Postgres concurrency integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dino_ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready -U postgres
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/dino_ci_test
+      USE_PRISMA_IN_TEST: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install server dependencies
+        run: |
+          cd server
+          npm ci --no-audit --no-fund
+
+      - name: Install Chrome for Puppeteer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg2 ca-certificates
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable || sudo apt-get install -y chromium-browser || true
+          # Set env var for puppeteer-core to find the browser
+          echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable" >> $GITHUB_ENV
+
+      - name: Wait for Postgres
+        run: |
+          echo "Waiting for Postgres to be ready"
+          for i in $(seq 1 30); do
+            if pg_isready -h 127.0.0.1 -p 5432 -U postgres; then
+              echo "Postgres is ready"
+              break
+            fi
+            sleep 2
+          done
+        shell: bash
+
+      - name: Generate Prisma client
+        run: |
+          npx --prefix server prisma generate
+
+      - name: Apply migrations
+        run: |
+          # Use migrate deploy to apply existing migrations
+          npx --prefix server prisma migrate deploy --schema=server/prisma/schema.prisma
+
+      - name: Run concurrency HTTP integration test
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          USE_PRISMA_IN_TEST: '1'
+          SKIP_PUPPETEER: 'true'
+          GENIE_PERSISTENCE_AWAIT: '1'
+        run: |
+          echo "Running HTTP concurrency integration test against Postgres"
+          cd server
+          npx vitest run __tests__/concurrency.http.integration.test.mjs --reporter dot
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-test-artifacts
+          path: |
+            server/logs/**
+            server/tmp-exports/**
+            server/vitest-*.json

@@ -1,7 +1,5 @@
 # AetherPress Client
 
-Note: Developer-only helper buttons (`Load V0.1 demo` and `Run smoke test`) are visually hidden in the UI for the rapid-feedback prototype; they exist only for local debugging and may be removed later.
-
 Frontend SPA for AetherPress content generation and management.
 
 ## Development Scripts

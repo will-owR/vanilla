@@ -37,6 +37,10 @@ shared/dist/vitest.config.*
 /package-lock.json
 tmp/
 
+# Shared transient dirs for generated artifacts
+shared/tmp/
+shared/test-artifacts/
+
 # Devcontainer local secrets (do NOT commit)
 .devcontainer/.env
 
@@ -55,3 +59,9 @@ server/tmp-e2e-exports/
 client/.vite/
 # Ignore generated Prisma client in dev environment
 server/prisma/prisma-client.js
+
+# Ignore server-generated prompt files and data directory
+server/data/
+
+# Ephemeral Playwright / test runner results
+**/test-results/

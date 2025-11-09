@@ -1,3 +1,54 @@
+# Devcontainer browser & test setup
+
+This document explains how the development container provisions system Chrome/Chromium and how to run browser-dependent tests (Puppeteer / Playwright) locally and in CI.
+
+Key points
+
+- The devcontainer image (see `.devcontainer/Dockerfile`) installs Google Chrome stable and the native libraries required by Puppeteer/Playwright on Debian.
+- `devcontainer.json` and `docker-compose.yml` set `CHROME_PATH=/usr/bin/google-chrome-stable` and `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true` so the server and tests use the system Chrome instead of downloading Chromium during `npm install`.
+
+Note: see `server/README.md` for important server-side guidance (seed scripts, export/env recommendations, and CI best-practices). That README contains details the devcontainer does not run automatically and is recommended reading before running migrations or seeders.
+
+Running browser tests in the devcontainer
+
+1. Rebuild / start the devcontainer (VS Code or Codespaces will use `devcontainer.json`). The Dockerfile installs system Chrome during image build.
+
+2. Open a terminal in the container and (if required) generate Prisma client and run migrations before integration tests:
+
+```bash
+# from repo root inside devcontainer
+npx --prefix server prisma generate
+npx --prefix server prisma migrate dev --name init
+```
+
+3. Run server tests (integration tests that use real browser):
+
+```bash
+# run all server tests (may include browser-dependent tests)
+npm --prefix server test
+
+# or run focused integration test
+npx --prefix server vitest run __tests__/concurrency.integration.test.mjs
+```
+
+Environment variables
+
+- `CHROME_PATH` and `PUPPETEER_EXECUTABLE_PATH`: paths to the system browser. The devcontainer sets `CHROME_PATH=/usr/bin/google-chrome-stable`.
+- `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true`: prevents Puppeteer from downloading its own Chromium during `npm install` (recommended for devcontainer where system Chrome is provided).
+- `SKIP_PUPPETEER=true`: test/run-time flag to intentionally skip Puppeteer initialization. Useful for fast unit test runs that do not need a browser. When set, code paths that require a browser should gracefully degrade or return 503 for endpoints that need a browser.
+
+CI alignment
+
+- CI workflows should either install Chrome on the runner and export `PUPPETEER_EXECUTABLE_PATH` or use the official Playwright action to provision browsers and system deps.
+- Examples in `.github/workflows/` (now updated) show patterns to install Chrome and export `PUPPETEER_EXECUTABLE_PATH`.
+
+Tips
+
+- Prefer mocking `generatePdfBuffer` in unit tests to avoid launching a browser. For integration tests, run them only in environments where `PUPPETEER_EXECUTABLE_PATH` is set and Chrome/Chromium is installed.
+- If you see `An executablePath or channel must be specified for puppeteer-core`, set `PUPPETEER_EXECUTABLE_PATH` in your environment to point to a working browser binary.
+
+If you'd like, I can add a small `server/test-utils/pdfMock.js` helper and a test harness that injects it for unit tests to make them fully independent of browser availability.
+
 # Devcontainer: AetherPress v0.1
 
 This document describes the purpose and configuration of the `.devcontainer/` folder and summarizes two important project documents (`PUPPETEER_Findings.md` and `PATH_V0.1.md`) with implementation estimates.

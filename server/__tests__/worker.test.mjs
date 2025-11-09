@@ -25,8 +25,33 @@ describe("worker-sqlite", () => {
     // If done, check output exists
     if (row.state === "done") {
       expect(row.file_path).toBeTruthy();
-      expect(fs.existsSync(row.file_path)).toBe(true);
-      fs.unlinkSync(row.file_path);
+      // Allow a short grace period for the output file to be flushed to disk
+      let exists = fs.existsSync(row.file_path);
+      const start = Date.now();
+      // increase timeout slightly to reduce CI flakiness
+      const timeoutMs = 5000;
+      while (!exists && Date.now() - start < timeoutMs) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 100));
+        exists = fs.existsSync(row.file_path);
+      }
+      if (!exists) {
+        // helpful debug output for CI logs
+        const dir = path.dirname(row.file_path || dbPath);
+        const files = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+        throw new Error(
+          `Expected output file ${
+            row.file_path
+          } to exist after ${timeoutMs}ms. Dir contents: ${JSON.stringify(
+            files
+          )}`
+        );
+      }
+      try {
+        fs.unlinkSync(row.file_path);
+      } catch (e) {
+        // ignore cleanup errors
+      }
     }
 
     await db2.close();

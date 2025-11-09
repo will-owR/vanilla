@@ -18,10 +18,26 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install root and client dependencies
+      - name: Install dependencies for repo root, server, and client
         run: |
-          npm ci --no-audit --no-fund
-          cd client && npm ci --no-audit --no-fund
+          # Install deps only for directories that contain a package.json.
+          # Prefer npm ci when a package-lock.json exists, otherwise use npm install.
+          set -euo pipefail
+          DIRS=("." "server" "client")
+          for d in "${DIRS[@]}"; do
+            if [ -f "$d/package.json" ]; then
+              echo "Installing dependencies in $d"
+              if [ -f "$d/package-lock.json" ]; then
+                echo "Found $d/package-lock.json: running npm ci in $d"
+                (cd "$d" && npm ci --no-audit --no-fund)
+              else
+                echo "No $d/package-lock.json: running npm install in $d"
+                (cd "$d" && npm install --no-audit --no-fund)
+              fi
+            else
+              echo "No package.json in $d; skipping"
+            fi
+          done
 
       - name: Start server and client in background
         run: |
@@ -32,13 +48,40 @@ jobs:
       - name: Install Playwright
         run: |
           npm install --no-audit --no-fund playwright@1.40.0
-          npx playwright install --with-deps
+          # Try to install browsers and system dependencies. On some runner
+          # images (ubuntu-24.04) Playwright's `--with-deps` step can fail due
+          # to package name differences (libffi7/libx264-163, etc). If that
+          # happens, fall back to installing browsers only so tests can still
+          # attempt to run and surface runtime errors separately.
+          if ! npx playwright install --with-deps; then
+            echo "playwright install --with-deps failed; falling back to browser-only install"
+            npx playwright install
+          fi
 
       - name: Run Playwright generate->preview smoke
         continue-on-error: true
         run: |
+          # Run the smoke script from the client/ directory so Playwright
+          # artifacts (if any) are placed under client/test-results/ by default.
           mkdir -p docs/focus/logs
-          node ./scripts/test-generate-preview.js --url http://localhost:5173
+          (cd client && node ../scripts/test-generate-preview.js --url http://localhost:5173)
+
+      - name: Move any repo-root test-results into shared/test-results
+        if: always()
+        run: |
+          mkdir -p shared/test-results
+          # Move root-level test-results (if created by earlier runs) into shared/
+          if [ -d test-results ]; then
+            mv test-results/* shared/test-results/ || true
+            rmdir test-results || true
+          fi
+          # Also consolidate client/server artifacts into shared for easier access
+          if [ -d client/test-results ]; then
+            mv client/test-results/* shared/test-results/ || true
+          fi
+          if [ -d server/test-results ]; then
+            mv server/test-results/* shared/test-results/ || true
+          fi
 
       - name: Upload artifacts
         if: always()

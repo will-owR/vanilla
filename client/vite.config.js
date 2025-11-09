@@ -27,6 +27,7 @@ export default defineConfig(({ mode }) => {
         "/api": createProxy("/api", DEV_AUTH_TOKEN),
         "/override": createProxy("/override", DEV_AUTH_TOKEN),
         "/export": createProxy("/export", DEV_AUTH_TOKEN),
+        "/health": createProxy("/health", DEV_AUTH_TOKEN)
       },
       fs: {
         strict: true,

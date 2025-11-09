@@ -77,16 +77,19 @@ Minimal flow (sequence)
 1. Create minimal store file
 
    - Task: Replace current stores with just promptStore, previewStore, uiStateStore
+   - To do: Strip down to just the three basic writables without the dev wrapper
    - Acceptance: Stores update and trigger UI changes when set
 
 2. Simplify prompt submission
 
    - Task: Update `api.js` to just POST prompt and return tripled content
+   - To do: Reduce to a simple fetch call to POST /prompt
    - Acceptance: `POST /prompt` creates `latest_prompt.txt` and returns content
 
 3. Simplify generate/preview flow
 
    - Task: Update `flows.js` to call submitPrompt and update preview
+   - To do: Reduce to basic prompt submission and preview update
    - Acceptance: Generate button triggers POST and preview updates
 
 4. Verify through GUI
@@ -95,19 +98,17 @@ Minimal flow (sequence)
 
 ## Validation checklist
 
-- [ ] Start fresh (Ctrl+F5)
-- [ ] Enter prompt text
-- [ ] Click generate
-- [ ] Verify:
-  1. Backend received prompt (`latest_prompt.txt` exists and contains prompt)
-  2. Preview shows tripled content
-  3. No errors in console
-  - `window.previewStore && typeof window.previewStore.set` (if you expose for manual testing) or use the UI force preview button
-- [ ] Enter a simple prompt and click generate. Observe:
-  - Backend writes `/samples/latest_prompt.txt`
-  - Preview pane displays the returned HTML (or a fallback local preview) within ~5s
-  - No AbortError entries in console
-  - No infinite console logs
+1. Start fresh (Ctrl+F5)
+2. Enter prompt text
+3. Click generate
+   Verify:
+
+- [x] Backend received prompt (`latest_prompt.txt` exists and contains prompt)
+- [ ] Preview shows tripled content
+- [ ] No errors in console
+      `window.previewStore && typeof window.previewStore.set` (if you expose for manual testing) or use the UI force preview button;
+      No AbortError entries in console;
+      No infinite console logs
 
 ## Rollback plan
 

@@ -1,4 +1,4 @@
-# AetherPress Server
+# AetherPress Server -- local dev notes
 
 Backend service for AetherPress content generation and management.
 
@@ -9,6 +9,87 @@ This server powers the backend for AetherPress, handling:
 - Content and image generation (AI orchestrator)
 - HTML preview and PDF export (via Puppeteer)
 - API endpoints for prompt, preview, override, and export
+
+## Quick prerequisites
+
+- Node.js and npm
+- `@prisma/client` generated: run `npx prisma generate` if you see Prisma initialization errors.
+- A Postgres database available via `DATABASE_URL` for full end-to-end flows. For quick local work you can use the devcontainer `db` service.
+
+## Seeding local dev data (safe, manual)
+
+Two files help with seeding a tiny, idempotent dataset for development:
+
+- `server/scripts/seed-dev.js` — Node seeder (dry-run by default). It uses the project's `dbUtils` helpers and Prisma to upsert Prompts and attach example AI results. Dry-run prints planned operations and writes a report to `shared/tmp/seed-report.json`.
+- `server/scripts/seed-dev.sh` — Shell wrapper that provides safety checks, an optional `pg_dump` backup, and a simple interactive apply flow. The wrapper refuses to run against obvious production-like databases and will not run automatically in provisioning.
+
+Usage examples
+
+Dry-run (safe, no writes):
+
+```bash
+./server/scripts/seed-dev.sh
+# or directly
+node server/scripts/seed-dev.js
+```
+
+Apply (explicit write):
+
+```bash
+./server/scripts/seed-dev.sh --apply
+# or
+SEED_DEV=true ./server/scripts/seed-dev.sh
+```
+
+Notes
+
+- The Node seeder is idempotent: prompt upserts are keyed on `normalizedHash` (uses `normalizePrompt` + SHA256), and AI results created by the seeder are tagged with `__seed: true` in the JSON result for easy identification.
+- The shell wrapper will refuse to run when `NODE_ENV=production` or when the `DATABASE_URL`'s host looks production-like (heuristic). It performs a `pg_dump` backup when possible before applying.
+- Do NOT wire these scripts to run automatically in CI or the devcontainer provisioning. The repo intentionally keeps seeding manual to avoid accidental writes.
+
+Rollback / cleanup
+
+- The seeder writes a `shared/tmp/seed-report.json` with ids it created (when `--apply` is used). Use that report to delete created rows with Prisma or `psql`.
+- Example (Prisma/one-liner):
+
+```bash
+node -e "const {PrismaClient}=require('@prisma/client');(async()=>{const p=new PrismaClient();const fs=require('fs');const r=JSON.parse(fs.readFileSync('shared/tmp/seed-report.json','utf8'));for(const rec of r.report.prompts){ if(rec.aiResultId){ try{ await p.aIResult.delete({where:{id:rec.aiResultId}}); }catch(e){} } if(rec.promptId){ try{ await p.prompt.delete({where:{id:rec.promptId}}); }catch(e){} } } await p.$disconnect();})();"
+```
+
+## Testing notes
+
+- The server's test suite uses Vitest. Some integration/concurrency tests require a running Postgres instance; set `DATABASE_URL` or `POSTGRES_URL` when running those tests.
+
+### Genie concurrency runbook (Priority B)
+
+This project includes a concurrency verification test for the Genie orchestration (Priority A). The following runbook notes describe how to run and validate the concurrency test locally and in CI, and lists the important env vars used by the test and CI job.
+
+- Purpose: run the HTTP-level concurrency test that fires parallel `POST /prompt` requests and validates at-most-one persisted prompt (or falls back to legacy storage checks).
+- Where: `server/__tests__/concurrency.http.integration.test.mjs`.
+
+Quick local steps
+
+1. Ensure Postgres is reachable and `DATABASE_URL` points at a dev/test database (or run with the legacy storage fallback if you don't have Postgres available).
+2. From the repo root run (example):
+
+```bash
+# Run the concurrency test against Postgres (opt-in)
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/poema_test \
+  USE_PRISMA_IN_TEST=1 SKIP_PUPPETEER=true npm --prefix server run test:run -- ./__tests__/concurrency.http.integration.test.mjs
+```
+
+Notes
+
+- The test is tolerant: if the running server persists via the legacy `crud` path the test will fall back to inspecting legacy storage and skip the strict Postgres-only assertion. For strict Postgres verification enable `USE_PRISMA_IN_TEST=1` and run against a Postgres instance.
+- For CI runs prefer a fresh, isolated Postgres instance. See `.github/ci/genie_concurrency.md` for CI-specific notes.
+
+## Devcontainer
+
+- The devcontainer setup includes a `db` service. The seeder will not be run automatically by the devcontainer; run it manually if you want seeded example data.
+
+## Contact / next steps
+
+If you want the seeder integrated differently (for example, an opt-in devcontainer prompt or a documented one-liner in onboarding docs), open a PR or request the change.
 
 ## Image types & rasterization (note)
 

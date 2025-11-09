@@ -16,11 +16,12 @@
   "waitFor": "onCreateCommand",
 
   // Install dependencies in all workspaces (server, shared, client)
-  //"postCreateCommand": "cd client && npm install && cd ../server && npm install express puppeteer && npm install --save-dev nodemon && cd ..",
 
   "updateContentCommand": "cd client && npm install && npx playwright install --with-deps || true && cd ../server && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm install && npm install --save-dev nodemon && cd ..",
 
-  "postCreateCommand": "cd client && npm install && npx playwright install --with-deps || true && cd ../server && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm install && cd .. && npm install -g concurrently",
+  //"postCreateCommand": "cd client && npm install && npx playwright install --with-deps || true && cd ../server && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm install && cd .. && npm install -g concurrently",
+
+  "postCreateCommand": "cd client && npm install && npx playwright install --with-deps || true && cd ../server && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm install && echo 'Waiting for Postgres...' && COUNTER=0; until pg_isready -h db -p 5432 -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-aether_dev} || [ $COUNTER -ge 60 ]; do sleep 1; COUNTER=$((COUNTER+1)); done; if [ $COUNTER -ge 60 ]; then echo 'Postgres not ready after 60s; continuing (container DB may be starting)'; fi && export DATABASE_URL=\"postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-aether_dev}\" && npx prisma generate || true && npx prisma db push --accept-data-loss || true && cd .. && npm install -g concurrently",
 
   "postAttachCommand": {
     "client + server": "concurrently 'cd ./client && npm run dev' 'cd ./server && npm run dev'"
@@ -95,6 +96,14 @@
 
     "CLOUDFLARE_ACCOUNT_ID": "${localEnv:CLOUDFLARE_ACCOUNT_ID}",
     "CLOUDFLARE_API_TOKEN": "${localEnv:CLOUDFLARE_API_TOKEN}",
+    "CHROME_PATH": "/usr/bin/google-chrome-stable",
+    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
+  },
+  "containerEnv": {
+    "POSTGRES_USER": "${localEnv:POSTGRES_USER:postgres}",
+    "POSTGRES_PASSWORD": "${localEnv:POSTGRES_PASSWORD:postgres}",
+    "POSTGRES_DB": "${localEnv:POSTGRES_DB:aether_dev}",
+    "DATABASE_URL": "postgresql://postgres:postgres@db:5432/aether_dev",
     "CHROME_PATH": "/usr/bin/google-chrome-stable",
     "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
   },

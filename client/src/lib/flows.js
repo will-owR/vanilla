@@ -49,6 +49,59 @@ function withTimeout(promise, ms = DEFAULT_TIMEOUT_MS) {
 }
 
 /**
+ * Extract styles and body content from a full HTML document string.
+ * If the input is already a fragment, return it unchanged.
+ */
+function extractFragmentFromDocument(input) {
+  if (!input || typeof input !== "string") return input;
+  const trimmed = input.trim();
+  // fast-path: if it doesn't look like a full document, return as-is
+  if (!/<!doctype html/i.test(trimmed) && !/^<html/i.test(trimmed))
+    return input;
+
+  // Browser path: use DOMParser to correctly extract head styles and body
+  // content. This is the safest path for dev UX in the browser.
+  try {
+    if (typeof DOMParser !== "undefined") {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(input, "text/html");
+      let out = "";
+      try {
+        const styles = Array.from(
+          doc.querySelectorAll("head style, head link[rel=stylesheet]")
+        );
+        out += styles.map((s) => s.outerHTML).join("\n");
+      } catch (e) {
+        // ignore
+      }
+      try {
+        out += doc.body ? doc.body.innerHTML : "";
+      } catch (e) {
+        // ignore
+      }
+      return out || input;
+    }
+  } catch (e) {
+    // fall through to regex fallback
+  }
+
+  // Fallback: naive regex extraction for environments without DOMParser
+  try {
+    const styleMatches = [];
+    let m;
+    const styleRe = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+    while ((m = styleRe.exec(input))) {
+      styleMatches.push(m[0]);
+    }
+    const bodyMatch = /<body[^>]*>([\s\S]*?)<\/body>/i.exec(input);
+    const body = (bodyMatch && bodyMatch[1]) || "";
+    return (styleMatches.join("\n") + "\n" + body).trim() || input;
+  } catch (e) {
+    return input;
+  }
+}
+
+/**
  * Call the preview API for a piece of content and update stores/UI state.
  * Returns the HTML string on success.
  */
@@ -74,8 +127,53 @@ export async function previewFromContent(
   setUiLoading("Loading preview...");
 
   try {
-    const html = await withTimeout(loadPreview(content, { signal }), timeoutMs);
-    // Ensure previewStore is updated with the returned HTML
+    let html = await withTimeout(loadPreview(content, { signal }), timeoutMs);
+    // If the backend returned a full HTML document, extract styles and body
+    // so that injecting with {@html} into a div renders correctly.
+    try {
+      // extract full-document components
+      const trimmed = String(html || "");
+      if (/^\s*<!doctype html/i.test(trimmed) || /^\s*<html/i.test(trimmed)) {
+        // in-browser parse to extract styles and body
+        if (typeof DOMParser !== "undefined") {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(trimmed, "text/html");
+          // collect css text from <style> tags
+          try {
+            const styles = Array.from(doc.querySelectorAll("head style"))
+              .map((s) => s.textContent || "")
+              .join("\n");
+            if (typeof document !== "undefined" && document.head) {
+              let tag = document.getElementById("preview-injected-styles");
+              if (!tag) {
+                tag = document.createElement("style");
+                tag.id = "preview-injected-styles";
+                document.head.appendChild(tag);
+              }
+              tag.textContent = styles;
+            }
+          } catch (e) {
+            // ignore style injection errors
+          }
+          // use body innerHTML as fragment
+          try {
+            html = doc.body ? doc.body.innerHTML : "";
+          } catch (e) {}
+        } else {
+          // fallback to earlier fragment extractor
+          html = extractFragmentFromDocument(html);
+        }
+      } else {
+        // input already a fragment; no style extraction needed
+        html = extractFragmentFromDocument(html);
+      }
+    } catch (e) {
+      // if extraction fails, fall back to raw html
+      try {
+        html = extractFragmentFromDocument(html);
+      } catch (er) {}
+    }
+    // Ensure previewStore is updated with the returned HTML fragment (body only)
     previewStore.set(html);
     uiStateStore.set({ status: "success", message: "Preview loaded" });
     // If this request is still the active controller, clear the global
