@@ -2,7 +2,8 @@
 
 date: 2025-11-08
 status: active
-description: |
+
+**description:** |
 Technical design document for the default GUI implementation,
 including current state and planned mode selection enhancements.
 
@@ -10,27 +11,27 @@ including current state and planned mode selection enhancements.
 
 ### Component Structure
 
-```typescript
-// App.svelte
-export default {
-  components: {
-    PromptInput,
-    Preview,
-    StatusBar
-  }
-}
+```text
+// Root component: client/src/App.svelte
+// Key components used or available in the client:
+// - client/src/components/ModeSwitcher.svelte
+// - client/src/components/MetadataSection.svelte
+// - client/src/components/ExportButton.svelte
+// - client/src/components/Preview.svelte (and PreviewWindow/PreviewSkeleton)
+// - client/src/components/StatusDisplay.svelte (exists; App currently renders header inline)
 
-// Layout hierarchy
+// Current layout (implementation in App.svelte)
 App
-├── StatusBar
-│   ├── AppTitle
-│   ├── HealthStatus
-│   └── UserStatus
+├── header-info (inline in App.svelte)
+│   ├── Title / Motto
+│   ├── Current user
+│   └── Backend health
 ├── MainContent
-│   ├── Title
-│   ├── PromptInput
-│   └── GenerateButton
-└── Preview
+│   ├── ModeSwitcher (client/src/components/ModeSwitcher.svelte)
+│   ├── MetadataSection (shown when mode === 'demo')
+│   ├── Prompt textarea (inline in App.svelte)
+│   └── Generate button (inline in App.svelte form)
+└── Preview (component)
 ```
 
 ### Current Layout
@@ -111,25 +112,20 @@ Development Path ----------------->
 
 ### Mode Selection Components
 
-```typescript
-interface ModeOption {
-  id: 'basic' | 'demo' | 'ebook';
-  label: string;
-  description: string;
-  icon?: string;
-}
+The project implements a `ModeSwitcher.svelte` component (not `ModeSelector`). It exposes a simple switch API and updates the `modeStore` and `promptStore`.
 
-// ModeSelector.svelte
-export default {
-  props: {
-    modes: ModeOption[],
-    active: string
-  },
-  events: {
-    'mode:change': (mode: string) => void
-  }
-}
+```text
+// Example modes (from client/src/components/ModeSwitcher.svelte)
+const modes = [
+  { id: 'demo', label: 'Demo Prompt → Book' },
+  { id: 'basic', label: 'Basic Prompt → Book' },
+  { id: 'ebook', label: 'eBook Prompt → Book' }
+];
+
+// Note: the 'ebook' mode button is present in the UI but currently disabled (WIP).
 ```
+
+Mode switching updates both `modeStore` (which keeps params and timestamps) and `promptStore` (which holds the active prompt and metadata).
 
 ### Mode-Specific Features
 
@@ -155,70 +151,99 @@ export default {
 
 ### State Management
 
-```typescript
-interface PromptState {
-  mode: "basic" | "demo" | "ebook";
-  prompt: string;
-  metadata?: {
-    author?: string;
-    title?: string;
-    pages?: number;
-  };
-  generating: boolean;
-  error?: string;
+The implementation uses Svelte writable stores (JavaScript). The actual `promptStore` lives at `client/src/stores/promptStore.js` and is initialized with `mode: 'demo'` and a small metadata shape. Example (JS):
+
+```javascript
+import { writable } from "svelte/store";
+
+const initialState = {
+  mode: "demo",
+  prompt: "",
+  metadata: {
+    title: "",
+    author: "",
+    pages: undefined,
+  },
+  generating: false,
+  error: null,
+};
+
+export const promptStore = writable(initialState);
+
+export function setGenerating(gen) {
+  promptStore.update((s) => ({ ...s, generating: gen, error: null }));
 }
 
-// promptStore.ts
-export const promptStore = writable<PromptState>({
-  mode: "basic",
-  prompt: "",
-  generating: false,
-});
+export function setError(err) {
+  promptStore.update((s) => ({ ...s, error: err, generating: false }));
+}
 ```
 
 ### Mode Switching Logic
 
-```typescript
-async function switchMode(newMode: string) {
-  // 1. Save current state
-  const currentState = get(promptStore);
+Mode switching is implemented via `modeStore.setMode(...)` and by updating `promptStore` so UI components can react. Example (JS-style):
 
-  // 2. Update mode
+```javascript
+import { get } from "svelte/store";
+import { promptStore } from "../stores/promptStore.js";
+import { modeStore } from "../stores/modeStore.js";
+
+function switchMode(newMode) {
+  // 1. Persist or snapshot current prompt if needed (optional)
+  const current = get(promptStore);
+
+  // 2. Update mode store with params (modeStore holds params/timestamps)
+  modeStore.setMode(newMode, {
+    promptType: newMode,
+    outputType: "book",
+    validation: newMode === "demo" ? "enhanced" : "standard",
+  });
+
+  // 3. Update promptStore mode and reset metadata when switching to basic
   promptStore.update((s) => ({
     ...s,
     mode: newMode,
-    metadata: newMode === "basic" ? undefined : {},
+    metadata: newMode === "basic" ? undefined : s.metadata,
   }));
-
-  // 3. Load mode-specific components
-  await loadModeComponents(newMode);
 }
 ```
 
 ### CSS Structure
 
-```scss
+Component styles are plain CSS in Svelte single-file components. Example (from `ModeSwitcher.svelte`):
+
+```css
 .mode-selector {
   display: flex;
   gap: 1rem;
-  padding: 1rem;
-  background: var(--bg-light);
-  border-bottom: 1px solid var(--border);
+  margin: 1.5rem 0;
+  padding: 0.5rem;
+  background: var(--bg-light, #f5f5f5);
+  border-radius: 8px;
+}
 
-  .mode-option {
-    flex: 1;
-    padding: 0.75rem;
-    border-radius: 4px;
-    text-align: center;
-    cursor: pointer;
+.mode-button {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 4px;
+  background: white;
+  color: var(--text-primary, #333);
+}
 
-    &.active {
-      background: var(--primary-light);
-      color: var(--primary);
-    }
-  }
+.mode-button.active {
+  background: var(--primary, #ff3e00);
+  color: white;
 }
 ```
+
+> Note: The project does not currently use **an SCSS build step for the client**; component styles are regular CSS inside Svelte components.
+
+---
+
+### Status / Testing notes
+
+The client includes `vitest` and `playwright` in devDependencies, but Playwright e2e and CI integration are currently work-in-progress—see `client/README.md` and `scripts/` for existing smoke/e2e helpers.
 
 ## Implementation Plan
 
@@ -261,14 +286,12 @@ describe("ModeSelector", () => {
 ```
 
 ### Integration Tests
-
 - Mode switching flow
 - State preservation
 - Preview updates
 - Error handling
 
 ### E2E Tests
-
 - Complete user journeys
 - Cross-mode operations
 - Error scenarios
