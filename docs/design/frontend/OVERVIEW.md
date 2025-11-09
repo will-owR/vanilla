@@ -1,8 +1,9 @@
 # Frontend Overview
 
-date: 2025-11-08
+date: 2025-11-09
 status: active
-description: |
+
+**description:** |
 Active overview document for the Aether frontend implementation.
 Reflects current state and planned enhancements.
 
@@ -17,13 +18,14 @@ client/
 │   ├── components/          # UI components
 │   │   ├── PromptInput.svelte
 │   │   ├── Preview.svelte
-│   │   └── ModeSelector.svelte (planned)
-│   ├── lib/                # Core logic
-│   │   ├── flows.js        # Main flows
-│   │   ├── api.js          # API client
-│   │   └── stores/         # State management
-│   └── styles/             # Global styles
-└── tests/                  # Test suites
+│   │   ├── ModeIndicator.svelte
+│   │   └── ModeSwitcher.svelte
+│   ├── stores/              # State management
+│   ├── lib/                 # Core logic
+│   │   ├── flows.js          # Main flows
+│   │   └── api.js            # API client
+│   └── styles/              # Global styles
+└── tests/                 # Test suites
 ```
 
 ### Key Components
@@ -44,9 +46,11 @@ client/
    - Result visualization
    - Dynamic updates
    - Error handling
-   - Style injection
+   - Style injection (previewHelper.js)
 
-4. **ModeSelector.svelte** (planned)
+4. **ModeIndicator.svelte**
+
+5. **ModeSwitcher.svelte**
    - Mode switching interface
    - Selection persistence
    - View coordination
@@ -86,10 +90,10 @@ User Input → Validation → Generation Request → Preview
 
 ### Core Endpoints
 
-- `/health` - Backend status
 - `/prompt` - Generation requests
 - `/preview` - Content preview
 - `/persist` - Content storage
+- `/health` - Backend status
 
 ### Implementation Details
 
@@ -155,31 +159,28 @@ User Input → Validation → Generation Request → Preview
 
 ## Technical Stack
 
-- **Framework**: Svelte
-- **Build**: Vite
+- **Framework**: Svelte 5.x
+- **Build**: Vite 6.x
 - **State**: Svelte stores
 - **API**: Fetch with retry
-- **Styling**: Scoped CSS
-- **Testing**: Vitest/Playwright
+- **Styling**: Scoped CSS + plain CSS and app.css
+- **Testing**: Vitest 3.x/Playwright
 
 ## Development Guidelines
 
 ### Code Organization
-
 - Component-focused structure
 - Clear state management
 - Consistent naming
 - Documentation inline
 
 ### Styling Principles
-
 - System fonts
 - Consistent spacing
 - Clear hierarchy
 - Responsive design
 
 ### Best Practices
-
 - Keep components focused
 - State management clarity
 - Error handling consistency
@@ -189,4 +190,4 @@ User Input → Validation → Generation Request → Preview
 ---
 
 This document is actively maintained.
-Last Updated: 2025-11-08
+Last Updated: 2025-11-09
