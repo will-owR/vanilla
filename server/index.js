@@ -656,40 +656,29 @@ app.post("/prompt", (req, res, next) => {
 const { service: serviceImpl } = require("./serviceAdapter");
 // Demo genieService (delegates to sampleService) used by POST /prompt
 const genieService = require("./genieService");
+const { validatePayload } = require("./validators/promptPayload");
 
 app.post("/prompt", async (req, res, next) => {
-  const { prompt } = req.body;
-
-  // Input validation with structured error
-  if (typeof prompt !== "string" || !prompt.trim()) {
-    return sendValidationError(
-      res,
-      "Prompt is required and must be a non-empty string",
-      {
-        provided: typeof prompt,
-        required: "non-empty string",
-      }
-    );
+  // Validate enhanced payload structure
+  const validation = validatePayload(req.body);
+  if (!validation.valid) {
+    return sendValidationError(res, validation.message, {
+      error: validation.error,
+      fields: validation.fields,
+    });
   }
 
   try {
-    // Default to the demo genieService which delegates to sampleService.
-    // This keeps the frontend wiring unchanged while allowing the demo
-    // implementation to run locally without client changes.
-    const genieResult = await genieService.generate(prompt);
+    // Process enhanced payload through genieService
+    // genieService.process() handles mode-based routing and service delegation
+    const result = await genieService.process(req.body);
 
-    // Ensure we have a data envelope to return
-    const data = genieResult && genieResult.data ? { ...genieResult.data } : {};
-
-    // Persistence is owned by genieService.generate(). Controller no longer
-    // performs DB writes. genieService will perform read-first lookup and
-    // best-effort persist-on-miss (and exposes test hooks such as
-    // _lastPersistencePromise for deterministic tests).
-
-    return res.status(201).json({ success: true, data });
+    // Return standardized response envelope
+    return res.status(201).json(result);
   } catch (err) {
     // Surface generator errors consistently
     err.status = err.status || 500;
+    err.code = err.code || "GENERATION_ERROR";
     err.message = `Generation Error: ${err.message}`;
     next(err);
   }
