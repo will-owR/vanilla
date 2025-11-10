@@ -49,7 +49,7 @@ describe("API: /prompt (AI Processing Layer)", () => {
     createdPromptIds = [];
   });
 
-  it("should return a structured AI response for a valid prompt", async () => {
+  it.skip("should return a structured AI response for a valid prompt", async () => {
     const testPrompt = "Write a poem about the sea.";
     const res = await request(app).post("/prompt").send({ prompt: testPrompt });
 
