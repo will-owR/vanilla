@@ -10,7 +10,7 @@
  * @param {Object} body - Request body
  * @returns {Object} Validation result: { valid: boolean, error?: string, message?: string, fields?: string[] }
  */
-export function validatePayload(body) {
+function validatePayload(body) {
   if (!body?.mode || typeof body.prompt !== "string") {
     return {
       valid: false,
@@ -74,4 +74,8 @@ function validateEbookPayload(body) {
   return { valid: true };
 }
 
-export { validateDemoPayload, validateEbookPayload };
+module.exports = {
+  validatePayload,
+  validateDemoPayload,
+  validateEbookPayload,
+};
