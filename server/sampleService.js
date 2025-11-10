@@ -69,10 +69,38 @@ async function generateFromPrompt(envelopeReq, opts = {}) {
   return generate(envelopeReq, opts);
 }
 
+/**
+ * Handle enhanced payload for basic/default mode
+ * Accepts flattened payload structure and generates content
+ * @param {Object} payload - { mode, prompt, metadata, options }
+ * @returns {Promise<Object>} Handler result { pages, metadata, actions }
+ */
+async function handle(payload) {
+  const { prompt, metadata = {}, options = {} } = payload;
+
+  // Use existing generation logic
+  const content = buildContent(prompt, options);
+  const copies = makeCopies(content, options.copies || 3);
+  const pages = buildPagesFromCopies(copies);
+
+  return {
+    pages,
+    metadata: {
+      ...metadata,
+      model: "sample-v1",
+    },
+    actions: {
+      can_export: true,
+      can_preview: true,
+    },
+  };
+}
+
 module.exports = {
   buildContent,
   makeCopies,
   buildPagesFromCopies,
   generate,
   generateFromPrompt,
+  handle,
 };

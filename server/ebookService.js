@@ -1,21 +1,23 @@
-// demoService - richer multi-page demo generator (iterative step above sampleService)
-// Minimal scaffold: implements the same generateFromPrompt(prompt) async contract
-// used by genieService. Returns { content, copies, metadata } where copies
-// represent pages.
+/**
+ * ebookService - ebook generation service
+ *
+ * Provides enhanced ebook generation with support for structured metadata
+ * Implements the same handler contract as demoService for consistency
+ */
 
 function buildContent(prompt) {
-  const title = `Demo: ${String(prompt || "")
+  const title = `Ebook: ${String(prompt || "")
     .split(/\s+/)
     .slice(0, 6)
     .join(" ")}`;
-  const body = `Demo generated content for prompt: ${prompt}`;
-  return { title, body, layout: "ebook-mock" };
+  const body = `Ebook generated content for prompt: ${prompt}`;
+  return { title, body, layout: "ebook-structured" };
 }
 
 function makePages(content, n = 3) {
   return Array.from({ length: n }).map((_, i) => ({
-    title: `${content.title} — Part ${i + 1}`,
-    body: `${content.body}\n\nPage ${i + 1} content...`,
+    title: `${content.title} — Chapter ${i + 1}`,
+    body: `${content.body}\n\nChapter ${i + 1} content...`,
     layout: content.layout,
   }));
 }
@@ -23,27 +25,27 @@ function makePages(content, n = 3) {
 async function generateFromPrompt(prompt) {
   const content = buildContent(prompt);
   const copies = makePages(content, 3);
-  const metadata = { model: "demo-1", pages: copies.length };
+  const metadata = { model: "ebook-v1", pages: copies.length };
   return { content, copies, metadata };
 }
 
 /**
- * Handle enhanced payload for demo mode
- * Validates required metadata and generates demo content
+ * Handle enhanced payload for ebook mode
+ * Validates required metadata and generates ebook content
  * @param {Object} payload - { mode, prompt, metadata, options }
  * @returns {Promise<Object>} Handler result { pages, metadata, actions }
  */
 async function handle(payload) {
   const { prompt, metadata = {}, options = {} } = payload;
 
-  // Generate demo content using existing logic
+  // Generate ebook content using existing logic
   const content = buildContent(prompt);
   const numPages = parseInt(metadata.pages) || 3;
   const pages = makePages(content, numPages);
 
   // Convert page objects to standardized format with blocks
   const standardizedPages = pages.map((page, idx) => ({
-    id: `p${idx + 1}`,
+    id: `chapter${idx + 1}`,
     title: page.title,
     blocks: [
       {
@@ -57,7 +59,7 @@ async function handle(payload) {
     pages: standardizedPages,
     metadata: {
       ...metadata,
-      model: "demo-1",
+      model: "ebook-v1",
     },
     actions: {
       can_export: true,
