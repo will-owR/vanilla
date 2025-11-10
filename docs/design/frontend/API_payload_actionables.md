@@ -162,21 +162,18 @@ export async function handle(payload) {
 ## Implementation Order
 
 1. Create Validation Layer:
-
    - [ ] Create `promptPayload.js` validator
    - [ ] Implement base payload validation
    - [ ] Add mode-specific validation rules
    - [ ] Add validation tests
 
 2. Update Endpoint Handler:
-
    - [ ] Add validation to `/prompt` endpoint
    - [ ] Implement error handling wrapper
    - [ ] Add error response formatting
    - [ ] Update endpoint tests
 
 3. Enhance Service Layer:
-
    - [ ] Update `genieService.process`
    - [ ] Add mode-based routing
    - [ ] Implement standard response envelope
@@ -229,14 +226,12 @@ export async function handle(payload) {
 ## Implementation Guidelines
 
 1. Error Handling:
-
    - All errors must use standard format
    - Include specific error codes
    - Provide clear error messages
    - Add field details for validation errors
 
 2. Response Format:
-
    - Use consistent `out_envelope` structure
    - Include complete metadata
    - Set appropriate action flags
