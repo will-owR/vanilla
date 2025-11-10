@@ -1,7 +1,7 @@
 ---
 title: API Payload Implementation (frontend + backend)
 date: 2025-11-09
-status: draft
+status: active
 ---
 
 ## Purpose
