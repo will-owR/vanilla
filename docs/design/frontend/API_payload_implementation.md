@@ -1,37 +1,117 @@
 ---
-title: API Payload Implementation (frontend + backend)
-date: 2025-11-09
+title: Enhanced API Payload Implementation (update)
+date: 2025-11-10
 status: active
 ---
 
 ## Purpose
 
-Prescribe the exact, minimal implementation steps to switch the system to the canonical prompt payload. This document intentionally omits any legacy shims — the server will enforce the new contract.
+Define the enhanced prompt payload structure and implementation steps for extending the existing `/prompt` endpoint to support metadata-rich requests across different generation modes.
 
-## Canonical payload
+## Current to Enhanced Payload
+
+The system evolves the current simple payload to a richer structure supporting multiple modes and metadata:
 
 POST /prompt
 
 Request JSON:
 
 ```json
+// Enhanced payload structure
 {
-  "mode": "basic" | "demo" | "ebook",
-  "prompt": "...",
-  "metadata": { "title"?: "...", "author"?: "...", "pages"?: 123 },
-  "options"?: { /* future flags */ }
+  "mode": "basic" | "demo" | "ebook",  // Generation context
+  "prompt": "...",                     // Core prompt content
+  "metadata": {                        // Optional structured data
+    "title"?: "...",
+    "author"?: "...",
+    "pages"?: 123
+  },
+  "options"?: {                        // Future configuration
+    // Extension point for future features
+  }
 }
 ```
 
-## Frontend changes (exact files & example)
+## Implementation Steps
 
-- File: `client/src/lib/api.js`
-- Replace existing `submitPrompt` behaviour so it:
-  1. Reads `promptStore` and `modeStore` (Svelte stores).
-  2. Assembles the canonical payload (mode, prompt, metadata, options).
-  3. POSTs JSON to `/prompt` and returns/parses JSON response.
+### 1. Backend Enhancement (`/prompt` Endpoint)
 
-Example (drop-in function):
+Update the endpoint handler in `server/index.js`; requirements for `/prompt` handler:
+
+```javascript
+app.post("/prompt", async (req, res) => {
+
+  // payload-specific validation
+  const body = req.body || {};
+  if (!body.mode || typeof body.prompt !== "string") {
+    return res.status(400).json({
+      error: "INVALID_PAYLOAD",
+      message: "payload must include mode and prompt",
+    });
+  }
+
+  // Mode-specific validation
+  if (body.mode === "demo") {
+    const md = body.metadata || {};
+    if (!md.title || !md.author || !md.pages) {
+      return res.status(400).json({
+        error: "MISSING_METADATA",
+        fields: ["title", "author", "pages"],
+      });
+    }
+  }
+
+  const result = await genieService.process(body);
+  return res.json(result);
+});
+```
+
+### 2. Service Layer Updates
+
+Update `genieService.js` to handle the enhanced payload:
+
+```javascript
+// genieService.js
+import sampleService from "./sampleService.js";
+import demoService from "./demoService.js";
+import ebookService from "./ebookService.js";
+
+export async function process(payload) {
+  switch (payload.mode) {
+    case "demo":
+      return demoService.handle(payload);
+    case "ebook":
+      return ebookService.handle(payload);
+    case "basic":
+    default:
+      return sampleService.handle(payload);
+  }
+}
+```
+
+Update service handlers to work with full payload:
+
+```javascript
+// sampleService.js
+export async function handle(payload) {
+  // Access full payload capabilities
+  const { prompt, metadata, options } = payload;
+
+  // Core generation logic
+  const result = await generateContent(prompt);
+
+  // Enhance with metadata if provided
+  if (metadata) {
+    result.metadata = { ...result.metadata, ...metadata };
+  }
+
+  return result;
+}
+```
+
+### 3. Frontend Integration
+
+Update `client/src/lib/api.js` to assemble the enhanced payload:
 
 ```javascript
 import { get } from "svelte/store";
@@ -49,7 +129,7 @@ export async function submitPrompt() {
     options: ps.options || {},
   };
 
-  // client-side validation: demo requires title/author/pages
+  // Client-side validation for demo mode
   if (payload.mode === "demo") {
     const md = payload.metadata || {};
     if (!md.title || !md.author || !md.pages) {
@@ -72,106 +152,64 @@ export async function submitPrompt() {
 }
 ```
 
-## Backend changes (exact files & example)
+## Implementation Order
 
-- File: `server/index.js` (or the existing prompt handler location)
-- File: `server/genieService.js`
+1. Backend Updates
+   - Enhance `/prompt` endpoint handler
+   - Update `genieService.process`
+   - Update service handlers
+   - Verify all services handle the enhanced payload
 
-Requirements for `/prompt` handler:
+2. Frontend Updates
+   - Update `submitPrompt` implementation
+   - Update store interactions
+   - Add client-side validation
 
-1. Accept only the canonical payload. If `mode` or `prompt` missing => return 400 with JSON error.
-2. Validate per-mode requirements server-side (demo: metadata.title, author, pages).
-3. Call `genieService.process(payload)` and return its result as JSON.
+## Response Schema
 
-Example handler (pseudocode to paste into `server/index.js`):
+All responses follow this structure:
 
-```javascript
-app.post("/prompt", async (req, res) => {
-  const body = req.body || {};
-  if (!body.mode || typeof body.prompt !== "string") {
-    return res.status(400).json({
-      error: "INVALID_PAYLOAD",
-      message: "payload must include mode and prompt",
-    });
-  }
-
-  if (body.mode === "demo") {
-    const md = body.metadata || {};
-    if (!md.title || !md.author || !md.pages) {
-      return res.status(400).json({
-        error: "MISSING_METADATA",
-        fields: ["title", "author", "pages"],
-      });
-    }
-  }
-
-  const result = await genieService.process(body);
-  return res.json(result);
-});
-```
-
-GenieService routing (replace or update `server/genieService.js`):
-
-```javascript
-import sampleService from "./sampleService.js";
-import demoService from "./demoService.js"; // may be stub
-import ebookService from "./ebookService.js"; // may be stub
-
-// NOTE: sampleService is updated to accept the full payload (mode,prompt,metadata,options).
-export async function process(payload) {
-  switch (payload.mode) {
-    case "demo":
-      return demoService.handle(payload);
-    case "ebook":
-      return ebookService.handle(payload);
-    case "basic":
-    default:
-      // sampleService now accepts the canonical payload
-      return sampleService.handle(payload);
+```json
+{
+  "out_envelope": {
+    "pages": [], // Generated content pages
+    "metadata": {}, // Generation metadata
+    "actions": {} // Available post-generation actions
   }
 }
 ```
 
-Update `sampleService` signature
+## Error Responses
 
-The existing `sampleService` currently operates on a prompt string. Update it to accept the canonical payload object and extract the prompt internally. This keeps routing uniform and future-proofs the code.
-
-Example change (in `server/sampleService.js`):
-
-```javascript
-// Before: export async function handle(prompt) { ... }
-
-export async function handle(payload) {
-  // payload: { mode, prompt, metadata, options }
-  const prompt = typeof payload === "string" ? payload : payload.prompt;
-  // existing logic continues using `prompt` variable
-  // if needed, use payload.metadata/options for enhanced flows
+```json
+{
+  "error": "ERROR_CODE",
+  "message": "Human readable message",
+  "fields"?: ["field1", "field2"]  // For validation errors
 }
 ```
 
-Notes: demoService and ebookService may be simple stubs that mirror sampleService return shape until implemented.
+Common error codes:
 
-## Tests to add (exact targets)
+- `INVALID_PAYLOAD`: Missing required fields
+- `MISSING_METADATA`: Missing mode-specific metadata
+- `GENERATION_ERROR`: Content generation failed
 
-- `server/__tests__/prompt.handler.test.mjs`: send canonical payloads for `basic` and `demo`; assert HTTP 200 and correct call into genieService (use sinon/jest spies or mock).
-- `server/__tests__/genie.process.test.mjs`: call `genieService.process` with each mode and assert it calls the expected service handler.
-- `client/__tests__/api.submitPrompt.test.js`: mock fetch; ensure submitPrompt sends assembled payload and rejects on missing demo metadata.
+## Acceptance Criteria
 
-## Deployment order (strict)
+1. Enhanced Payload
+   - Endpoint accepts and validates the enhanced payload structure
+   - Each mode correctly validates its required metadata
+   - Options object is preserved for future use
 
-1. Push frontend change to branch and run client unit tests. Do not enable demo/ebook in UI unless services exist.
-2. Push backend changes (prompt handler + genieService). Run server unit tests.
-3. Deploy backend, then frontend (backend must accept canonical payload before frontend sends it in production).
+2. Service Integration
+   - Services receive and handle the complete payload
+   - Metadata flows through to the response when provided
+   - Mode routing works correctly
 
-## Acceptance criteria
+3. Error Handling
+   - Invalid payloads return 400 with clear error messages
+   - Missing metadata returns specific validation errors
+   - Successful responses match the documented schema
 
-- Pressing Generate in `basic` mode results in `sampleService.handle` being invoked and a valid response rendered.
-- Server rejects malformed requests (missing mode or prompt) with 400.
-- Demo/ebook flows route to the correct services once those services are implemented.
-
-## Notes
-
-- No legacy mapping or gating is performed in this plan; clients and server move directly to the canonical contract.
-- Keep client-side validation to prevent user errors before request reaches server.
-
-Last updated: 2025-11-09
+Last updated: 2025-11-10
