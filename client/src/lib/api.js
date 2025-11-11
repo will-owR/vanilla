@@ -1,4 +1,7 @@
 import Logger from "./logger";
+import { get } from "svelte/store";
+import { promptStore } from "../stores/promptStore.js";
+import { modeStore } from "../stores/modeStore.js";
 
 // API utilities with retry logic
 const DEFAULT_CONFIG = {
@@ -109,34 +112,62 @@ async function fetchWithRetry(url, options = {}) {
 }
 
 // API endpoints
-export async function submitPrompt(prompt) {
-  Logger.debug("Submitting prompt", { prompt });
+export async function submitPrompt(payloadOrPrompt) {
+  Logger.debug("Submitting prompt", { payloadOrPrompt });
 
   try {
+    // Build canonical payload from argument or stores
+    const ps = get(promptStore);
+    const ms = get(modeStore);
+
+    const payload =
+      typeof payloadOrPrompt === "object" && payloadOrPrompt !== null
+        ? payloadOrPrompt
+        : {
+            mode: (ms && ms.current) || (ps && ps.mode) || "basic",
+            prompt:
+              typeof payloadOrPrompt === "string"
+                ? payloadOrPrompt
+                : (ps && ps.prompt) || "",
+            metadata: (ps && ps.metadata) || {},
+            options: (ps && ps.options) || {},
+          };
+
+    Logger.debug("submitPrompt: sending payload", { payload });
+
     const response = await fetchWithRetry("/prompt", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify(payload),
       // Use default retry behaviour; do not retry on 401 so auth errors
       // are surfaced to the UI immediately.
     });
 
+    const json = await response.json().catch(() => null);
+
     if (!response.ok) {
-      const error = new Error(`Error: ${response.status}`);
-      Logger.error("Prompt submission failed", {
-        error,
-        status: response.status,
-      });
-      throw error;
+      const code = json?.error || "UNKNOWN_ERROR";
+      const message = json?.message || `HTTP ${response.status}`;
+      const fields = json?.fields;
+      Logger.error("Prompt submission failed", { code, message, fields });
+      throw { type: "server", code, message, fields };
     }
 
-    const data = await response.json();
+    // Expect canonical envelope only
+    const envelope = json?.out_envelope;
+    if (!envelope || !Array.isArray(envelope.pages)) {
+      Logger.error("Invalid server response shape", { envelope });
+      throw {
+        type: "server",
+        code: "INVALID_RESPONSE",
+        message: "Server response missing canonical out_envelope.pages",
+      };
+    }
+
     Logger.info("Prompt submitted successfully", {
-      promptLength: prompt.length,
+      pages: (envelope.pages || []).length,
     });
-    // Normalize shape: prefer the inner `data` envelope when present so
-    // callers receive { content, metadata, promptId, resultId } directly.
-    return data && data.data ? data.data : data;
+    return envelope;
   } catch (error) {
     Logger.error("Prompt submission error", { error });
     throw error;

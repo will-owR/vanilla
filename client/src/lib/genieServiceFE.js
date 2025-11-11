@@ -18,12 +18,22 @@ export async function generate(prompt, opts = {}) {
   }
 
   // Default: delegate to server via submitPrompt and normalize the shape.
-  const resp = await submitPrompt(prompt);
-  // submitPrompt returns either { data: { content, ... } } or { content }
-  const data = resp && resp.data ? resp.data : resp;
-  const content = (data && data.content) || data || null;
-  const copies = (data && data.copies) || [];
-  return { content, copies, meta: { source: "server" } };
+  const envelope = await submitPrompt(prompt);
+  // envelope is canonical: { pages, metadata, actions }
+  const pages = envelope?.pages || [];
+  const toContent = (page) => {
+    const body = (page.blocks || [])
+      .map((b) => (b && b.content ? b.content : ""))
+      .join("\n\n");
+    return { title: page.title, body: body, layout: page.layout || null };
+  };
+  const content = pages.length ? toContent(pages[0]) : null;
+  const copies = pages.map((p) => toContent(p));
+  return {
+    content,
+    copies,
+    meta: { source: "server", metadata: envelope.metadata },
+  };
 }
 
 export async function preview(content, opts = {}) {
