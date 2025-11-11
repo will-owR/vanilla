@@ -36,14 +36,11 @@ Quick decision: make the frontend doc the primary implementation guide for the U
   - `client/src/App.svelte`, `PromptInput.svelte` (call sites)
   - `client/src/components/MetadataSection.svelte` (verify validation UX)
 
-2. Frontend: defensive validation & parsing
+2. Frontend: validation & parsing
 
-- Client-side validation should mirror server rules (fail fast, show errors). Keep server as the source-of-truth for checks.
-- Frontend should defensively parse server responses, accepting either:
-  - Legacy shape: `{ success: true, data: { content, copies, metadata, ... } }`
-  - Canonical shape: `{ out_envelope: { pages, metadata, actions } }`
-- For server errors, parse both shapes:
-  - Top-level `error: "INVALID_PAYLOAD"` or nested `error: { code: "VALIDATION_ERROR", ... }`.
+- Client-side validation should mirror server rules (fail fast, show errors). The server is the source-of-truth for server-side checks and will enforce the canonical contract.
+- The frontend must parse the canonical server response shape only: `{ out_envelope: { pages, metadata, actions } }`.
+- For server errors, the frontend must parse the canonical validation error shape: `{ error: "ERROR_CODE", message: "Human readable message", fields?: ["field1", ...] }` and show appropriate user messages.
 
 3. Backend minimal requirements (must be implemented before/with frontend PR):
 
@@ -63,9 +60,9 @@ Quick decision: make the frontend doc the primary implementation guide for the U
   - (Optional) Error handler change clarifying `error` shape.
 - Plan: merge small backend PRs first, then frontend updates, then full integration test.
 
-## Frontend code examples: assemble payload & robust parsing
+## Frontend code examples: assemble payload & canonical parsing
 
-- Minimal `submitPrompt()` (defensive and backwards compatible):
+-- Minimal `submitPrompt()` (canonical parsing only):
 
 ```javascript
 // client/src/lib/api.js
@@ -120,49 +117,56 @@ export async function submitPrompt(payloadOrPrompt) {
     body: JSON.stringify(payload),
   });
 
-  // Parse server response robustly
+  // Parse the canonical server response
   const json = await res.json().catch(() => null);
 
-  // error shapes: legacy string or nested object
   if (!res.ok) {
-    const code = json?.error || json?.error?.code || "UNKNOWN_ERROR";
-    const message =
-      json?.message || json?.error?.message || `HTTP ${res.status}`;
-    const fields = json?.fields || json?.error?.fields || undefined;
+    const code = json?.error || "UNKNOWN_ERROR";
+    const message = json?.message || `HTTP ${res.status}`;
+    const fields = json?.fields || undefined;
     throw { type: "server", code, message, fields };
   }
 
-  // success: canonical or legacy shapes
-  const envelope = json?.out_envelope || json?.data || json;
-  // Envelope may contain pages or content/copies; normalize to pages
-  const pages =
-    envelope?.pages ||
-    (envelope?.content
-      ? [
-          {
-            title: envelope.content.title,
-            blocks: [{ type: "text", content: envelope.content.body }],
-          },
-        ]
-      : envelope?.copies || []);
+  // Expect canonical envelope only
+  const envelope = json?.out_envelope;
+  if (!envelope || !Array.isArray(envelope.pages)) {
+    throw {
+      type: "server",
+      code: "INVALID_RESPONSE",
+      message: "Server response missing canonical out_envelope.pages",
+    };
+  }
 
-  const metadata = envelope?.metadata || envelope?.meta || {};
-  // Some services use generatedAt; support both
-  metadata.generated_at =
-    metadata.generated_at || metadata.generatedAt || new Date().toISOString();
+  const pages = envelope.pages;
+  const metadata = envelope.metadata || {};
 
-  return { pages, metadata, actions: envelope?.actions || {} };
+  // Ensure canonical metadata fields exist
+  if (!metadata.generated_at || !metadata.mode) {
+    throw {
+      type: "server",
+      code: "INVALID_RESPONSE",
+      message:
+        "Server response metadata missing required fields: generated_at and mode",
+    };
+  }
+
+  return { pages, metadata, actions: envelope.actions || {} };
 }
 ```
 
 ## Server error shape expectations (explicit, small section) — frontend dev checklist
 
-Front-end code should be tolerant to either:
+Front-end code must parse the canonical server error shape only:
 
-- Legacy error: `{ error: "INVALID_PAYLOAD", message: "payload missing" }`, or
-- Full error object: `{ error: { message: "...", code: "VALIDATION_ERROR", status: 400, fields: ['title'] } }`.
+```json
+{
+  "error": "ERROR_CODE",
+  "message": "Human readable message",
+  "fields": ["field1"]
+}
+```
 
-Prefer to negotiate a consistent server shape early (recommended: top-level `error` string with `fields` and `requestId` where applicable) — update `server/utils/errorHandler.js` to include the validator's code as `error` or `error.code`.
+Update `server/utils/errorHandler.js` to ensure validation errors return the validator-specific code as the top-level `error` string and `fields` (for missing metadata) under `fields`.
 
 ## Server expectations for the canonical envelope and metadata
 
@@ -215,20 +219,21 @@ curl -X POST http://localhost:3000/prompt -H "Content-Type: application/json" -d
 1. Backend validation: ensure `server/validators/promptPayload.js` is fully implemented and covered by unit tests.
 2. Backend `genieService.process` update: return canonical `out_envelope` including `generated_at`, `mode`, and optional `request_id`.
 3. Endpoint & error handler: modify `server/index.js` to include `request_id` and update `sendValidationError` to return validator `error` code top-level or documented nested object; add tests.
-4. Frontend `submitPrompt()` update and unit tests (client), along with defensive parsing.
+4. Frontend `submitPrompt()` update and unit tests (client).
 5. UI components update to handle new `out_envelope` shape and update tests.
 6. Integration tests end-to-end and docs updates (OpenAPI or README sections).
 
 ## Implementation guidance / risk mitigation
 
 - Keep changes small and verifiable. Merge backend changes that establish the API contract first — so frontend work uses stable interface.
-- Use defensive parsing in the frontend for the transition: accept both legacy and canonical shapes.
+  -- Do not implement fallbacks for legacy shapes. The frontend must support the canonical contract only and should provide clear errors if the server returns a non-canonical shape.
 - Add tests quickly for invalid and valid `demo` mode payloads to find integration gaps early.
 - If time permits, adopt schema validation (Zod/Joi) for `promptPayload`, and optionally export the schema for the frontend.
 
 ## Appendix — Quick snippets
 
-- Defensive payload building: see `submitPrompt()` snippet above.
+-- Payload building: see `submitPrompt()` snippet above (canonical payload expected).
+
 - Error parsing snippet (from `submitPrompt`) — keep this in `client/src/lib/api.js` for robustness.
 
 ---
