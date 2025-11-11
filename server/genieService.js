@@ -541,6 +541,51 @@ const genieService = {
   saveContentToFile(content) {
     return saveContentToFile(content);
   },
+
+  /**
+   * Process enhanced payload with mode-based routing
+   * Routes to appropriate service handler based on mode
+   * @param {Object} payload - Enhanced payload { mode, prompt, metadata, options }
+   * @returns {Promise<Object>} Standardized response with out_envelope
+   */
+  async process(payload) {
+    const { mode, prompt, metadata = {}, options = {} } = payload;
+
+    try {
+      let result;
+
+      // Mode-based routing to appropriate service handler
+      switch (mode) {
+        case "demo":
+          const demoService = require("./demoService");
+          result = await demoService.handle(payload);
+          break;
+        case "ebook":
+          const ebookService = require("./ebookService");
+          result = await ebookService.handle(payload);
+          break;
+        case "basic":
+        default:
+          result = await sampleService.handle(payload);
+      }
+
+      // Return standardized response envelope
+      return {
+        out_envelope: {
+          pages: result.pages || [],
+          metadata: {
+            ...metadata,
+            ...result.metadata,
+            generated_at: new Date().toISOString(),
+            mode: mode,
+          },
+          actions: result.actions || {},
+        },
+      };
+    } catch (error) {
+      throw new Error(`Generation failed: ${error.message}`);
+    }
+  },
 };
 
 module.exports = genieService;
