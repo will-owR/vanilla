@@ -156,6 +156,36 @@ Successful Response (HTTP 201):
 
 This separation avoids the orchestrator becoming a 'mish-mash' of business logic and keeps single responsibility across modules.
 
+## Root cause analysis: Missing 'smarts' in `sampleService` and hardcoded behavior in `genieService`
+
+During the recent re-alignment to the canonical payload, we discovered a systemic issue that explains the end-to-end failures: the runtime 'smarts' for interpreting a prompt as a book (title derivation, page count decision, page-by-page generation) currently live, at least in part, inside `genieService`. This locks the orchestrator to generation details and couples orchestration to business logic.
+
+Why this matters:
+
+- When `genieService` contains generation rules that `sampleService` should own, any changes to the prompt contract, or the way we expect services to return canonical shapes, can break end-to-end flows because the logic is in the wrong place.
+- The new canonical payload expects `sampleService` to interpret `prompt` and return `{ pages, metadata, actions }`, but if `genieService` is still enforcing or assuming specific shapes (or performing splits and title derivation), the mapping and normalization will diverge and tests will fail.
+
+Consequences:
+
+- End-to-end failures in basic mode — preview content not produced — occur because the frontend and tests now expect canonical envelopes from `genieService` (via `sampleService`). When `genieService` contains the generation logic, `sampleService` may return an unexpected shape or little more than a passthrough object, and the normalization step no longer aligns correctly.
+- Hardcoded behavior in `genieService` prevents `sampleService` from being the single source of truth for generation semantics.
+
+What to change (summary):
+
+- Move all content generation logic (title derivation, page-count logic, page-level content generation, and page title assembly) into the service implementations themselves (`sampleService`, `demoService`, `ebookService`).
+- `genieService` MUST be reduced to orchestration only: pick the right handler, normalize its return shape, and augment metadata (added `generated_at` and `mode`). No generation logic should remain in the orchestrator.
+- Ensure `sampleService.handle(payload)` returns the canonical shape with explicit `pages` each containing `id`, `title`, and `blocks`.
+
+Small checklist to resolve the missing link:
+
+1. Audit `genieService` for generation logic (title splits, content chunking, page count defaults) and move those into `sampleService`.
+2. Ensure `sampleService.handle` implements the contract of mapping `prompt` -> `pages` (with title + body) and `metadata` -> `model`, `pages` count.
+3. Add unit tests that assert `sampleService.handle` returns `{ pages, metadata, actions }` for given prompts and options. Use multiple payload combinations (default pages, override pages, custom options).
+4. Add `genieService.process` unit tests that assert only routing and normalization behavior; it should not manipulate page content nor derive titles.
+5. Update integration tests calling `/prompt` to verify the final `out_envelope` and page content flows through to the preview renderer.
+
+By enforcing this separation, the E2E test suite will be able to mock `sampleService` outputs and assert coupling only through the canonical envelope — eliminating the previous misalignment caused by generation logic inside the orchestrator.
+
 ## Suggestion: `sampleService.handle` contract and implementation pattern
 
 `sampleService.handle(payload)` should be the only place that interprets the prompt as content and decides how to generate pages for the 'basic' mode. We recommend a simple, documented contract:
