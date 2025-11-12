@@ -581,9 +581,9 @@ setInterval(cleanupExpiredJobs, 60 * 60 * 1000);
 
 ### **Phase 2: Result Persistence** ✅ TODO
 
-- [ ] Modify `genieService.process()` to persist result
-- [ ] Return `resultId` in response
-- [ ] Test: `POST /prompt` persists to results table
+- [x] Modify `genieService.process()` to persist result
+- [x] Return `resultId` in response
+- [x] Test: `POST /prompt` persists to results table
 
 ### **Phase 3: Export Queue** ✅ TODO
 
