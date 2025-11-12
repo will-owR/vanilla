@@ -86,8 +86,11 @@ async function handle(payload) {
   return {
     pages,
     metadata: {
-      ...metadata,
+      // NOTE: Response metadata MUST only contain service-generated fields.
+      // Request metadata is for validation input only and must NOT be reflected in response.
+      // This preserves the semantic contract: request metadata != response metadata
       model: "sample-v1",
+      pages_count: pages.length,
     },
     actions: {
       can_export: true,

@@ -570,11 +570,15 @@ const genieService = {
       }
 
       // Return standardized response envelope
+      // NOTE: Response metadata MUST contain ONLY service-generated fields + standard fields.
+      // Request metadata (from payload.metadata) MUST NOT be included in response.
+      // This enforces the semantic contract between request and response structures.
       return {
         out_envelope: {
           pages: result.pages || [],
           metadata: {
-            ...metadata,
+            // NOTE: result.metadata contains service-generated fields only (model, pages_count, etc.)
+            // Do NOT spread payload.metadata here - request data must not leak into response
             ...result.metadata,
             generated_at: new Date().toISOString(),
             mode: mode,
