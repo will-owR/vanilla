@@ -71,28 +71,57 @@ async function generateFromPrompt(envelopeReq, opts = {}) {
 
 /**
  * Handle enhanced payload for basic/default mode
- * Accepts flattened payload structure and generates content
+ * Creates a multi-page ebook from a single prompt
+ *
+ * Business Logic:
+ * 1. Derive title from prompt (first 6 words)
+ * 2. Use entire prompt as body content
+ * 3. Create 3 pages (ad-hoc; can be parameterized via options.pages_count)
+ * 4. Each page: { id, title, blocks: [{ type: "text", content: body }] }
+ * 5. Express persistence intent via actions.persist_prompt
+ *
  * @param {Object} payload - { mode, prompt, metadata, options }
- * @returns {Promise<Object>} Handler result { pages, metadata, actions }
+ * @returns {Promise<Object>} Canonical service result { pages, metadata, actions }
  */
 async function handle(payload) {
   const { prompt, metadata = {}, options = {} } = payload;
 
-  // Use existing generation logic
-  const content = buildContent(prompt, options);
-  const copies = makeCopies(content, options.copies || 3);
-  const pages = buildPagesFromCopies(copies);
+  // 1. Derive title from prompt
+  // Take first 6 words, add ellipsis if prompt is longer
+  const titleWords = prompt.split(/\s+/).slice(0, 6);
+  const title = titleWords.join(" ");
+  const isTruncated = prompt.split(/\s+/).length > 6;
+  const finalTitle = title + (isTruncated ? "..." : "");
 
+  // 2. Use prompt as body
+  const body = prompt;
+
+  // 3. Create pages
+  // Default to 3 pages (ad-hoc), can be overridden via options.pages_count
+  const numPages = parseInt(options.pages_count || 3, 10);
+  const pages = Array.from({ length: numPages }).map((_, idx) => ({
+    id: `p${idx + 1}`,
+    title: `${finalTitle} — Page ${idx + 1}`,
+    blocks: [
+      {
+        type: "text",
+        content: body,
+      },
+    ],
+  }));
+
+  // 4. Return canonical shape with actions for persistence
   return {
     pages,
     metadata: {
-      // NOTE: Response metadata MUST only contain service-generated fields.
-      // Request metadata is for validation input only and must NOT be reflected in response.
-      // This preserves the semantic contract: request metadata != response metadata
+      // Service-generated fields ONLY (no request metadata)
       model: "sample-v1",
       pages_count: pages.length,
+      source: "prompt",
     },
     actions: {
+      // Signal to orchestrator: persist the prompt to file
+      persist_prompt: true,
       can_export: true,
       can_preview: true,
     },

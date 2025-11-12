@@ -548,44 +548,89 @@ const genieService = {
    * @param {Object} payload - Enhanced payload { mode, prompt, metadata, options }
    * @returns {Promise<Object>} Standardized response with out_envelope
    */
+  /**
+   * Process enhanced payload — Orchestrator
+   *
+   * Responsibilities:
+   * 1. Route by mode to appropriate service handler
+   * 2. Build canonical envelope with enriched metadata
+   * 3. Process actions from service (e.g., persist_prompt)
+   * 4. Coordinate with external concerns (persistence, etc.)
+   *
+   * @param {Object} payload - { mode, prompt, metadata, options }
+   * @returns {Promise<Object>} Canonical response { out_envelope: { pages, metadata, actions } }
+   */
   async process(payload) {
-    const { mode, prompt, metadata = {}, options = {} } = payload;
+    const { mode, prompt } = payload;
 
     try {
       let result;
 
-      // Mode-based routing to appropriate service handler
+      // 1. Route by mode to appropriate service handler
       switch (mode) {
-        case "demo":
+        case "demo": {
           const demoService = require("./demoService");
           result = await demoService.handle(payload);
           break;
-        case "ebook":
+        }
+        case "ebook": {
           const ebookService = require("./ebookService");
           result = await ebookService.handle(payload);
           break;
+        }
         case "basic":
-        default:
+        default: {
           result = await sampleService.handle(payload);
+        }
       }
 
-      // Return standardized response envelope
-      // NOTE: Response metadata MUST contain ONLY service-generated fields + standard fields.
-      // Request metadata (from payload.metadata) MUST NOT be included in response.
-      // This enforces the semantic contract between request and response structures.
-      return {
+      // 2. Build canonical response envelope with enriched metadata
+      const envelope = {
         out_envelope: {
           pages: result.pages || [],
           metadata: {
-            // NOTE: result.metadata contains service-generated fields only (model, pages_count, etc.)
-            // Do NOT spread payload.metadata here - request data must not leak into response
+            // Service-generated fields
             ...result.metadata,
+            // Orchestrator-added fields
             generated_at: new Date().toISOString(),
             mode: mode,
           },
           actions: result.actions || {},
         },
       };
+
+      // 3. Process actions from service (orchestrator responsibility)
+      // Actions allow services to express intent without handling side effects
+      if (result.actions) {
+        // Check for persist_prompt action
+        if (result.actions.persist_prompt === true) {
+          try {
+            const { saveContentToFile } = require("./utils/fileUtils");
+            // Fire-and-forget: save prompt in background (non-blocking)
+            saveContentToFile(prompt).catch((err) => {
+              // Log but do not fail the request
+              // eslint-disable-next-line no-console
+              console.warn(
+                "genieService.process: persist_prompt action failed",
+                err?.message
+              );
+            });
+          } catch (e) {
+            // Log but do not fail the request
+            // eslint-disable-next-line no-console
+            console.warn(
+              "genieService.process: Could not process persist_prompt action",
+              e?.message
+            );
+          }
+        }
+
+        // Other actions can be added here as needed:
+        // if (result.actions.send_notification) { ... }
+        // if (result.actions.trigger_webhook) { ... }
+      }
+
+      return envelope;
     } catch (error) {
       throw new Error(`Generation failed: ${error.message}`);
     }
