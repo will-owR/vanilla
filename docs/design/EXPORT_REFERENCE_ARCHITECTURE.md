@@ -574,10 +574,10 @@ setInterval(cleanupExpiredJobs, 60 * 60 * 1000);
 
 ### **Phase 1: Schema & Persistence** ✅ TODO
 
-- [ ] Add `results` table to PostgreSQL schema
-- [ ] Add `export_jobs` table to PostgreSQL schema
-- [ ] Update Prisma schema or direct SQL migrations
-- [ ] Verify schema via `./server/scripts/db-health.sh --check=all`
+- [x] Add `results` table to PostgreSQL schema
+- [x] Add `export_jobs` table to PostgreSQL schema
+- [x] Update Prisma schema or direct SQL migrations
+- [x] Verify schema via `./server/scripts/db-health.sh --check=all`
 
 ### **Phase 2: Result Persistence** ✅ TODO
 

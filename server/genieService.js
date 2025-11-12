@@ -543,6 +543,8 @@ const genieService = {
    */
   async process(payload) {
     const { mode, prompt } = payload;
+    const { v4: uuidv4 } = require("uuid");
+    const resultDb = require("./utils/resultDb");
 
     try {
       let result;
@@ -580,7 +582,28 @@ const genieService = {
         },
       };
 
-      // 3. Process actions from service (orchestrator responsibility)
+      // 3. Persist result with unique UUID for retrieval
+      // Each generation gets a resultId that can be used to reference this result
+      // in export, preview, and other endpoints. This enables:
+      // - Reference-based export (client sends resultId, not content)
+      // - Async job queuing (jobs reference resultId, not full content)
+      // - Audit trail (all prompts/results stored by UUID)
+      const resultId = uuidv4();
+      try {
+        await resultDb.saveResult(resultId, envelope.out_envelope, mode);
+        envelope.resultId = resultId;
+      } catch (err) {
+        // Log but do not fail the request - persistence is best-effort
+        // eslint-disable-next-line no-console
+        console.warn(
+          "genieService.process: result persistence failed",
+          err?.message
+        );
+        // Still include resultId in response for client reference (best-effort)
+        envelope.resultId = resultId;
+      }
+
+      // 4. Process actions from service (orchestrator responsibility)
       // Actions allow services to express intent without handling side effects
       if (result.actions) {
         // Check for persist_prompt action
