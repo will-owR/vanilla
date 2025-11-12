@@ -84,9 +84,9 @@ async function generateFromPrompt(envelopeReq, opts = {}) {
  * @returns {Promise<Object>} Canonical service result { pages, metadata, actions }
  */
 async function handle(payload) {
-  const { prompt, metadata = {}, options = {} } = payload;
-
-  // 1. Derive title from prompt
+  const { prompt, options = {} } = payload;
+  // Note: metadata from payload is intentionally not spread into response
+  // Services return only service-generated metadata (model, pages_count, source)
   // Take first 6 words, add ellipsis if prompt is longer
   const titleWords = prompt.split(/\s+/).slice(0, 6);
   const title = titleWords.join(" ");
@@ -122,6 +122,8 @@ async function handle(payload) {
     actions: {
       // Signal to orchestrator: persist the prompt to file
       persist_prompt: true,
+      // Signal to orchestrator: this content is exportable as PDF
+      generate_pdf: true,
       can_export: true,
       can_preview: true,
     },

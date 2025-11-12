@@ -438,10 +438,20 @@ const genieService = {
     }
   },
 
-  // Backwards-compatible wrapper that delegates to utils/fileUtils
   /**
-   * Export content or a generated prompt to a PDF buffer.
+   * Export content or a generated prompt to a PDF buffer
+   *
+   * Orchestration strategy (in priority order):
+   * 1. Use canonical envelope if provided directly
+   * 2. Lookup persisted content by promptId/resultId
+   * 3. Generate from string prompt using process() (preferred for new envelopes)
+   * 4. Generate from prompt object (legacy content object with title/body)
+   *
+   * All rendering is delegated to exportService which handles both
+   * canonical envelope format and legacy title/body format.
+   *
    * @param {{prompt?: string|Content, promptId?: number|string, resultId?: number|string, envelope?: any, validate?: boolean}} [opts]
+   * @returns {Promise<{buffer: Buffer, validation?: any}>}
    */
   async export({
     prompt,
@@ -450,92 +460,63 @@ const genieService = {
     envelope,
     validate = false,
   } = {}) {
-    // Centralized export orchestration: prefer persisted content, fall back
-    // to generation, then render PDF using the pdfGenerator utility.
-    let contentObj = null;
-    // Lazily require pdfGenerator once for this invocation to avoid
-    // duplicate identifier complaints from static analysis when using
-    // destructured requires in multiple branches.
-    const pdfGenerator = /** @type {any} */ (require("./pdfGenerator"));
+    const exportService = require("./exportService");
 
-    // If caller provided a canonical envelope directly, use it immediately
+    // Priority 1: Canonical envelope provided directly
     if (envelope && envelope.pages && Array.isArray(envelope.pages)) {
-      // Accept canonical envelope directly; downstream plumbing will render
-      // the envelope into a PDF. Bypass legacy title/body normalization.
-      // Note: we still allow validate flag to be passed through.
-      const generated = await pdfGenerator.generatePdfBuffer({
-        envelope,
-        validate,
-      });
-      if (validate) {
-        if (generated && generated.buffer)
-          return {
-            buffer: generated.buffer,
-            validation: generated.validation,
-          };
-        if (generated && generated.validation) return generated;
-      }
-      return {
-        buffer: Buffer.isBuffer(generated) ? generated : generated.buffer,
-      };
+      return exportService.generate(envelope, { validate });
     }
 
-    // Prefer persisted canonical content when IDs provided
+    // Priority 2: Canonical envelope passed as prompt parameter
+    if (
+      prompt &&
+      typeof prompt === "object" &&
+      prompt.pages &&
+      Array.isArray(prompt.pages)
+    ) {
+      return exportService.generate(prompt, { validate });
+    }
+
+    // Priority 3: Generate from string prompt using process()
+    if (prompt && typeof prompt === "string") {
+      const processResult = await genieService.process({
+        mode: "basic",
+        prompt,
+        metadata: {},
+        options: {},
+      });
+      if (processResult && processResult.out_envelope) {
+        return exportService.generate(processResult.out_envelope, {
+          validate,
+        });
+      }
+    }
+
+    // Priority 4: Lookup persisted content by ID
     if (promptId || resultId) {
       const persisted = await genieService.getPersistedContent({
         promptId,
         resultId,
       });
       if (persisted && persisted.content) {
-        contentObj =
+        const contentObj =
           persisted.content && persisted.content.content
             ? persisted.content.content
             : persisted.content;
+        // If persisted content has pages (canonical), use it
+        if (contentObj && contentObj.pages && Array.isArray(contentObj.pages)) {
+          return exportService.generate(contentObj, { validate });
+        }
       }
     }
 
-    // If caller provided a content object directly via `prompt`, accept it
-    if (!contentObj && prompt && typeof prompt === "object") {
-      // shape: { title, body }
-      contentObj = prompt;
-    }
-
-    // Otherwise, generate content from prompt text
-    if (!contentObj && prompt && typeof prompt === "string") {
-      const genResult = await genieService.generate(prompt);
-      // genieService.generate returns envelope { success, data }
-      if (genResult && genResult.data && genResult.data.content)
-        contentObj = genResult.data.content;
-      else if (genResult && genResult.content) contentObj = genResult.content;
-    }
-
-    if (!contentObj || !contentObj.title || !contentObj.body) {
-      const e = new Error(
-        "Export requires content (title & body) or a valid prompt/persisted id"
-      );
-      // @ts-ignore
-      e.status = 400;
-      throw e;
-    }
-
-    const title = contentObj.title || "Export";
-    const body = contentObj.body || "";
-
-    const generated = await pdfGenerator.generatePdfBuffer({
-      title,
-      body,
-      validate,
-    });
-    if (validate) {
-      if (generated && generated.buffer)
-        return { buffer: generated.buffer, validation: generated.validation };
-      // Some implementations return { buffer, validation } already
-      if (generated && generated.validation) return generated;
-    }
-
-    return {
-      buffer: Buffer.isBuffer(generated) ? generated : generated.buffer,
-    };
+    // No valid export path found
+    const e = new Error(
+      "Export requires: canonical envelope with pages array, or valid promptId/resultId"
+    );
+    // @ts-ignore
+    e.status = 400;
+    throw e;
   },
 
   saveContentToFile(content) {
