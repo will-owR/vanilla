@@ -13,15 +13,17 @@ const path = require("path");
 /**
  * Generate complete 10-page PDF from all Phase A modules
  * @param {Object} envelope - { pages: [], metadata: {}, epilogue: {} }
- * @param {string} theme - Theme name ('dark' for Phase A)
- * @returns {Promise<Buffer>} PDF buffer
+ * @param {Object} theme - Theme object from getTheme()
+ * @param {Object} [options] - { validate?: boolean, browser?: any }
+ * @returns {Promise<Buffer|{buffer: Buffer, validation: Object}>} PDF buffer or result object
  */
-async function generatePDF(envelope, theme = "dark") {
+async function generatePDF(envelope, theme = "dark", options = {}) {
   if (!envelope || !envelope.pages) {
     throw new Error("Invalid envelope: missing pages");
   }
 
-  const themeConfig = getTheme(theme);
+  // If theme is a string, get the theme object
+  const themeConfig = typeof theme === "string" ? getTheme(theme) : theme;
   const pages = envelope.pages || [];
   const metadata = envelope.metadata || {};
   const epilogue = envelope.epilogue || {};
@@ -38,7 +40,8 @@ async function generatePDF(envelope, theme = "dark") {
   const pdfBuffer = await pdfGenerator.generatePdfBuffer({
     title: metadata.title || "Demo Presentation",
     body: html,
-    validate: false,
+    validate: options.validate || false,
+    browser: options.browser,
     envelope: { pages, metadata, epilogue },
   });
 

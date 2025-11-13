@@ -7,11 +7,15 @@
  * Data flow:
  * 1. generate(envelope, options)
  *    - Accepts { pages, metadata, actions } canonical format
- *    - Delegates to pdfGenerator for rendering
+ *    - Routes to mode-specific PDF builder:
+ *      * "demo" → pdfStructureBuilder (10-page styled book)
+ *      * others → pdfGenerator (simple multi-page layout)
  *    - Returns { buffer, validation? }
  */
 
 const pdfGenerator = require("./pdfGenerator");
+const pdfStructureBuilder = require("./utils/pdfStructureBuilder");
+const themeEngine = require("./utils/themeEngine");
 
 const exportService = {
   /**
@@ -34,11 +38,31 @@ const exportService = {
     }
 
     try {
-      const generated = await pdfGenerator.generatePdfBuffer({
-        envelope,
-        validate: options.validate,
-        browser: options.browser,
-      });
+      // Route to mode-specific PDF builder
+      const mode = envelope.metadata?.mode;
+      let generated;
+
+      if (mode === "demo") {
+        // Use demo-specific PDF structure builder for polished book format
+        try {
+          const theme = themeEngine.getTheme(
+            envelope.metadata?.theme || "dark"
+          );
+          generated = await pdfStructureBuilder.generatePDF(envelope, theme, {
+            validate: options.validate,
+            browser: options.browser,
+          });
+        } catch (err) {
+          throw new Error(`Demo PDF generation failed: ${err.message}`);
+        }
+      } else {
+        // Use generic PDF generator for other modes (basic, sample, etc.)
+        generated = await pdfGenerator.generatePdfBuffer({
+          envelope,
+          validate: options.validate,
+          browser: options.browser,
+        });
+      }
 
       if (options.validate) {
         if (generated && generated.buffer) {

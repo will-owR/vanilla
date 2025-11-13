@@ -112,39 +112,14 @@ async function generatePages(prompt, metadata = {}) {
  */
 async function handle(payload) {
   const { prompt, metadata = {} } = payload;
-  // Note: options from payload is intentionally not used in demo mode
-  const content = buildContent(prompt);
-  const numPages = parseInt(metadata.pages) || 3;
-  const pages = makePages(content, numPages);
+  // Use new generatePages() function for 5-page demo with rich blocks
+  const result = await generatePages(prompt, {
+    pages: metadata.pages || 5,
+    theme: metadata.theme || "dark",
+    author: metadata.author || "CELS",
+  });
 
-  // Convert page objects to standardized format with blocks
-  const standardizedPages = pages.map((page, idx) => ({
-    id: `p${idx + 1}`,
-    title: page.title,
-    blocks: [
-      {
-        type: "text",
-        content: page.body,
-      },
-    ],
-  }));
-
-  return {
-    pages: standardizedPages,
-    metadata: {
-      model: "demo-1",
-      pages_count: standardizedPages.length,
-      source: "demo",
-    },
-    actions: {
-      // Persist prompt for audit trail
-      persist_prompt: true,
-      // Support PDF export
-      generate_pdf: true,
-      can_export: true,
-      can_preview: true,
-    },
-  };
+  return result;
 }
 
 module.exports = {

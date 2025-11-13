@@ -120,9 +120,14 @@ async function generatePdfBuffer({
       contentHtml = `<!doctype html><html><body><h1>${title}</h1><div>${body}</div></body></html>`;
     }
     await page.setContent(contentHtml, { waitUntil: "networkidle0" });
-    const buffer = await page.pdf({ format: "A4", printBackground: true });
+    let buffer = await page.pdf({ format: "A4", printBackground: true });
     if (page && launched) await page.close();
     if (launched && browser) await browser.close();
+
+    // Ensure buffer is a Node.js Buffer (convert from ArrayBuffer if needed)
+    if (buffer && !Buffer.isBuffer(buffer)) {
+      buffer = Buffer.from(buffer);
+    }
 
     if (validate) {
       // Run non-fatal validation and return both buffer and validation summary.
