@@ -13,7 +13,7 @@ This document defines the architecture for **reference-based PDF export** — a 
 
 **Core Principle**: Client sends only `resultId` (reference), backend retrieves full `out_envelope` and generates PDF asynchronously.
 
-**Key Constraint**: No legacy code paths; clean separation of concerns between orchestrator (genieService) and services (sampleService, demoService, ebookService).
+**Key Constraint**: No legacy code paths; clean separation of concerns between orchestrator (genieService) and services (sampleService, demoService, ebookService, etc.).
 
 ---
 
@@ -737,7 +737,7 @@ After 24 hours, PDFs are deleted. Should we:
 
 ## **Next Steps**
 
-1. **Answer the 8 clarifying questions** (Section 12)
+1. **Answer the 8 clarifying questions** (Proceed per recommendations)
 2. **Implement Phase 1** (schema migration)
 3. **Implement Phase 2** (result persistence)
 4. **Implement Phases 3-4** (export queue + endpoints)

@@ -140,6 +140,60 @@ async function startServer(options = {}) {
       await startPuppeteer();
     }
 
+    // 2.b Initialize Phase 3/4: Export Queue, Processor, and Cleanup Scheduler
+    const skipExportQueue =
+      process.env.SKIP_EXPORT_QUEUE === "true" ||
+      process.env.SKIP_EXPORT_QUEUE === "1";
+    if (!skipExportQueue) {
+      try {
+        const exportQueue = require("./utils/exportQueue");
+        const exportProcessor = require("./utils/exportProcessor");
+        const cleanupScheduler = require("./utils/cleanupScheduler");
+        const resultDb = require("./utils/resultDb");
+        const { PrismaClient } = require("@prisma/client");
+        const prisma = new PrismaClient();
+
+        // Initialize export queue with fallback database
+        const exportQueueDbPath =
+          process.env.EXPORT_QUEUE_DB ||
+          path.join(process.cwd(), "data", "export-queue-fallback.db");
+        await exportQueue.initialize(exportQueueDbPath);
+
+        // Initialize export processor with dependencies
+        await exportProcessor.initialize(exportQueue, resultDb, prisma);
+
+        // Start background processor loop (checks every 1 second)
+        const processorIntervalMs =
+          parseInt(process.env.EXPORT_PROCESSOR_INTERVAL_MS) || 1000;
+        exportProcessor.start(processorIntervalMs);
+
+        // Initialize cleanup scheduler
+        cleanupScheduler.initialize(exportQueue, resultDb);
+
+        // Start cleanup scheduler (runs every hour)
+        const cleanupIntervalMs =
+          parseInt(process.env.EXPORT_CLEANUP_INTERVAL_MS) || 60 * 60 * 1000;
+        cleanupScheduler.start(cleanupIntervalMs);
+
+        console.log(
+          "Phase 3/4: Export Queue, Processor, and Cleanup initialized"
+        );
+        module.exports._exportQueue = exportQueue;
+        module.exports._exportProcessor = exportProcessor;
+        module.exports._cleanupScheduler = cleanupScheduler;
+      } catch (err) {
+        console.warn(
+          "Failed to initialize export queue/processor/cleanup:",
+          err.message
+        );
+        if (process.env.EXPORT_QUEUE_REQUIRED === "true") {
+          throw err; // Fail startup if export queue is required
+        }
+      }
+    } else {
+      console.log("SKIP_EXPORT_QUEUE=true - export queue disabled (test mode)");
+    }
+
     // 3. Start the server only after all dependencies are ready
     // Decide whether to call app.listen: by default true, but tests should
     // avoid binding to the network to prevent EADDRINUSE when multiple
@@ -2352,6 +2406,283 @@ app.get("/api/export/jobs/metrics", async (req, res) => {
       e && e.message ? e.message : e
     );
     return res.status(500).json({ error: "Failed to collect job metrics" });
+  }
+});
+
+// ============================================================================
+// PHASE 3/4: REFERENCE-BASED EXPORT ENDPOINTS
+// Reference architecture: result by UUID -> queue job -> async process -> download
+// ============================================================================
+
+/**
+ * POST /api/export/generate
+ * Queue an async export job for a result
+ * Request: { resultId: "uuid-..." }
+ * Response 202: { jobId: "uuid-...", status: "queued" }
+ * Response 400: { error: "Result not found", code: "RESULT_NOT_FOUND" }
+ * Response 503: { error: "Export queue full", code: "QUEUE_FULL" }
+ */
+app.post("/api/export/generate", async (req, res) => {
+  const { resultId } = req.body || {};
+
+  if (!resultId || typeof resultId !== "string") {
+    return sendValidationError(res, "resultId is required", {
+      provided: typeof resultId === "string" ? resultId : typeof resultId,
+      required: "non-empty string (UUID)",
+    });
+  }
+
+  try {
+    const resultDb = require("./utils/resultDb");
+    const exportQueue = require("./utils/exportQueue");
+    const { v4: uuidv4 } = require("uuid");
+
+    // 1. Validate result exists
+    let result;
+    try {
+      result = await resultDb.getResultById(resultId);
+    } catch (err) {
+      return res.status(500).json({
+        error: "Database error retrieving result",
+        code: "DB_ERROR",
+      });
+    }
+
+    if (!result) {
+      return res.status(400).json({
+        error: "Result not found",
+        code: "RESULT_NOT_FOUND",
+      });
+    }
+
+    // 2. Create export job in database
+    const jobId = uuidv4();
+    let exportJob;
+    try {
+      exportJob = await resultDb.createExportJob(jobId, resultId);
+    } catch (err) {
+      console.error("Failed to create export job:", err.message);
+      return res.status(500).json({
+        error: "Failed to create export job",
+        code: "JOB_CREATION_ERROR",
+      });
+    }
+
+    // 3. Enqueue to export queue (in-memory or fallback)
+    try {
+      await exportQueue.enqueue(jobId, resultId);
+    } catch (err) {
+      console.error("Failed to enqueue export job:", err.message);
+      if (
+        err.message.includes("queue full") ||
+        err.message.includes("Queue full")
+      ) {
+        return res.status(503).json({
+          error: "Export queue full",
+          code: "QUEUE_FULL",
+        });
+      }
+      return res.status(500).json({
+        error: "Failed to enqueue export job",
+        code: "ENQUEUE_ERROR",
+      });
+    }
+
+    // 4. Return success (202 Accepted)
+    return res.status(202).json({
+      jobId,
+      status: "queued",
+    });
+  } catch (err) {
+    console.error("/api/export/generate error:", err.message);
+    return res.status(500).json({
+      error: "Export generation failed",
+      code: "GENERATION_ERROR",
+    });
+  }
+});
+
+/**
+ * GET /api/export/status/:jobId
+ * Check the status of an export job
+ * Response 200: { jobId, status, progress, pdfUrl?, error? }
+ * Response 404: { error: "Export job not found", code: "JOB_NOT_FOUND" }
+ * Response 410: { error: "Export expired", code: "EXPIRED" }
+ */
+app.get("/api/export/status/:jobId", async (req, res) => {
+  const { jobId } = req.params;
+
+  if (!jobId || typeof jobId !== "string") {
+    return sendValidationError(res, "jobId is required", {
+      provided: jobId,
+      required: "non-empty string (UUID)",
+    });
+  }
+
+  try {
+    const exportQueue = require("./utils/exportQueue");
+    const resultDb = require("./utils/resultDb");
+
+    // 1. Get job from queue or database
+    let job;
+    try {
+      job = await exportQueue.getJob(jobId);
+    } catch (err) {
+      console.error("Failed to get job from queue:", err.message);
+    }
+
+    // Fallback: check database if not in queue
+    if (!job) {
+      try {
+        job = await resultDb.getExportJobById(jobId);
+      } catch (err) {
+        console.error("Failed to get job from database:", err.message);
+      }
+    }
+
+    if (!job) {
+      return res.status(404).json({
+        error: "Export job not found",
+        code: "JOB_NOT_FOUND",
+      });
+    }
+
+    // 2. Check if job is expired (>24 hours old)
+    const EXPIRY_MS = 24 * 60 * 60 * 1000;
+    const age = Date.now() - job.createdAt;
+    if (age > EXPIRY_MS) {
+      return res.status(410).json({
+        error: "Export expired",
+        code: "EXPIRED",
+      });
+    }
+
+    // 3. Build response
+    const response = {
+      jobId,
+      status: job.status,
+      progress: job.progress || 0,
+    };
+
+    // Add PDF URL if complete
+    if (job.status === "complete") {
+      response.pdfUrl = `/api/export/download/${jobId}`;
+    }
+
+    // Add error if failed
+    if (job.status === "failed" && job.errorMessage) {
+      response.error = job.errorMessage;
+    }
+
+    return res.status(200).json(response);
+  } catch (err) {
+    console.error("/api/export/status/:jobId error:", err.message);
+    return res.status(500).json({
+      error: "Failed to retrieve job status",
+      code: "STATUS_ERROR",
+    });
+  }
+});
+
+/**
+ * GET /api/export/download/:jobId
+ * Download a generated PDF export
+ * Response 200: binary PDF
+ * Response 404: { error: "Export not found", code: "NOT_FOUND" }
+ * Response 202: { error: "Export not ready", code: "NOT_READY" }
+ * Response 410: { error: "Export expired", code: "EXPIRED" }
+ */
+app.get("/api/export/download/:jobId", async (req, res) => {
+  const { jobId } = req.params;
+
+  if (!jobId || typeof jobId !== "string") {
+    return sendValidationError(res, "jobId is required", {
+      provided: jobId,
+      required: "non-empty string (UUID)",
+    });
+  }
+
+  try {
+    const exportQueue = require("./utils/exportQueue");
+    const resultDb = require("./utils/resultDb");
+    const fs = require("fs").promises;
+
+    // 1. Get job
+    let job;
+    try {
+      job = await exportQueue.getJob(jobId);
+    } catch (err) {
+      console.error("Failed to get job from queue:", err.message);
+    }
+
+    if (!job) {
+      try {
+        job = await resultDb.getExportJobById(jobId);
+      } catch (err) {
+        console.error("Failed to get job from database:", err.message);
+      }
+    }
+
+    if (!job) {
+      return res.status(404).json({
+        error: "Export not found",
+        code: "NOT_FOUND",
+      });
+    }
+
+    // 2. Check if expired
+    const EXPIRY_MS = 24 * 60 * 60 * 1000;
+    const age = Date.now() - job.createdAt;
+    if (age > EXPIRY_MS) {
+      return res.status(410).json({
+        error: "Export expired",
+        code: "EXPIRED",
+      });
+    }
+
+    // 3. Check if ready
+    if (job.status !== "complete") {
+      return res.status(202).json({
+        error: "Export not ready",
+        code: "NOT_READY",
+        status: job.status,
+        progress: job.progress || 0,
+      });
+    }
+
+    // 4. Verify PDF file exists
+    const pdfPath = job.pdfPath;
+    if (!pdfPath) {
+      return res.status(404).json({
+        error: "PDF path not found in job record",
+        code: "PATH_NOT_FOUND",
+      });
+    }
+
+    // 5. Read and send PDF
+    try {
+      const buffer = await fs.readFile(pdfPath);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="export_${jobId}.pdf"`
+      );
+      return res.send(buffer);
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        return res.status(404).json({
+          error: "PDF file not found on disk",
+          code: "FILE_NOT_FOUND",
+        });
+      }
+      throw err;
+    }
+  } catch (err) {
+    console.error("/api/export/download/:jobId error:", err.message);
+    return res.status(500).json({
+      error: "Failed to download export",
+      code: "DOWNLOAD_ERROR",
+    });
   }
 });
 
