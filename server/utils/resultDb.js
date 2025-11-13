@@ -245,6 +245,69 @@ async function getExportJobStats() {
   }
 }
 
+/**
+ * Get export jobs by status with optional filters
+ * @param {string} status - Job status to filter by
+ * @param {Object} filters - Additional filters { olderThan, limit }
+ * @returns {Promise<Array>} Array of export jobs
+ */
+async function getExportJobsByStatus(status, filters = {}) {
+  try {
+    const where = { status };
+
+    if (filters.olderThan) {
+      where.createdAt = { lt: filters.olderThan };
+    }
+
+    const jobs = await prisma.exportJob.findMany({
+      where,
+      orderBy: { createdAt: "asc" },
+      take: filters.limit || 1000,
+    });
+
+    return jobs;
+  } catch (error) {
+    console.error("getExportJobsByStatus failed:", error.message);
+    const err = new Error(`Failed to retrieve export jobs: ${error.message}`);
+    err.status = 500;
+    throw err;
+  }
+}
+
+/**
+ * Mark expired jobs (older than maxAgeMs) as "expired" status without deleting
+ * Useful for cleanup tracking and compliance audits
+ * @param {number} maxAgeMs - Age threshold in milliseconds (default: 24 hours)
+ * @returns {Promise<number>} Number of jobs marked as expired
+ */
+async function markJobsAsExpired(maxAgeMs = 24 * 60 * 60 * 1000) {
+  try {
+    const cutoff = new Date(Date.now() - maxAgeMs);
+
+    const result = await prisma.exportJob.updateMany({
+      where: {
+        createdAt: { lt: cutoff },
+        status: { not: "expired" },
+      },
+      data: {
+        status: "expired",
+      },
+    });
+
+    console.log(
+      `Marked ${
+        result.count
+      } jobs as expired (older than ${cutoff.toISOString()})`
+    );
+    return result.count;
+  } catch (error) {
+    console.error("markJobsAsExpired failed:", error.message);
+    const err = new Error(`Failed to mark jobs as expired: ${error.message}`);
+    err.status = 500;
+    throw err;
+  }
+}
+
 module.exports = {
   saveResult,
   getResultById,
@@ -254,4 +317,6 @@ module.exports = {
   getQueuedExportJobs,
   deleteExpiredExportJobs,
   getExportJobStats,
+  getExportJobsByStatus,
+  markJobsAsExpired,
 };
