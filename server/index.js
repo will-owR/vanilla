@@ -71,60 +71,10 @@ async function startServer(options = {}) {
     serviceState.db.startupPhase = "ready";
     console.log("Database initialized successfully");
 
-    // 1.b Initialize jobs DB for background export queue (optional)
-    try {
-      if (jobsModule && jobsModule.openJobsDb) {
-        const jobsDbPath =
-          process.env.JOBS_DB || path.join(process.cwd(), "data", "jobs.db");
-        // Open and keep a handle to reuse across requests/workers
-        module.exports._jobsDb = await jobsModule.openJobsDb(jobsDbPath);
-        console.log("Jobs DB opened at", jobsDbPath);
-
-        // Run one immediate recovery pass at startup so any stale 'processing'
-        // jobs from a previous crash or shutdown are returned to 'queued'
-        // before the regular recovery interval begins.
-        try {
-          const requeuedAtStart = await jobsModule.requeueStaleJobs(
-            module.exports._jobsDb,
-            parseInt(process.env.JOBS_STALE_MS) || 10 * 60 * 1000
-          );
-          if (requeuedAtStart && requeuedAtStart > 0) {
-            console.log(
-              `Startup recovery: requeued ${requeuedAtStart} stale jobs`
-            );
-          }
-        } catch (e) {
-          console.warn(
-            "Startup requeueStaleJobs failed",
-            e && e.message ? e.message : e
-          );
-        }
-
-        // Start periodic recovery pass to requeue stale jobs
-        const recoveryInterval =
-          parseInt(process.env.JOBS_RECOVERY_INTERVAL_MS) || 5 * 60 * 1000; // default 5m
-        module.exports._jobsRecoveryTimer = setInterval(async () => {
-          try {
-            const requeued = await jobsModule.requeueStaleJobs(
-              module.exports._jobsDb,
-              parseInt(process.env.JOBS_STALE_MS) || 10 * 60 * 1000
-            );
-            if (requeued && requeued > 0)
-              console.log(`Requeued ${requeued} stale jobs`);
-          } catch (e) {
-            console.warn(
-              "requeueStaleJobs failed",
-              e && e.message ? e.message : e
-            );
-          }
-        }, recoveryInterval);
-      }
-    } catch (e) {
-      console.warn(
-        "Failed to initialize jobs DB or recovery timer:",
-        e && e.message ? e.message : e
-      );
-    }
+    // 1.b DEPRECATED: Legacy jobs DB initialization removed
+    // Phase cleanup: jobsModule and old export queue replaced by Phase 3/4 architecture
+    // Old endpoints: /api/export/job, /api/export/job/:id removed
+    // Use new endpoints: /api/export/generate, /api/export/status/:jobId, /api/export/download/:jobId
 
     // 2. Then initialize Puppeteer (skip if explicitly disabled for tests)
     const skipPuppeteer =
@@ -2181,232 +2131,35 @@ app.post("/api/export/book", async (req, res) => {
   }
 });
 
-// --- Background export job API (SQLite-backed with in-memory fallback) ---
-let jobsModule = null;
-try {
-  jobsModule = require("./jobs");
-} catch (e) {
-  console.warn(
-    "jobs module not available, will use in-memory fallback",
-    e.message
-  );
-}
+// --- DEPRECATED: Legacy export job endpoints removed in Phase cleanup ---
+// These old endpoints have been replaced by Phase 3/4 new architecture:
+// - OLD: POST /api/export/job { poems, generateImages }
+// - NEW: POST /api/export/generate { resultId }
+//
+// - OLD: GET /api/export/job/:id
+// - NEW: GET /api/export/status/:jobId
+//
+// - OLD: GET /api/export/jobs/metrics
+// - NEW: Query individual jobs via GET /api/export/status/:jobId
+//
+// For migration guidance, see PHASE_4_ENDPOINTS_IMPLEMENTATION.md
 
-const exportJobs = {}; // fallback in-memory jobs
-
+// Deprecated stub for backwards compatibility
 app.post("/api/export/job", async (req, res) => {
-  const payload = req.body && Object.keys(req.body).length ? req.body : null;
-
-  // Primary path: try to enqueue in SQLite-backed jobs table
-  if (jobsModule) {
-    try {
-      // Prefer explicit DB path when provided (tests set JOBS_DB), otherwise use server default
-      const dbPath =
-        process.env.JOBS_DB ||
-        path.join(process.cwd(), "data", "your-database-name.db");
-      const db = await jobsModule.openJobsDb(dbPath);
-      try {
-        const id = await jobsModule.enqueueJob(db, payload);
-        await db.close();
-        // Respond with DB id
-        res.status(202).json({ jobId: String(id) });
-        return;
-      } catch (e) {
-        // ensure DB closed on error
-        try {
-          await db.close();
-        } catch (ee) {
-          // ignore errors closing DB
-        }
-        console.warn(
-          "jobs.enqueueJob failed, falling back to in-memory",
-          e && e.message ? e.message : e
-        );
-      }
-    } catch (e) {
-      console.warn(
-        "jobs DB open failed, falling back to in-memory",
-        e && e.message ? e.message : e
-      );
-    }
-  }
-
-  // Fallback: in-memory behavior (existing logic)
-  const jobId = uuidv4();
-  exportJobs[jobId] = { state: "queued", progress: 0 };
-
-  (async () => {
-    try {
-      exportJobs[jobId].state = "preparing";
-      exportJobs[jobId].progress = 10;
-
-      let poems = payload && payload.poems ? payload.poems : null;
-      if (!poems) {
-        const samplePath = path.resolve(__dirname, "samples", "poems.json");
-        const raw = fs.readFileSync(samplePath, "utf8");
-        const parsed = JSON.parse(raw);
-        poems =
-          Array.isArray(parsed) && parsed.length > 0 && parsed[0].poems
-            ? parsed[0].poems
-            : parsed && parsed.poems
-            ? parsed.poems
-            : parsed;
-      }
-
-      const { generateImages } = payload || {};
-      if (generateImages) {
-        const { generatePoemAndImage } = require("./imageGenerator.cjs");
-        let i = 0;
-        for (let p of poems) {
-          exportJobs[jobId].state = "generating_images";
-          exportJobs[jobId].progress = 10 + Math.round((i / poems.length) * 30);
-          try {
-            const result = await generatePoemAndImage({
-              theme: p.title || p.theme,
-            });
-            if (result && result.image) p.background = result.image;
-          } catch (e) {
-            console.warn("Image generation failed for poem", i, e.message || e);
-          }
-          i++;
-        }
-      } else {
-        for (let p of poems) {
-          if (!p.background) {
-            const generated = generateBackgroundForPoem(p);
-            if (generated) p.background = generated;
-          }
-        }
-      }
-
-      exportJobs[jobId].state = "composing";
-      exportJobs[jobId].progress = 50;
-
-      const pdf = await renderBookToPDF(poems, browserInstance);
-
-      exportJobs[jobId].state = "saving";
-      exportJobs[jobId].progress = 85;
-
-      const outDir = path.resolve(__dirname, "samples", "exports");
-      if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-      const outPath = path.join(outDir, `ebook_${jobId}.pdf`);
-      fs.writeFileSync(outPath, pdf);
-
-      exportJobs[jobId].state = "done";
-      exportJobs[jobId].progress = 100;
-      exportJobs[jobId].filePath = outPath;
-    } catch (err) {
-      exportJobs[jobId].state = "error";
-      exportJobs[jobId].error = err && err.message ? err.message : String(err);
-      exportJobs[jobId].progress = 0;
-      console.error("Export job failed", jobId, err);
-    }
-  })();
-
-  res.status(202).json({ jobId });
-});
-
-// Job queue metrics endpoint - returns counts per state (queued/processing/done/failed)
-app.get("/api/jobs/metrics", async (req, res) => {
-  try {
-    if (jobsModule && jobsModule.openJobsDb) {
-      const dbPath =
-        process.env.JOBS_DB ||
-        path.join(process.cwd(), "data", "your-database-name.db");
-      const db = await jobsModule.openJobsDb(dbPath);
-      try {
-        const rows = await db.all(
-          `SELECT state, COUNT(*) as count FROM jobs GROUP BY state`
-        );
-        const metrics = { queued: 0, processing: 0, done: 0, failed: 0 };
-        for (const r of rows) {
-          if (r.state && typeof r.count !== "undefined")
-            metrics[r.state] = r.count;
-        }
-        await db.close();
-        return res.status(200).json({ success: true, metrics });
-      } catch (e) {
-        try {
-          await db.close();
-        } catch (ee) {
-          // ignore errors closing DB
-        }
-        throw e;
-      }
-    }
-
-    // Fallback to in-memory metrics
-    const counts = { queued: 0, processing: 0, done: 0, failed: 0 };
-    for (const id of Object.keys(exportJobs)) {
-      const s =
-        exportJobs[id] && exportJobs[id].state
-          ? exportJobs[id].state
-          : "queued";
-      counts[s] = (counts[s] || 0) + 1;
-    }
-    return res.status(200).json({ success: true, metrics: counts });
-  } catch (err) {
-    console.error(
-      "Failed to compute job metrics",
-      err && err.message ? err.message : err
-    );
-    return res
-      .status(500)
-      .json({ success: false, error: "Failed to compute metrics" });
-  }
-});
-
-app.get("/api/export/job/:id", async (req, res) => {
-  const id = req.params.id;
-  // Try DB lookup first
-  if (jobsModule) {
-    try {
-      const row = await jobsModule.getJob(id);
-      if (row) return res.json({ jobId: id, ...row });
-    } catch (e) {
-      console.warn("jobs.getJob failed", e.message);
-    }
-  }
-
-  const job = exportJobs[id];
-  if (!job) return res.status(404).json({ error: "Job not found" });
-  res.json({ jobId: id, ...job });
-});
-
-// Job queue metrics: return counts for queued/processing/done
-app.get("/api/export/jobs/metrics", async (req, res) => {
-  try {
-    // Prefer DB-backed metrics when jobs DB is open
-    if (module.exports._jobsDb) {
-      const q = await module.exports._jobsDb.get(
-        `SELECT COUNT(*) as cnt FROM jobs WHERE state = 'queued'`
-      );
-      const p = await module.exports._jobsDb.get(
-        `SELECT COUNT(*) as cnt FROM jobs WHERE state = 'processing'`
-      );
-      const d = await module.exports._jobsDb.get(
-        `SELECT COUNT(*) as cnt FROM jobs WHERE state = 'done'`
-      );
-      return res.json({
-        queued: q.cnt || 0,
-        processing: p.cnt || 0,
-        done: d.cnt || 0,
-      });
-    }
-
-    // Fallback: in-memory exportJobs
-    const counts = { queued: 0, processing: 0, done: 0 };
-    Object.values(exportJobs).forEach((j) => {
-      if (j && j.state && counts[j.state] !== undefined) counts[j.state]++;
-    });
-    return res.json(counts);
-  } catch (e) {
-    console.warn(
-      "Failed to collect job metrics",
-      e && e.message ? e.message : e
-    );
-    return res.status(500).json({ error: "Failed to collect job metrics" });
-  }
+  return res.status(410).json({
+    error: "Deprecated endpoint",
+    code: "DEPRECATED",
+    message: "POST /api/export/job has been replaced",
+    migrateToNewWorkflow: {
+      step1:
+        "POST /prompt { mode, prompt } → returns { resultId, out_envelope }",
+      step2:
+        "POST /api/export/generate { resultId } → returns { jobId, status }",
+      step3:
+        "GET /api/export/status/:jobId → returns { status, progress, pdfUrl? }",
+      step4: "GET /api/export/download/:jobId → returns PDF binary",
+    },
+  });
 });
 
 // ============================================================================
