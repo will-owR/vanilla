@@ -1064,32 +1064,22 @@ app.post("/export", async (req, res) => {
   const {
     sendValidationError,
     sendProcessingError,
-    sendServiceUnavailableError,
   } = require("./utils/errorHandler");
-  // Delegate to genieService.export which centralizes content selection
-  // and PDF generation. This reduces duplication and makes it easier to
-  // swap generation services (sample/demo/ebook) without changing the
-  // controller logic.
+  // Accept only canonical envelope format with pages array
   try {
-    const { prompt, promptId, resultId, content, validate, title, body } =
-      req.body || {};
-    const arg = {};
-    if (prompt) arg.prompt = prompt;
-    if (promptId) arg.promptId = promptId;
-    if (resultId) arg.resultId = resultId;
-    // Accept a direct content object via `content` or legacy title/body fields
-    if (content) arg.prompt = content; // accept direct content object
-    else if (
-      (typeof title === "string" && title) ||
-      (typeof body === "string" && body)
-    ) {
-      // Backwards-compat: allow callers to POST { title, body } directly
-      arg.prompt = { title: title || "", body: body || "" };
+    const envelope = req.body || {};
+
+    // Validate canonical envelope structure
+    if (!envelope || !Array.isArray(envelope.pages)) {
+      return sendValidationError(
+        res,
+        "Export requires canonical envelope with pages array"
+      );
     }
 
     const exportResult = await genieService.export({
-      ...arg,
-      validate: !!validate,
+      envelope,
+      validate: !!envelope.validate,
     });
 
     let buffer =
@@ -1134,7 +1124,7 @@ app.post("/export", async (req, res) => {
   } catch (err) {
     const status = err && err.status ? err.status : 500;
     if (status === 400) return sendValidationError(res, err.message);
-    console.error("Export generation error (delegated)", err && err.message);
+    console.error("Export generation error", err && err.message);
     return sendProcessingError(res, `PDF Generation Failed: ${err.message}`, {
       code: "PDF_GENERATION_ERROR",
     });
@@ -1142,134 +1132,6 @@ app.post("/export", async (req, res) => {
 });
 
 // Maintain existing GET /export behaviour for legacy clients (keeps file save path)
-app.get("/export", async (req, res) => {
-  // Backwards-compatible GET /export that accepts ?content=<json>
-  // Harmonized to use the standardized error response helpers and
-  // to return binary PDF with proper headers.
-  const { content, promptId, resultId } = req.query;
-  const {
-    sendValidationError,
-    sendProcessingError,
-    sendServiceUnavailableError,
-  } = require("./utils/errorHandler");
-
-  if (!content) {
-    return sendValidationError(res, "Content parameter is required");
-  }
-
-  let page;
-  try {
-    let contentObj = content ? JSON.parse(content) : null;
-
-    // If promptId/resultId provided prefer persisted content and require it to exist
-    if (!contentObj && (promptId || resultId)) {
-      const persisted = await genieService.getPersistedContent({
-        promptId,
-        resultId,
-      });
-      if (!persisted || !persisted.content) {
-        return sendValidationError(
-          res,
-          "Persisted content not found for provided promptId/resultId",
-          {
-            promptId,
-            resultId,
-          }
-        );
-      }
-      contentObj =
-        persisted.content && persisted.content.content
-          ? persisted.content.content
-          : persisted.content;
-    }
-
-    if (!serviceState.puppeteer.ready || !browserInstance) {
-      try {
-        const {
-          generatePdfBuffer,
-          validatePdfBuffer,
-        } = require("./pdfGenerator");
-        const htmlToRender = await rewriteImagesForExportAsync(
-          previewTemplate(contentObj)
-        );
-        // Use the generator: pass the rendered HTML as 'body' and a title
-        const generated = await generatePdfBuffer({
-          title: contentObj.title || "",
-          body: htmlToRender,
-          validate: true,
-        });
-        let pdfBuffer;
-        let validation;
-        if (Buffer.isBuffer(generated)) {
-          pdfBuffer = generated;
-          validation = await validatePdfBuffer(pdfBuffer).catch(() => ({
-            ok: true,
-          }));
-        } else {
-          pdfBuffer = generated.buffer;
-          validation = generated.validation;
-        }
-
-        if (!validation || validation.ok === false) {
-          return res.status(422).json({
-            ok: false,
-            errors: validation && validation.errors ? validation.errors : [],
-            warnings:
-              validation && validation.warnings ? validation.warnings : [],
-            pageCount:
-              validation && validation.pageCount ? validation.pageCount : 0,
-          });
-        }
-
-        res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Length", pdfBuffer.length);
-        res.end(pdfBuffer);
-        return;
-      } catch (fallbackErr) {
-        console.warn(
-          "GET /export fallback failed:",
-          fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr
-        );
-        return sendServiceUnavailableError(
-          res,
-          "PDF generation service not ready",
-          { code: "SERVICE_UNAVAILABLE" }
-        );
-      }
-    }
-
-    page = await browserInstance.newPage();
-    if (!page) throw new Error("Failed to create browser page");
-
-    const htmlToRender = await rewriteImagesForExportAsync(
-      previewTemplate(contentObj)
-    );
-    const EXPORT_BASE_URL =
-      process.env.EXPORT_BASE_URL ||
-      `http://localhost:${process.env.PORT || 3000}`;
-    await page.setContent(htmlToRender, {
-      waitUntil: "networkidle2",
-      timeout: 60000,
-      url: EXPORT_BASE_URL,
-    });
-    const pdf = await page.pdf({ format: "A4", printBackground: true });
-
-    // Set headers to match POST export endpoints
-    res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Length", pdf.length);
-    res.end(pdf);
-    return;
-  } catch (err) {
-    console.error("Export generation error (GET /export)", err);
-    return sendProcessingError(res, `PDF Generation Failed: ${err.message}`, {
-      code: "PDF_GENERATION_ERROR",
-    });
-  } finally {
-    if (page) await page.close();
-  }
-});
 
 // --- PROMPTS CRUD API ---
 app.post("/api/prompts", (req, res, next) => {

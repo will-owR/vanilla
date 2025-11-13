@@ -421,8 +421,11 @@ export async function exportToPdf(content) {
     contentKeys: content ? Object.keys(content) : "no content",
   });
 
-  if (!content || !content.title || !content.body) {
-    const error = new Error("Export content must include title and body");
+  // Validate canonical envelope format (pages/metadata/actions)
+  if (!content || !Array.isArray(content.pages)) {
+    const error = new Error(
+      "Export content must be a canonical envelope with pages array"
+    );
     Logger.error("Export validation failed", { error });
     throw error;
   }

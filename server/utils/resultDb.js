@@ -1,0 +1,257 @@
+/**
+ * resultDb.js — Database utilities for Result and ExportJob persistence
+ *
+ * Provides clean abstractions for:
+ * - Saving generated results (out_envelope) by resultId
+ * - Querying results by ID
+ * - Creating export jobs
+ * - Querying/updating export job status
+ *
+ * Built on top of Prisma Client.
+ */
+
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
+
+/**
+ * Save a generated result with canonical out_envelope
+ * @param {string} resultId - UUID for the result
+ * @param {Object} outEnvelope - Canonical { pages, metadata, actions }
+ * @param {string} mode - Generation mode (basic, demo, ebook)
+ * @param {number} [promptId] - Optional link to original prompt
+ * @returns {Promise<Object>} Created result record
+ */
+async function saveResult(resultId, outEnvelope, mode, promptId = null) {
+  if (!resultId || !outEnvelope || !mode) {
+    const err = new Error("resultId, outEnvelope, and mode are required");
+    err.status = 400;
+    throw err;
+  }
+
+  try {
+    const result = await prisma.result.create({
+      data: {
+        resultId,
+        outEnvelope,
+        mode,
+        promptId,
+      },
+    });
+    return result;
+  } catch (error) {
+    console.error("saveResult failed:", error.message);
+    const err = new Error(`Failed to save result: ${error.message}`);
+    err.status = 500;
+    throw err;
+  }
+}
+
+/**
+ * Retrieve a result by resultId
+ * @param {string} resultId - UUID of the result
+ * @returns {Promise<Object|null>} Result record with outEnvelope
+ */
+async function getResultById(resultId) {
+  if (!resultId) {
+    const err = new Error("resultId is required");
+    err.status = 400;
+    throw err;
+  }
+
+  try {
+    const result = await prisma.result.findUnique({
+      where: { resultId },
+    });
+    return result;
+  } catch (error) {
+    console.error("getResultById failed:", error.message);
+    const err = new Error(`Failed to retrieve result: ${error.message}`);
+    err.status = 500;
+    throw err;
+  }
+}
+
+/**
+ * Create an export job for a result
+ * @param {string} jobId - UUID for the job
+ * @param {string} resultId - UUID of the result to export
+ * @returns {Promise<Object>} Created export job record
+ */
+async function createExportJob(jobId, resultId) {
+  if (!jobId || !resultId) {
+    const err = new Error("jobId and resultId are required");
+    err.status = 400;
+    throw err;
+  }
+
+  // Verify result exists
+  const result = await getResultById(resultId);
+  if (!result) {
+    const err = new Error("Result not found");
+    err.status = 404;
+    throw err;
+  }
+
+  try {
+    const job = await prisma.exportJob.create({
+      data: {
+        jobId,
+        resultId,
+        status: "queued",
+      },
+    });
+    return job;
+  } catch (error) {
+    console.error("createExportJob failed:", error.message);
+    const err = new Error(`Failed to create export job: ${error.message}`);
+    err.status = 500;
+    throw err;
+  }
+}
+
+/**
+ * Get export job by jobId
+ * @param {string} jobId - UUID of the job
+ * @returns {Promise<Object|null>} Export job record
+ */
+async function getExportJobById(jobId) {
+  if (!jobId) {
+    const err = new Error("jobId is required");
+    err.status = 400;
+    throw err;
+  }
+
+  try {
+    const job = await prisma.exportJob.findUnique({
+      where: { jobId },
+      include: { result: true },
+    });
+    return job;
+  } catch (error) {
+    console.error("getExportJobById failed:", error.message);
+    const err = new Error(`Failed to retrieve export job: ${error.message}`);
+    err.status = 500;
+    throw err;
+  }
+}
+
+/**
+ * Update export job status
+ * @param {string} jobId - UUID of the job
+ * @param {Object} updates - Fields to update { status, progress, pdfPath, errorMessage, completedAt }
+ * @returns {Promise<Object>} Updated export job record
+ */
+async function updateExportJob(jobId, updates) {
+  if (!jobId) {
+    const err = new Error("jobId is required");
+    err.status = 400;
+    throw err;
+  }
+
+  try {
+    const job = await prisma.exportJob.update({
+      where: { jobId },
+      data: updates,
+    });
+    return job;
+  } catch (error) {
+    console.error("updateExportJob failed:", error.message);
+    const err = new Error(`Failed to update export job: ${error.message}`);
+    err.status = 500;
+    throw err;
+  }
+}
+
+/**
+ * Get all queued export jobs
+ * @returns {Promise<Array>} Array of queued jobs
+ */
+async function getQueuedExportJobs(limit = 10) {
+  try {
+    const jobs = await prisma.exportJob.findMany({
+      where: { status: "queued" },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+      include: { result: true },
+    });
+    return jobs;
+  } catch (error) {
+    console.error("getQueuedExportJobs failed:", error.message);
+    const err = new Error(`Failed to retrieve queued jobs: ${error.message}`);
+    err.status = 500;
+    throw err;
+  }
+}
+
+/**
+ * Delete expired export jobs (older than maxAgeMs)
+ * @param {number} maxAgeMs - Age threshold in milliseconds (default: 24 hours)
+ * @returns {Promise<number>} Number of deleted jobs
+ */
+async function deleteExpiredExportJobs(maxAgeMs = 24 * 60 * 60 * 1000) {
+  try {
+    const cutoff = new Date(Date.now() - maxAgeMs);
+    const result = await prisma.exportJob.deleteMany({
+      where: {
+        createdAt: { lt: cutoff },
+      },
+    });
+    console.log(
+      `Deleted ${
+        result.count
+      } expired export jobs older than ${cutoff.toISOString()}`
+    );
+    return result.count;
+  } catch (error) {
+    console.error("deleteExpiredExportJobs failed:", error.message);
+    const err = new Error(`Failed to delete expired jobs: ${error.message}`);
+    err.status = 500;
+    throw err;
+  }
+}
+
+/**
+ * Get export job statistics (counts by status)
+ * @returns {Promise<Object>} Counts by status: { queued, processing, complete, failed }
+ */
+async function getExportJobStats() {
+  try {
+    const stats = await prisma.exportJob.groupBy({
+      by: ["status"],
+      _count: true,
+    });
+
+    const counts = {
+      queued: 0,
+      processing: 0,
+      complete: 0,
+      failed: 0,
+    };
+
+    for (const stat of stats) {
+      if (counts.hasOwnProperty(stat.status)) {
+        counts[stat.status] = stat._count;
+      }
+    }
+
+    return counts;
+  } catch (error) {
+    console.error("getExportJobStats failed:", error.message);
+    const err = new Error(
+      `Failed to retrieve job statistics: ${error.message}`
+    );
+    err.status = 500;
+    throw err;
+  }
+}
+
+module.exports = {
+  saveResult,
+  getResultById,
+  createExportJob,
+  getExportJobById,
+  updateExportJob,
+  getQueuedExportJobs,
+  deleteExpiredExportJobs,
+  getExportJobStats,
+};

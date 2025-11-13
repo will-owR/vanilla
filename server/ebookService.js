@@ -36,7 +36,8 @@ async function generateFromPrompt(prompt) {
  * @returns {Promise<Object>} Handler result { pages, metadata, actions }
  */
 async function handle(payload) {
-  const { prompt, metadata = {}, options = {} } = payload;
+  const { prompt, metadata = {} } = payload;
+  // Note: options from payload is intentionally not used in ebook mode
 
   // Generate ebook content using existing logic
   const content = buildContent(prompt);
@@ -58,10 +59,15 @@ async function handle(payload) {
   return {
     pages: standardizedPages,
     metadata: {
-      ...metadata,
       model: "ebook-v1",
+      pages_count: standardizedPages.length,
+      source: "ebook",
     },
     actions: {
+      // Persist prompt for audit trail
+      persist_prompt: true,
+      // Support PDF export
+      generate_pdf: true,
       can_export: true,
       can_preview: true,
     },

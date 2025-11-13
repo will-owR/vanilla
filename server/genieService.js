@@ -438,10 +438,20 @@ const genieService = {
     }
   },
 
-  // Backwards-compatible wrapper that delegates to utils/fileUtils
   /**
-   * Export content or a generated prompt to a PDF buffer.
+   * Export content or a generated prompt to a PDF buffer
+   *
+   * Orchestration strategy (in priority order):
+   * 1. Use canonical envelope if provided directly
+   * 2. Lookup persisted content by promptId/resultId
+   * 3. Generate from string prompt using process() (preferred for new envelopes)
+   * 4. Generate from prompt object (legacy content object with title/body)
+   *
+   * All rendering is delegated to exportService which handles both
+   * canonical envelope format and legacy title/body format.
+   *
    * @param {{prompt?: string|Content, promptId?: number|string, resultId?: number|string, envelope?: any, validate?: boolean}} [opts]
+   * @returns {Promise<{buffer: Buffer, validation?: any}>}
    */
   async export({
     prompt,
@@ -450,92 +460,63 @@ const genieService = {
     envelope,
     validate = false,
   } = {}) {
-    // Centralized export orchestration: prefer persisted content, fall back
-    // to generation, then render PDF using the pdfGenerator utility.
-    let contentObj = null;
-    // Lazily require pdfGenerator once for this invocation to avoid
-    // duplicate identifier complaints from static analysis when using
-    // destructured requires in multiple branches.
-    const pdfGenerator = /** @type {any} */ (require("./pdfGenerator"));
+    const exportService = require("./exportService");
 
-    // If caller provided a canonical envelope directly, use it immediately
+    // Priority 1: Canonical envelope provided directly
     if (envelope && envelope.pages && Array.isArray(envelope.pages)) {
-      // Accept canonical envelope directly; downstream plumbing will render
-      // the envelope into a PDF. Bypass legacy title/body normalization.
-      // Note: we still allow validate flag to be passed through.
-      const generated = await pdfGenerator.generatePdfBuffer({
-        envelope,
-        validate,
-      });
-      if (validate) {
-        if (generated && generated.buffer)
-          return {
-            buffer: generated.buffer,
-            validation: generated.validation,
-          };
-        if (generated && generated.validation) return generated;
-      }
-      return {
-        buffer: Buffer.isBuffer(generated) ? generated : generated.buffer,
-      };
+      return exportService.generate(envelope, { validate });
     }
 
-    // Prefer persisted canonical content when IDs provided
+    // Priority 2: Canonical envelope passed as prompt parameter
+    if (
+      prompt &&
+      typeof prompt === "object" &&
+      prompt.pages &&
+      Array.isArray(prompt.pages)
+    ) {
+      return exportService.generate(prompt, { validate });
+    }
+
+    // Priority 3: Generate from string prompt using process()
+    if (prompt && typeof prompt === "string") {
+      const processResult = await genieService.process({
+        mode: "basic",
+        prompt,
+        metadata: {},
+        options: {},
+      });
+      if (processResult && processResult.out_envelope) {
+        return exportService.generate(processResult.out_envelope, {
+          validate,
+        });
+      }
+    }
+
+    // Priority 4: Lookup persisted content by ID
     if (promptId || resultId) {
       const persisted = await genieService.getPersistedContent({
         promptId,
         resultId,
       });
       if (persisted && persisted.content) {
-        contentObj =
+        const contentObj =
           persisted.content && persisted.content.content
             ? persisted.content.content
             : persisted.content;
+        // If persisted content has pages (canonical), use it
+        if (contentObj && contentObj.pages && Array.isArray(contentObj.pages)) {
+          return exportService.generate(contentObj, { validate });
+        }
       }
     }
 
-    // If caller provided a content object directly via `prompt`, accept it
-    if (!contentObj && prompt && typeof prompt === "object") {
-      // shape: { title, body }
-      contentObj = prompt;
-    }
-
-    // Otherwise, generate content from prompt text
-    if (!contentObj && prompt && typeof prompt === "string") {
-      const genResult = await genieService.generate(prompt);
-      // genieService.generate returns envelope { success, data }
-      if (genResult && genResult.data && genResult.data.content)
-        contentObj = genResult.data.content;
-      else if (genResult && genResult.content) contentObj = genResult.content;
-    }
-
-    if (!contentObj || !contentObj.title || !contentObj.body) {
-      const e = new Error(
-        "Export requires content (title & body) or a valid prompt/persisted id"
-      );
-      // @ts-ignore
-      e.status = 400;
-      throw e;
-    }
-
-    const title = contentObj.title || "Export";
-    const body = contentObj.body || "";
-
-    const generated = await pdfGenerator.generatePdfBuffer({
-      title,
-      body,
-      validate,
-    });
-    if (validate) {
-      if (generated && generated.buffer)
-        return { buffer: generated.buffer, validation: generated.validation };
-      // Some implementations return { buffer, validation } already
-      if (generated && generated.validation) return generated;
-    }
-
-    return {
-      buffer: Buffer.isBuffer(generated) ? generated : generated.buffer,
-    };
+    // No valid export path found
+    const e = new Error(
+      "Export requires: canonical envelope with pages array, or valid promptId/resultId"
+    );
+    // @ts-ignore
+    e.status = 400;
+    throw e;
   },
 
   saveContentToFile(content) {
@@ -548,40 +529,112 @@ const genieService = {
    * @param {Object} payload - Enhanced payload { mode, prompt, metadata, options }
    * @returns {Promise<Object>} Standardized response with out_envelope
    */
+  /**
+   * Process enhanced payload — Orchestrator
+   *
+   * Responsibilities:
+   * 1. Route by mode to appropriate service handler
+   * 2. Build canonical envelope with enriched metadata
+   * 3. Process actions from service (e.g., persist_prompt)
+   * 4. Coordinate with external concerns (persistence, etc.)
+   *
+   * @param {Object} payload - { mode, prompt, metadata, options }
+   * @returns {Promise<Object>} Canonical response { out_envelope: { pages, metadata, actions } }
+   */
   async process(payload) {
-    const { mode, prompt, metadata = {}, options = {} } = payload;
+    const { mode, prompt } = payload;
+    const { v4: uuidv4 } = require("uuid");
+    const resultDb = require("./utils/resultDb");
 
     try {
       let result;
 
-      // Mode-based routing to appropriate service handler
+      // 1. Route by mode to appropriate service handler
       switch (mode) {
-        case "demo":
+        case "demo": {
           const demoService = require("./demoService");
           result = await demoService.handle(payload);
           break;
-        case "ebook":
+        }
+        case "ebook": {
           const ebookService = require("./ebookService");
           result = await ebookService.handle(payload);
           break;
+        }
         case "basic":
-        default:
+        default: {
           result = await sampleService.handle(payload);
+        }
       }
 
-      // Return standardized response envelope
-      return {
+      // 2. Build canonical response envelope with enriched metadata
+      const envelope = {
         out_envelope: {
           pages: result.pages || [],
           metadata: {
-            ...metadata,
+            // Service-generated fields
             ...result.metadata,
+            // Orchestrator-added fields
             generated_at: new Date().toISOString(),
             mode: mode,
           },
           actions: result.actions || {},
         },
       };
+
+      // 3. Persist result with unique UUID for retrieval
+      // Each generation gets a resultId that can be used to reference this result
+      // in export, preview, and other endpoints. This enables:
+      // - Reference-based export (client sends resultId, not content)
+      // - Async job queuing (jobs reference resultId, not full content)
+      // - Audit trail (all prompts/results stored by UUID)
+      const resultId = uuidv4();
+      try {
+        await resultDb.saveResult(resultId, envelope.out_envelope, mode);
+        envelope.resultId = resultId;
+      } catch (err) {
+        // Log but do not fail the request - persistence is best-effort
+        // eslint-disable-next-line no-console
+        console.warn(
+          "genieService.process: result persistence failed",
+          err?.message
+        );
+        // Still include resultId in response for client reference (best-effort)
+        envelope.resultId = resultId;
+      }
+
+      // 4. Process actions from service (orchestrator responsibility)
+      // Actions allow services to express intent without handling side effects
+      if (result.actions) {
+        // Check for persist_prompt action
+        if (result.actions.persist_prompt === true) {
+          try {
+            const { saveContentToFile } = require("./utils/fileUtils");
+            // Fire-and-forget: save prompt in background (non-blocking)
+            saveContentToFile(prompt).catch((err) => {
+              // Log but do not fail the request
+              // eslint-disable-next-line no-console
+              console.warn(
+                "genieService.process: persist_prompt action failed",
+                err?.message
+              );
+            });
+          } catch (e) {
+            // Log but do not fail the request
+            // eslint-disable-next-line no-console
+            console.warn(
+              "genieService.process: Could not process persist_prompt action",
+              e?.message
+            );
+          }
+        }
+
+        // Other actions can be added here as needed:
+        // if (result.actions.send_notification) { ... }
+        // if (result.actions.trigger_webhook) { ... }
+      }
+
+      return envelope;
     } catch (error) {
       throw new Error(`Generation failed: ${error.message}`);
     }

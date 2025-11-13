@@ -42,6 +42,43 @@ model PDFExport {
   createdAt DateTime @default(now())
 }
 
+// Results table: persistent storage of generated content (reference-based export)
+model Result {
+  id          Int       @id @default(autoincrement())
+  resultId    String    @unique @db.Uuid // UUID for anonymous/distributed access
+  outEnvelope Json      @db.JsonB // Canonical { pages, metadata, actions }
+  mode        String    @db.VarChar(50) // "basic", "demo", "ebook"
+  promptId    Int? // Optional link to original prompt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  exportJobs  ExportJob[] // Relationship to export jobs
+  
+  @@index([resultId])
+  @@index([createdAt])
+  @@map("results")
+}
+
+// Export jobs table: async job tracking for reference-based export
+model ExportJob {
+  id            Int       @id @default(autoincrement())
+  jobId         String    @unique @db.Uuid // UUID for anonymous job reference
+  result        Result    @relation(fields: [resultId], references: [resultId])
+  resultId      String    @db.Uuid // Foreign key to results.resultId
+  status        String    @default("queued") @db.VarChar(50)
+    // Values: queued, processing, complete, failed
+  progress      Int       @default(0)
+  pdfPath       String?   @db.VarChar(500) // Path to generated PDF
+  errorMessage  String?   // Error details if status is failed
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime? // Timestamp when job completed
+  
+  @@index([jobId])
+  @@index([resultId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("export_jobs")
+}
+
 // Minimal Calendar model to satisfy health checks that expect a Calendar table.
 model Calendar {
   id        Int      @id @default(autoincrement())

@@ -34,9 +34,8 @@ async function generateFromPrompt(prompt) {
  * @returns {Promise<Object>} Handler result { pages, metadata, actions }
  */
 async function handle(payload) {
-  const { prompt, metadata = {}, options = {} } = payload;
-
-  // Generate demo content using existing logic
+  const { prompt, metadata = {} } = payload;
+  // Note: options from payload is intentionally not used in demo mode
   const content = buildContent(prompt);
   const numPages = parseInt(metadata.pages) || 3;
   const pages = makePages(content, numPages);
@@ -56,10 +55,15 @@ async function handle(payload) {
   return {
     pages: standardizedPages,
     metadata: {
-      ...metadata,
       model: "demo-1",
+      pages_count: standardizedPages.length,
+      source: "demo",
     },
     actions: {
+      // Persist prompt for audit trail
+      persist_prompt: true,
+      // Support PDF export
+      generate_pdf: true,
       can_export: true,
       can_preview: true,
     },
