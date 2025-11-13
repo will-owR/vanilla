@@ -572,14 +572,14 @@ setInterval(cleanupExpiredJobs, 60 * 60 * 1000);
 
 ## **11. Implementation Phases**
 
-### **Phase 1: Schema & Persistence** ✅ TODO
+### **Phase 1: Schema & Persistence** ✅ DONE
 
 - [x] Add `results` table to PostgreSQL schema
 - [x] Add `export_jobs` table to PostgreSQL schema
 - [x] Update Prisma schema or direct SQL migrations
 - [x] Verify schema via `./server/scripts/db-health.sh --check=all`
 
-### **Phase 2: Result Persistence** ✅ TODO
+### **Phase 2: Result Persistence** ✅ DONE
 
 - [x] Modify `genieService.process()` to persist result
 - [x] Return `resultId` in response
