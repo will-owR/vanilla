@@ -579,6 +579,8 @@ const genieService = {
             mode: mode,
           },
           actions: result.actions || {},
+          // Include epilogue if provided by service (e.g., demo mode)
+          ...(result.epilogue && { epilogue: result.epilogue }),
         },
       };
 

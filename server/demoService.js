@@ -108,10 +108,11 @@ async function generatePages(prompt, metadata = {}) {
  * Handle enhanced payload for demo mode
  * Validates required metadata and generates demo content
  * @param {Object} payload - { mode, prompt, metadata, options }
- * @returns {Promise<Object>} Handler result { pages, metadata, actions }
+ * @returns {Promise<Object>} Handler result { pages, metadata, actions, epilogue }
  */
 async function handle(payload) {
   const { prompt, metadata = {} } = payload;
+
   // Use new generatePages() function for 5-page demo with rich blocks
   const result = await generatePages(prompt, {
     pages: metadata.pages || 5,
@@ -119,7 +120,19 @@ async function handle(payload) {
     author: metadata.author || "CELS",
   });
 
-  return result;
+  // Generate epilogue (closing + bio + resources)
+  const epilogueGenerator = require("./utils/epilogueGenerator");
+  const epilogue = await epilogueGenerator.generateEpilogue({
+    title: metadata.title || "Demo Presentation",
+    author: metadata.author || "CELS",
+    email: metadata.email,
+  });
+
+  // Add epilogue to the result
+  return {
+    ...result,
+    epilogue,
+  };
 }
 
 module.exports = {
