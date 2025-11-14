@@ -1,7 +1,7 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "types": ["jest", "node"],
+    "types": ["vitest", "node"],
     "baseUrl": "..",
     "paths": {
       "@utils/*": ["utils/*"],

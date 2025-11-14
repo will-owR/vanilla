@@ -1,4 +1,4 @@
-/// <reference types="jest" />
+/// <reference types="vitest" />
 import { exportCalendarToPDF, PDFExportOptions } from "@utils/pdfExport";
 import { PDFDocument, PageSizes } from "pdf-lib";
 import { execFileSync } from "child_process";
