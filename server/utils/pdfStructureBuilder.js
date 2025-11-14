@@ -36,13 +36,24 @@ async function generatePDF(envelope, theme = "dark", options = {}) {
     theme: themeConfig,
   });
 
+  console.log(
+    `[pdfStructureBuilder] Built HTML with ${pages.length} content pages, ${html.length} bytes`
+  );
+  const pageCount = (html.match(/<div class="page/g) || []).length;
+  console.log(
+    `[pdfStructureBuilder] HTML has ${pageCount} page divs (cover, copyright, toc, ${pages.length} content, epilogue)`
+  );
+
   // Generate PDF using existing pdfGenerator (Puppeteer-based)
+  // IMPORTANT: Do NOT pass envelope parameter here, as pdfGenerator will use the
+  // envelope to build its own simple HTML and ignore our carefully crafted HTML.
+  // Instead, pass the full HTML as body and let pdfGenerator render it as-is.
   const pdfBuffer = await pdfGenerator.generatePdfBuffer({
     title: metadata.title || "Demo Presentation",
     body: html,
     validate: options.validate || false,
     browser: options.browser,
-    envelope: { pages, metadata, epilogue },
+    // envelope is intentionally NOT passed here
   });
 
   return pdfBuffer;

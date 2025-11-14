@@ -40,10 +40,12 @@ const exportService = {
     try {
       // Route to mode-specific PDF builder
       const mode = envelope.metadata?.mode;
+      console.log("[exportService] Generating PDF for mode:", mode);
       let generated;
 
       if (mode === "demo") {
         // Use demo-specific PDF structure builder for polished book format
+        console.log("[exportService] Using pdfStructureBuilder for demo mode");
         try {
           const theme = themeEngine.getTheme(
             envelope.metadata?.theme || "dark"
@@ -57,6 +59,10 @@ const exportService = {
         }
       } else {
         // Use generic PDF generator for other modes (basic, sample, etc.)
+        console.log(
+          "[exportService] Using pdfGenerator for mode:",
+          mode || "unspecified"
+        );
         generated = await pdfGenerator.generatePdfBuffer({
           envelope,
           validate: options.validate,
