@@ -115,6 +115,7 @@ This document outlines the plan for implementing the export system from scratch,
    ```
 
 2. **Export Service Client**
+
    ```typescript
    // client/src/services/exportService.ts
    export class ExportService {
@@ -171,15 +172,15 @@ This document outlines the plan for implementing the export system from scratch,
    // server/services/__tests__/ExportService.test.ts
    describe("ExportService", () => {
      let exportService: ExportService;
-     let mockGenieService: jest.Mocked<GenieService>;
-     let mockSampleService: jest.Mocked<SampleService>;
+     let mockGenieService: Partial<GenieService> & Record<string, any>;
+     let mockSampleService: Partial<SampleService> & Record<string, any>;
 
      beforeEach(() => {
        mockGenieService = {
-         getPersistedContent: jest.fn(),
+         getPersistedContent: vi.fn(),
        };
        mockSampleService = {
-         getEditedContent: jest.fn(),
+         getEditedContent: vi.fn(),
        };
        exportService = new ExportService(mockGenieService, mockSampleService);
      });
@@ -246,6 +247,7 @@ This document outlines the plan for implementing the export system from scratch,
    ```
 
 3. **E2E Tests**
+
    ```typescript
    // e2e/export.test.ts
    describe("Export Flow", () => {

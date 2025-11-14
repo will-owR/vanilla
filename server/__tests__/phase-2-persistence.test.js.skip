@@ -8,7 +8,7 @@
  * 4. Persistence failures do not block generation
  */
 
-const { describe, it, expect, beforeAll, afterAll } = require("@jest/globals");
+const { describe, it, expect, beforeAll, afterAll, vi } = require("@vitest/globals");
 const genieService = require("../genieService");
 const resultDb = require("../utils/resultDb");
 const { PrismaClient } = require("@prisma/client");
@@ -165,7 +165,7 @@ describe("Phase 2: Result Persistence Integration", () => {
       const originalSave = resultDb.saveResult;
       let callCount = 0;
 
-      resultDb.saveResult = jest
+      resultDb.saveResult = vi
         .fn()
         .mockRejectedValueOnce(new Error("Database temporarily unavailable"));
 
@@ -254,7 +254,7 @@ describe("Phase 2: Result Persistence Integration", () => {
 
       // Mock saveResult to use the same resultId
       const originalSave = resultDb.saveResult;
-      resultDb.saveResult = jest.fn(async (rid, envelope, mode) => {
+      resultDb.saveResult = vi.fn(async (rid, envelope, mode) => {
         // Force using the same resultId from first result
         return await prisma.result.create({
           data: {
