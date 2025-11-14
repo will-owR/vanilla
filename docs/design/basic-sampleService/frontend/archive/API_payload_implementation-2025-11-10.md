@@ -153,7 +153,7 @@ Notes: demoService and ebookService may be simple stubs that mirror sampleServic
 
 ## Tests to add (exact targets)
 
-- `server/__tests__/prompt.handler.test.mjs`: send canonical payloads for `basic` and `demo`; assert HTTP 200 and correct call into genieService (use sinon/jest spies or mock).
+- `server/__tests__/prompt.handler.test.mjs`: send canonical payloads for `basic` and `demo`; assert HTTP 200 and correct call into genieService (use sinon/vi or sinon spies/mocks).
 - `server/__tests__/genie.process.test.mjs`: call `genieService.process` with each mode and assert it calls the expected service handler.
 - `client/__tests__/api.submitPrompt.test.js`: mock fetch; ensure submitPrompt sends assembled payload and rejects on missing demo metadata.
 
