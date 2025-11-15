@@ -628,7 +628,7 @@ class KeywordDatabaseAPI {
    */
   findMatches(token, category) {
     const keywords = this.database[category];
-    if (!keywords) return null;
+    if (!keywords || !token || token.trim() === "") return null;
 
     const lowerToken = token.toLowerCase();
 
