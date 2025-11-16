@@ -22,6 +22,7 @@
     "e2e:smoke": "node ./scripts/e2e-smoke.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^6.18.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
