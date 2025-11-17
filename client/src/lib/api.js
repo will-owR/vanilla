@@ -524,3 +524,240 @@ export async function getExportJobStatus(jobId) {
     throw new Error(`Failed to fetch job status: ${response.status}`);
   return response.json();
 }
+
+// ========================================
+// Phase A-B: Classification + Routing API
+// ========================================
+
+/**
+ * Classify a prompt to extract medium, style, theme, audience, etc.
+ * Returns classification with confidence score and source (rules/ai/hybrid)
+ */
+export async function classify(prompt, options = {}) {
+  Logger.debug("Classifying prompt", { promptLength: prompt?.length });
+
+  try {
+    const response = await fetchWithRetry("/api/classify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, options }),
+      retryConfig: { maxRetries: 2 },
+    });
+
+    if (!response.ok) {
+      const error = new Error(`Classification failed: ${response.status}`);
+      Logger.error("Classification request failed", {
+        error,
+        status: response.status,
+      });
+      throw error;
+    }
+
+    const result = await response.json();
+    Logger.info("Prompt classified successfully", {
+      medium: result.medium,
+      confidence: result.confidence,
+      source: result.source,
+    });
+    return result;
+  } catch (error) {
+    Logger.error("Classification error", { error });
+    throw error;
+  }
+}
+
+/**
+ * Generate content for a prompt with specified medium and options
+ * Internally calls genieRouter to route to appropriate service
+ */
+export async function generate(prompt, medium = "ebook", options = {}) {
+  Logger.debug("Generating content", { prompt: prompt?.slice(0, 50), medium });
+
+  try {
+    const response = await fetchWithRetry("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        medium,
+        options,
+      }),
+      retryConfig: { maxRetries: 2 },
+    });
+
+    if (!response.ok) {
+      const error = new Error(`Generation failed: ${response.status}`);
+      Logger.error("Generation request failed", {
+        error,
+        status: response.status,
+      });
+      throw error;
+    }
+
+    const result = await response.json();
+    Logger.info("Content generated successfully", {
+      medium: result.medium,
+      latency: result.latency,
+      confidence: result.confidence,
+    });
+    return result;
+  } catch (error) {
+    Logger.error("Generation error", { error });
+    throw error;
+  }
+}
+
+/**
+ * Apply override to change style, color, or medium after generation
+ * Calls override system API for cost-aware transformations
+ */
+export async function applyOverride(
+  output,
+  oldClassification,
+  newClassification
+) {
+  Logger.debug("Applying override", {
+    oldMedium: oldClassification?.medium,
+    newMedium: newClassification?.medium,
+  });
+
+  try {
+    const response = await fetchWithRetry("/api/override", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        output,
+        oldClassification,
+        newClassification,
+      }),
+      retryConfig: { maxRetries: 2 },
+    });
+
+    if (!response.ok) {
+      const error = new Error(`Override failed: ${response.status}`);
+      Logger.error("Override request failed", {
+        error,
+        status: response.status,
+      });
+      throw error;
+    }
+
+    const result = await response.json();
+    Logger.info("Override applied successfully", {
+      costMultiplier: result.costMultiplier,
+      changedDimensions: result.changedDimensions,
+    });
+    return result;
+  } catch (error) {
+    Logger.error("Override error", { error });
+    throw error;
+  }
+}
+
+/**
+ * Get available services (mediums) from router
+ */
+export async function getAvailableServices() {
+  Logger.debug("Fetching available services");
+
+  try {
+    const response = await fetchWithRetry("/api/router/services", {
+      retryConfig: { maxRetries: 2 },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch services: ${response.status}`);
+    }
+
+    const services = await response.json();
+    Logger.info("Services fetched", { count: services?.length });
+    return services;
+  } catch (error) {
+    Logger.error("Failed to fetch services", { error });
+    throw error;
+  }
+}
+
+/**
+ * Get capabilities (styles, themes) for a specific medium
+ */
+export async function getServiceCapabilities(medium) {
+  Logger.debug("Fetching capabilities", { medium });
+
+  try {
+    const response = await fetchWithRetry(
+      `/api/router/capabilities/${encodeURIComponent(medium)}`,
+      { retryConfig: { maxRetries: 2 } }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch capabilities: ${response.status}`);
+    }
+
+    const capabilities = await response.json();
+    Logger.info("Capabilities fetched", {
+      medium,
+      styles: capabilities?.styles?.length,
+    });
+    return capabilities;
+  } catch (error) {
+    Logger.error("Failed to fetch capabilities", { error });
+    throw error;
+  }
+}
+
+/**
+ * Check if override from one medium to another is possible
+ */
+export async function canTransform(fromMedium, toMedium) {
+  Logger.debug("Checking transform compatibility", { fromMedium, toMedium });
+
+  try {
+    const response = await fetchWithRetry("/api/override/can-transform", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fromMedium, toMedium }),
+      retryConfig: { maxRetries: 2 },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to check transform: ${response.status}`);
+    }
+
+    const result = await response.json();
+    Logger.info("Transform compatibility checked", {
+      fromMedium,
+      toMedium,
+      can: result.can,
+    });
+    return result.can;
+  } catch (error) {
+    Logger.error("Failed to check transform", { error });
+    throw error;
+  }
+}
+
+/**
+ * Get compatible styles for a given medium
+ */
+export async function getCompatibleStyles(medium) {
+  Logger.debug("Fetching compatible styles", { medium });
+
+  try {
+    const response = await fetchWithRetry(
+      `/api/override/compatible-styles/${encodeURIComponent(medium)}`,
+      { retryConfig: { maxRetries: 2 } }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch compatible styles: ${response.status}`);
+    }
+
+    const styles = await response.json();
+    Logger.info("Compatible styles fetched", { medium, count: styles?.length });
+    return styles;
+  } catch (error) {
+    Logger.error("Failed to fetch compatible styles", { error });
+    throw error;
+  }
+}
