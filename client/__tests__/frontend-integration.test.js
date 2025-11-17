@@ -416,4 +416,189 @@ describe("Frontend Integration Tests - Module 10", () => {
       });
     });
   });
+
+  // ========================================
+  // END-TO-END WORKFLOW TESTS (5 tests)
+  // ========================================
+  describe("End-to-End Workflows", () => {
+    it("should complete full workflow: prompt → classify → generate", async () => {
+      // Step 1: Classify
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          medium: "ebook",
+          style: "minimalist",
+          confidence: 0.92,
+          source: "hybrid",
+        }),
+      });
+
+      const classification = await classify("Write a summer poetry collection");
+
+      expect(classification.medium).toBe("ebook");
+      expect(classification.confidence).toBeGreaterThan(0.9);
+
+      // Step 2: Generate
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output: { type: "ebook", pages: 8, images: 8 },
+          latency: 3500,
+          medium: "ebook",
+        }),
+      });
+
+      const generated = await generate(
+        "Write a summer poetry collection",
+        "ebook",
+        {
+          style: classification.style,
+        }
+      );
+
+      expect(generated.output.type).toBe("ebook");
+      expect(generated.latency).toBeLessThan(5000);
+    });
+
+    it("should handle full override workflow: generate → override style", async () => {
+      // Step 1: Generate initial
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output: { type: "ebook", style: "minimalist" },
+          latency: 2000,
+        }),
+      });
+
+      const generated = await generate("Summer poems", "ebook");
+      expect(generated.output.style).toBe("minimalist");
+
+      // Step 2: Override style
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output: { type: "ebook", style: "gothic" },
+          costMultiplier: 0.4,
+          changedDimensions: ["style"],
+        }),
+      });
+
+      const overridden = await applyOverride(
+        generated.output,
+        { medium: "ebook", style: "minimalist" },
+        { medium: "ebook", style: "gothic" }
+      );
+
+      expect(overridden.output.style).toBe("gothic");
+      expect(overridden.costMultiplier).toBeLessThan(0.5);
+    });
+
+    it("should handle multiple overrides in sequence", async () => {
+      const initialOutput = {
+        type: "ebook",
+        style: "minimalist",
+        color: "vibrant",
+      };
+      let currentClass = {
+        medium: "ebook",
+        style: "minimalist",
+        color: "vibrant",
+      };
+
+      // Override 1: Change style
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output: { ...initialOutput, style: "gothic" },
+          costMultiplier: 0.4,
+        }),
+      });
+
+      const step1 = await applyOverride(initialOutput, currentClass, {
+        ...currentClass,
+        style: "gothic",
+      });
+      currentClass.style = "gothic";
+
+      // Override 2: Change color
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output: { ...step1.output, color: "dark" },
+          costMultiplier: 0.05,
+        }),
+      });
+
+      const step2 = await applyOverride(step1.output, currentClass, {
+        ...currentClass,
+        color: "dark",
+      });
+
+      expect(step2.output.style).toBe("gothic");
+      expect(step2.output.color).toBe("dark");
+      expect(step2.costMultiplier).toBeLessThan(0.1);
+    });
+
+    it("should handle medium transformation with full regeneration", async () => {
+      const initialOutput = { type: "ebook", content: "..." };
+      const initialClass = { medium: "ebook" };
+
+      // Transform to different medium
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output: { type: "poster", content: "poster layout" },
+          costMultiplier: 1.0,
+          changedDimensions: ["medium"],
+        }),
+      });
+
+      const transformed = await applyOverride(initialOutput, initialClass, {
+        medium: "poster",
+      });
+
+      expect(transformed.output.type).toBe("poster");
+      expect(transformed.costMultiplier).toBe(1.0); // Full cost for medium change
+    });
+
+    it("should maintain backward compatibility with Phase A demoService output", async () => {
+      // Simulate existing demoService format
+      const demoOutput = {
+        type: "demoContent",
+        title: "Summer Poems",
+        body: "Verse 1...",
+        layout: "default",
+        metadata: { author: "demo", theme: "light" },
+      };
+
+      // Should be able to classify this
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          medium: "ebook",
+          style: "minimalist",
+          confidence: 0.85,
+          source: "rules",
+        }),
+      });
+
+      const classification = await classify(demoOutput.title);
+
+      expect(classification.medium).toBeDefined();
+      expect(classification.confidence).toBeGreaterThan(0);
+
+      // Should be able to generate replacement content
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output: { type: "ebook", ...demoOutput },
+          latency: 2500,
+        }),
+      });
+
+      const generated = await generate(demoOutput.title, "ebook");
+      expect(generated.output).toHaveProperty("title");
+      expect(generated.output).toHaveProperty("body");
+    });
+  });
 });
