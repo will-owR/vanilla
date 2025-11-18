@@ -1,5 +1,7 @@
 # Frontend-Backend Integration Specification
 
+"Here's how frontend components receive data from backend responses, how state transitions work, and what errors look like"
+
 **Document Version**: 1.0  
 **Date**: November 18, 2025  
 **Status**: 🟢 **READY FOR IMPLEMENTATION**  
