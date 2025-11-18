@@ -688,6 +688,144 @@ app.post("/prompt", async (req, res, next) => {
   }
 });
 
+// --- PHASE A-B: NEW ENDPOINTS ---
+
+/**
+ * POST /api/classify - Classify a prompt to extract metadata
+ * Request: { prompt: string, selectedMedium?: string }
+ * Response: { classification: { medium, style, themes, confidence, source } }
+ */
+app.post("/api/classify", async (req, res, next) => {
+  try {
+    const { prompt } = req.body;
+
+    // Validate
+    if (!prompt || !String(prompt).trim()) {
+      return res.status(400).json({
+        error: "INVALID_REQUEST",
+        message: "Prompt is required and must be non-empty",
+      });
+    }
+
+    // Classify
+    const classification = await genieService.classifyPrompt(prompt);
+
+    // Return
+    return res.status(200).json({ classification });
+  } catch (err) {
+    err.status = err.status || 500;
+    err.code = err.code || "CLASSIFICATION_ERROR";
+    err.message = `Classification Error: ${err.message}`;
+    next(err);
+  }
+});
+
+/**
+ * POST /api/generate - Generate content with explicit medium
+ * Request: { prompt: string, medium: string, classification?: object }
+ * Response: { out_envelope, resultId }
+ */
+app.post("/api/generate", async (req, res, next) => {
+  try {
+    const { prompt, medium, classification } = req.body;
+
+    // Validate
+    if (!prompt || !String(prompt).trim()) {
+      return res.status(400).json({
+        error: "INVALID_REQUEST",
+        message: "Prompt is required and must be non-empty",
+      });
+    }
+
+    if (!medium || !String(medium).trim()) {
+      return res.status(400).json({
+        error: "INVALID_REQUEST",
+        message: "Medium is required",
+      });
+    }
+
+    // Build payload
+    const payload = {
+      mode: medium,
+      prompt: String(prompt).trim(),
+      _classification: classification || null,
+      ...(req.body.options && { options: req.body.options }),
+    };
+
+    // Process
+    const result = await genieService.process(payload);
+
+    // Return
+    return res.status(201).json(result);
+  } catch (err) {
+    err.status = err.status || 500;
+    err.code = err.code || "GENERATION_ERROR";
+    err.message = `Generation Error: ${err.message}`;
+    next(err);
+  }
+});
+
+/**
+ * POST /api/override - Apply style overrides to existing result
+ * Request: { resultId: string, overrides: object }
+ * Response: { out_envelope, costMultiplier, regenerationStrategy }
+ */
+app.post("/api/override", async (req, res, next) => {
+  try {
+    const { resultId, overrides, classification } = req.body;
+
+    // Validate
+    if (!resultId || !String(resultId).trim()) {
+      return res.status(400).json({
+        error: "INVALID_REQUEST",
+        message: "resultId is required",
+      });
+    }
+
+    if (!overrides || typeof overrides !== "object") {
+      return res.status(400).json({
+        error: "INVALID_REQUEST",
+        message: "Overrides must be an object",
+      });
+    }
+
+    // Calculate cost using overrideSystem
+    const { OverrideSystem } = require("./utils/overrideSystem");
+    const overrideSystem = new OverrideSystem();
+
+    // Detect what changed and estimate cost
+    const changes = overrideSystem.detectChanges(classification, overrides);
+    const costEstimate = overrideSystem.estimateCost(changes);
+
+    // Determine regeneration strategy
+    let regenerationStrategy = "restyling"; // Default: CSS only
+    if (overrides.medium && overrides.medium !== classification.medium) {
+      regenerationStrategy = "full"; // Full regeneration needed
+    } else if (changes.style || changes.theme) {
+      regenerationStrategy = "partial"; // Partial regeneration
+    }
+
+    // For Phase 1, return cost metadata only
+    // Phase 2 will implement actual override regeneration
+    return res.status(200).json({
+      resultId,
+      overrides: {
+        applied: Object.keys(overrides),
+        skipped: [],
+      },
+      costMultiplier: costEstimate.multiplier,
+      costBreakdown: costEstimate.breakdown,
+      regenerationStrategy,
+      message: "Override validated (regeneration in Phase 2)",
+    });
+  } catch (err) {
+    err.status = err.status || 500;
+    err.code = err.code || "OVERRIDE_ERROR";
+    err.message = `Override Error: ${err.message}`;
+    next(err);
+  }
+});
+
 // --- PREVIEW ENDPOINT ---
 // Import error handling utilities
 const { sendValidationError } = require("./utils/errorHandler");

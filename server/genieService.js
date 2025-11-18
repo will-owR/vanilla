@@ -530,6 +530,107 @@ const genieService = {
    * @returns {Promise<Object>} Standardized response with out_envelope
    */
   /**
+   * Classify a prompt to extract medium, style, theme, audience, tone
+   *
+   * Classification Pipeline:
+   * 1. Rule engine (fast path, <10ms, >80% accuracy)
+   * 2. LLM classifier (slow path, ~500ms, fallback when confidence < 0.85)
+   * 3. Validator (merge rule + AI results intelligently)
+   *
+   * @param {string} prompt - User prompt to classify
+   * @returns {Promise<Object>} Classification { medium, style, themes, audience, tone, confidence, source }
+   */
+  async classifyPrompt(prompt) {
+    if (!prompt || !String(prompt).trim()) {
+      return {
+        medium: "ebook",
+        style: "minimalist",
+        themes: [],
+        confidence: 0.5,
+        source: "default",
+      };
+    }
+
+    try {
+      const { RuleEngine, ruleEngineInstance } = require("./utils/ruleEngine");
+      const { keywordDatabase } = require("./utils/keywordDatabase");
+      const {
+        LLMClassifier,
+        llmClassifierInstance,
+      } = require("./utils/llmClassifier");
+      const {
+        ClassificationValidator,
+        classificationValidatorInstance,
+      } = require("./utils/classificationValidator");
+
+      // STEP 1: Fast path - rule engine extraction (<10ms)
+      const ruleEngine = ruleEngineInstance || new RuleEngine(keywordDatabase);
+      let classification = ruleEngine.extract(prompt);
+
+      // Normalize response format
+      if (!classification.themes && classification.theme) {
+        classification.themes = classification.theme;
+      }
+      if (!classification.themes) {
+        classification.themes = [];
+      }
+      if (!classification.confidence) {
+        classification.confidence = 0.5;
+      }
+      if (!classification.source) {
+        classification.source = "rules";
+      }
+
+      // STEP 2: LLM fallback - if rule engine low confidence
+      if (classification.confidence < 0.85) {
+        try {
+          const llmClassifier = llmClassifierInstance || new LLMClassifier();
+          const aiResult = await llmClassifier.classify(prompt);
+
+          if (aiResult) {
+            // STEP 3: Merge rule + AI results
+            const validator =
+              classificationValidatorInstance || new ClassificationValidator();
+            classification = validator.merge(classification, aiResult);
+
+            // Ensure merged result has correct format
+            if (!classification.themes && classification.theme) {
+              classification.themes = classification.theme;
+            }
+            if (!classification.themes) {
+              classification.themes = [];
+            }
+            if (!classification.source) {
+              classification.source = "merge";
+            }
+          }
+        } catch (aiError) {
+          // Log but don't fail - rule engine result is sufficient
+          // eslint-disable-next-line no-console
+          console.warn(
+            "LLM classification failed (non-blocking)",
+            aiError?.message
+          );
+          // Keep rule engine result
+        }
+      }
+
+      return classification;
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn("Classification pipeline failed", error?.message);
+      // Return safe default
+      return {
+        medium: "ebook",
+        style: "minimalist",
+        themes: [],
+        confidence: 0.5,
+        source: "error",
+      };
+    }
+  },
+
+  /**
    * Process enhanced payload — Orchestrator
    *
    * Responsibilities:
@@ -542,28 +643,38 @@ const genieService = {
    * @returns {Promise<Object>} Canonical response { out_envelope: { pages, metadata, actions } }
    */
   async process(payload) {
-    const { mode, prompt } = payload;
+    let { mode, prompt } = payload;
     const { v4: uuidv4 } = require("uuid");
     const resultDb = require("./utils/resultDb");
 
     try {
       let result;
+      let classification = null;
+
+      // NEW: Phase A-B - Extract classification if mode not provided
+      if (!mode || mode === "auto") {
+        classification = await this.classifyPrompt(prompt);
+        mode = classification.medium; // Use detected medium for routing
+      } else if (payload._classify === true) {
+        // Explicit classification flag for testing
+        classification = await this.classifyPrompt(prompt);
+      }
 
       // 1. Route by mode to appropriate service handler
       switch (mode) {
         case "demo": {
           const demoService = require("./demoService");
-          result = await demoService.handle(payload);
+          result = await demoService.handle(payload, classification);
           break;
         }
         case "ebook": {
           const ebookService = require("./ebookService");
-          result = await ebookService.handle(payload);
+          result = await ebookService.handle(payload, classification);
           break;
         }
         case "basic":
         default: {
-          result = await sampleService.handle(payload);
+          result = await sampleService.handle(payload, classification);
         }
       }
 
@@ -577,6 +688,8 @@ const genieService = {
             // Orchestrator-added fields
             generated_at: new Date().toISOString(),
             mode: mode,
+            // NEW: Phase A-B - Include classification metadata
+            ...(classification && { classification }),
           },
           actions: result.actions || {},
           // Include epilogue if provided by service (e.g., demo mode)
