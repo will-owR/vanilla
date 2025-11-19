@@ -11,6 +11,13 @@
   import { onMount } from 'svelte';
   import { flowStore, STATES } from '../lib/stores/flowStore.js';
   import { classify, generate, applyOverride, CONFIG } from '../lib/api-v2.js';
+  import MediaSelector from './MediaSelector-v2.svelte';
+  import PromptInput from './PromptInput-v2.svelte';
+  import ClassificationFeedback from './ClassificationFeedback-v2.svelte';
+  import ResultsDisplay from './ResultsDisplay-v2.svelte';
+  import StatsPanel from './StatsPanel-v2.svelte';
+  import OverrideControls from './OverrideControls-v2.svelte';
+  import CostVisualization from './CostVisualization-v2.svelte';
 
   // Track which handler is currently executing
   let isProcessing = false;
@@ -234,14 +241,13 @@
     <div class="state-initial">
       <h1>Welcome to Genie Generator</h1>
       <p>Select a medium to get started</p>
-      <!-- MediaSelector component will go here in Bundle 4 -->
+      <MediaSelector />
     </div>
 
   {:else if $flowStore.state === STATES.MEDIUM_SELECTED}
     <div class="state-medium-selected">
-      <p>Medium selected: {$flowStore.selectedMedium}</p>
-      <!-- PromptInput component will go here in Bundle 4 -->
-      <!-- Component will call on:generate event which triggers handleGenerateClick() -->
+      <h2>Create your {$flowStore.selectedMedium}</h2>
+      <PromptInput on:generate={handleGenerateClick} />
     </div>
 
   {:else if $flowStore.state === STATES.GENERATING}
@@ -254,27 +260,41 @@
 
   {:else if $flowStore.state === STATES.CLASSIFICATION_READY}
     <div class="state-classification-ready">
-      <!-- ClassificationFeedback component will go here in Bundle 5 -->
-      <!-- Component will call on:accept={handleAcceptClassification} -->
-      <!-- Component will call on:override={handleRequestOverride} -->
+      <h2>Review Classification</h2>
+      <ClassificationFeedback
+        classification={$flowStore.classification}
+        onAccept={handleAcceptClassification}
+        onRequestOverride={handleRequestOverride}
+      />
     </div>
 
   {:else if $flowStore.state === STATES.RESULT_READY}
     <div class="state-result-ready">
-      <!-- ResultsDisplay component will go here in Bundle 5 -->
-      <!-- Component will call on:customize={handleRequestOverride} -->
-      <!-- Component will call on:newPrompt={handleNewPrompt} -->
-      <!-- Component will call on:export={handleExportPDF} -->
-      
-      <!-- StatsPanel component will go here in Bundle 5 -->
+      <h2>Your Generated {$flowStore.selectedMedium}</h2>
+      <ResultsDisplay
+        result={$flowStore.result}
+        classification={$flowStore.classification}
+        onCustomizeStyle={handleRequestOverride}
+        onDownloadPDF={handleExportPDF}
+        onNewPrompt={handleNewPrompt}
+      />
+      <StatsPanel
+        result={$flowStore.result}
+        classification={$flowStore.classification}
+      />
     </div>
 
   {:else if $flowStore.state === STATES.OVERRIDE_ACTIVE}
     <div class="state-override-active">
-      <!-- OverrideControls component will go here in Bundle 6 -->
-      <!-- Component will call on:apply={(e) => handleApplyOverride(e.detail)} -->
-      
-      <!-- CostVisualization component will go here in Bundle 6 -->
+      <h2>Customize Your Generation</h2>
+      <OverrideControls
+        classification={$flowStore.classification}
+        onApplyOverride={handleApplyOverride}
+      />
+      <CostVisualization
+        result={$flowStore.result}
+        costMultiplier={$flowStore.overrideCost || 1.0}
+      />
     </div>
 
   {:else if $flowStore.state === STATES.ERROR}
