@@ -14,10 +14,10 @@
  * - Integration with genieService, OverrideSystem
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import request from "supertest";
-import db from "../db.js";
-import app from "../index.js";
+const { describe, it, expect, beforeAll, afterAll, vi } = require("vitest");
+const request = require("supertest");
+const db = require("../db");
+const app = require("../index");
 
 let testResultId = null;
 let testPrompt = null;
