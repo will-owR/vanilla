@@ -124,6 +124,7 @@ export async function mockClassify(prompt, selectedMedium) {
 
 /**
  * Mock generate endpoint
+ * Returns response matching backend POST /api/generate schema
  */
 export async function mockGenerate(prompt, medium, classification) {
   // Check for error injection
@@ -133,28 +134,39 @@ export async function mockGenerate(prompt, medium, classification) {
   }
 
   // Simulate longer network delay for generation
+  const latency = Math.floor(Math.random() * 15000) + 8000; // 8-23 seconds
   await delay(MOCK_DELAY_MS * 3);
 
+  // Calculate cost multiplier based on style/tone
+  const baseCost = 1.0;
+  const styleCost = classification.style ? 0.4 : 0;
+  const costEstimate = Math.round((baseCost + styleCost) * 100) / 100;
+
+  const generationId = generateUUID();
+
   return {
-    id: `gen-${generateUUID()}`,
-    pdfUrl: `/tmp-exports/generated-${generateUUID()}.pdf`,
+    id: generationId,
+    pdfUrl: `/tmp-exports/generated-${generationId}.pdf`,
     pageCount: Math.floor(Math.random() * 40) + 10,
     medium,
     style: classification.style,
     classification,
+    latency,
+    costEstimate,
     metadata: {
+      service: "mockService",
+      model: "mock-gemini-1.5",
+      timestamp: new Date().toISOString(),
       imageCount: Math.floor(Math.random() * 20) + 5,
       textLength: Math.floor(Math.random() * 5000) + 1000,
-      generatedAt: new Date().toISOString(),
       mockData: true,
     },
-    latency: Math.floor(Math.random() * 10000) + 5000,
-    costEstimate: Math.round(Math.random() * 200 + 50) / 100,
   };
 }
 
 /**
  * Mock applyOverride endpoint
+ * Returns response matching backend POST /api/override schema
  */
 export async function mockApplyOverride(
   generationId,
@@ -170,34 +182,63 @@ export async function mockApplyOverride(
     };
   }
 
+  if (!generationId) {
+    throw {
+      status: 404,
+      message: "Generation not found",
+      retryable: false,
+    };
+  }
+
   // Simulate network delay (shorter than generate)
+  const latency = Math.floor(Math.random() * 8000) + 2000; // 2-10 seconds
   await delay(MOCK_DELAY_MS * 2);
 
   // Calculate cost multiplier based on overrides
+  // MAX formula: 1.0 + 0.4 (style) + 0.3 (tone) + 0.2 (themes)
   let costMultiplier = 1.0;
+  const costBreakdown = {
+    base: 1.0,
+    style: 0,
+    tone: 0,
+    themes: 0,
+  };
+
   if (overrides.style && overrides.style !== classification.style) {
-    costMultiplier += 0.4;
+    costBreakdown.style = 0.4;
   }
   if (overrides.tone && overrides.tone !== classification.tone) {
-    costMultiplier += 0.3;
+    costBreakdown.tone = 0.3;
   }
-  if (overrides.themes) {
-    costMultiplier += 0.2;
+  if (overrides.themes && Array.isArray(overrides.themes)) {
+    costBreakdown.themes = 0.2;
   }
 
+  // Use MAX formula: take highest cost component
+  const costs = Object.values(costBreakdown);
+  const maxAdditionalCost = Math.max(...costs.slice(1)); // Skip base (index 0)
+  costMultiplier = costBreakdown.base + Math.max(0, maxAdditionalCost);
+
+  // Determine regeneration strategy based on what changed
+  let regenerationStrategy = "css-only"; // Default: only style changed
+  if (overrides.tone || overrides.themes) {
+    regenerationStrategy = "incremental"; // Tone or themes: partial regen
+  }
+  if (overrides.medium !== classification.medium) {
+    regenerationStrategy = "full"; // Medium changed: full regen
+  }
+
+  const overrideId = generateUUID();
+
   return {
-    id: `override-${generateUUID()}`,
-    pdfUrl: `/tmp-exports/override-${generateUUID()}.pdf`,
+    id: overrideId,
+    pdfUrl: `/tmp-exports/override-${overrideId}.pdf`,
     costMultiplier: Math.round(costMultiplier * 100) / 100,
-    costBreakdown: {
-      base: 1.0,
-      style: overrides.style ? 0.4 : 0,
-      tone: overrides.tone ? 0.3 : 0,
-      themes: overrides.themes ? 0.2 : 0,
-    },
-    regenerationStrategy: "incremental",
+    costBreakdown,
+    regenerationStrategy,
+    latency,
     metadata: {
-      originalId: generationId,
+      originalGenerationId: generationId,
       appliedOverrides: Object.keys(overrides),
       regeneratedAt: new Date().toISOString(),
       mockData: true,

@@ -83,7 +83,8 @@ describe("Mock API", () => {
       );
 
       expect(result).toBeDefined();
-      expect(result.id).toMatch(/^gen-/);
+      expect(result.id).toBeDefined(); // UUID format, no prefix required
+      expect(typeof result.id).toBe("string");
       expect(result.pdfUrl).toMatch(/^\/tmp-exports\//);
       expect(result.pdfUrl).toMatch(/\.pdf$/);
       expect(typeof result.pageCount).toBe("number");
@@ -129,7 +130,8 @@ describe("Mock API", () => {
       });
 
       expect(result).toBeDefined();
-      expect(result.id).toMatch(/^override-/);
+      expect(result.id).toBeDefined(); // UUID format, no prefix required
+      expect(typeof result.id).toBe("string");
       expect(result.pdfUrl).toMatch(/^\/tmp-exports\//);
       expect(typeof result.costMultiplier).toBe("number");
       expect(result.costMultiplier).toBeGreaterThan(1.0);
@@ -137,7 +139,7 @@ describe("Mock API", () => {
       expect(typeof result.costBreakdown.base).toBe("number");
       expect(result.regenerationStrategy).toBeDefined();
       expect(result.metadata).toBeDefined();
-      expect(result.metadata.originalId).toBe("gen-123");
+      expect(result.metadata.originalGenerationId).toBe("gen-123");
     });
 
     it("should calculate cost multiplier based on overrides", async () => {

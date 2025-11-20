@@ -651,8 +651,13 @@ const genieService = {
       let result;
       let classification = null;
 
-      // NEW: Phase A-B - Extract classification if mode not provided
-      if (!mode || mode === "auto") {
+      // NEW: Phase A-B - Extract classification if provided or auto-generate
+      // Priority: provided classification > auto-classify flag > auto-mode
+      if (payload._classification) {
+        // Use provided classification (from POST /api/generate)
+        classification = payload._classification;
+      } else if (!mode || mode === "auto") {
+        // Auto-classify when no mode provided or mode is "auto"
         classification = await this.classifyPrompt(prompt);
         mode = classification.medium; // Use detected medium for routing
       } else if (payload._classify === true) {
