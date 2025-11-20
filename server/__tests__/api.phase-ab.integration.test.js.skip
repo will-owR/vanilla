@@ -1,0 +1,872 @@
+/**
+ * Integration Tests for New Phase A-B API Endpoints
+ * 
+ * Tests:
+ * - POST /api/classify - Classification pipeline endpoint
+ * - POST /api/generate - Generation with explicit medium
+ * - POST /api/override - Style override application
+ * 
+ * Coverage:
+ * - Happy path (valid requests → correct responses)
+ * - Input validation (missing/invalid fields)
+ * - Error handling (500s, timeouts, service failures)
+ * - Response schema compliance
+ * - Integration with genieService, OverrideSystem
+ */
+
+const { describe, it, expect, beforeAll, afterAll, vi } = require("vitest");
+const request = require("supertest");
+const db = require("../db");
+const app = require("../index");
+
+let testResultId = null;
+let testPrompt = null;
+let testClassification = null;
+
+describe("API Integration Tests - Phase A-B Endpoints", () => {
+  beforeAll(async () => {
+    // Initialize database and server
+    // @ts-ignore
+    await db.initialize();
+
+    if (typeof app.startServer === "function") {
+      await app.startServer();
+    }
+
+    // Verify server is running
+    try {
+      const health = await request(app).get("/health");
+      expect(health.status).toBe(200);
+    } catch (error) {
+      throw new Error("Server must be running for integration tests");
+    }
+  });
+
+  afterAll(async () => {
+    // Cleanup: Delete test data if needed
+    if (testResultId) {
+      try {
+        // Try to delete via API or directly
+        await request(app).delete(`/api/result/${testResultId}`).catch(() => {
+          // Endpoint might not exist, ignore
+        });
+      } catch (error) {
+        console.warn("Cleanup failed for result:", testResultId);
+      }
+    }
+  });
+
+  describe("POST /api/classify - Classification Pipeline", () => {
+    it("should classify valid prompt", async () => {
+      const payload = {
+        prompt: "Create a summer poem ebook",
+        selectedMedium: null,
+      };
+
+      const res = await request(app)
+        .post("/api/classify")
+        .send(payload)
+        .expect(200);
+
+      expect(res.body).toHaveProperty("classification");
+      expect(res.body.classification).toHaveProperty("medium");
+      expect(res.body.classification).toHaveProperty("style");
+      expect(res.body.classification).toHaveProperty("themes");
+      expect(res.body.classification).toHaveProperty("confidence");
+      expect(res.body.classification).toHaveProperty("source");
+
+      // Store for later tests
+      testPrompt = payload.prompt;
+      testClassification = res.body.classification;
+    });
+
+    it("should classify with selectedMedium hint", async () => {
+      const payload = {
+        prompt: "Create content",
+        selectedMedium: "ebook",
+      };
+
+      const res = await request(app)
+        .post("/api/classify")
+        .send(payload)
+        .expect(200);
+
+      expect(res.body.classification).toBeDefined();
+      expect(res.body.classification.medium).toBeDefined();
+    });
+
+    it("should return 400 for missing prompt", async () => {
+      const payload = {
+        selectedMedium: "ebook",
+      };
+
+      const res = await request(app)
+        .post("/api/classify")
+        .send(payload)
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+      expect(res.body.error).toMatch(/prompt|required/i);
+    });
+
+    it("should return 400 for empty prompt", async () => {
+      const payload = {
+        prompt: "",
+        selectedMedium: null,
+      };
+
+      const res = await request(app)
+        .post("/api/classify")
+        .send(payload)
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("should return 400 for non-string prompt", async () => {
+      const payload = {
+        prompt: 12345,
+        selectedMedium: null,
+      };
+
+      const res = await request(app)
+        .post("/api/classify")
+        .send(payload)
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("should handle very long prompt", async () => {
+      const payload = {
+        prompt: "Create ebook " + "with content ".repeat(500),
+        selectedMedium: null,
+      };
+
+      const res = await request(app)
+        .post("/api/classify")
+        .send(payload);
+
+      // Should succeed or return 400, not 500
+      expect([200, 400]).toContain(res.status);
+    });
+
+    it("should return valid classification schema", async () => {
+      const res = await request(app)
+        .post("/api/classify")
+        .send({
+          prompt: "Test classification",
+          selectedMedium: null,
+        })
+        .expect(200);
+
+      const { classification } = res.body;
+
+      // Validate schema
+      expect(typeof classification.medium).toBe("string");
+      expect(["ebook", "demo", "sample"]).toContain(classification.medium);
+      expect(typeof classification.style).toBe("string");
+      expect(typeof classification.confidence).toBe("number");
+      expect(classification.confidence).toBeGreaterThanOrEqual(0);
+      expect(classification.confidence).toBeLessThanOrEqual(1);
+      expect(["rules", "llm", "merge"]).toContain(classification.source);
+    });
+
+    it("should handle special characters in prompt", async () => {
+      const payload = {
+        prompt: "Create ebook!@#$%^&*()_+-=[]{}|;:',.<>?/",
+        selectedMedium: null,
+      };
+
+      const res = await request(app)
+        .post("/api/classify")
+        .send(payload)
+        .expect(200);
+
+      expect(res.body.classification).toBeDefined();
+    });
+
+    it("should handle unicode in prompt", async () => {
+      const payload = {
+        prompt: "Create ebook with 中文 العربية Ελληνικά",
+        selectedMedium: null,
+      };
+
+      const res = await request(app)
+        .post("/api/classify")
+        .send(payload)
+        .expect(200);
+
+      expect(res.body.classification).toBeDefined();
+    });
+
+    it("should return consistent classification for same prompt", async () => {
+      const payload = {
+        prompt: "Create ebook about nature",
+        selectedMedium: null,
+      };
+
+      const res1 = await request(app)
+        .post("/api/classify")
+        .send(payload)
+        .expect(200);
+
+      const res2 = await request(app)
+        .post("/api/classify")
+        .send(payload)
+        .expect(200);
+
+      expect(res1.body.classification.medium).toBe(
+        res2.body.classification.medium
+      );
+    });
+  });
+
+  describe("POST /api/generate - Generation with Medium", () => {
+    it("should generate with valid classification", async () => {
+      const payload = {
+        prompt: testPrompt || "Create a summer poem ebook",
+        medium: testClassification?.medium || "ebook",
+        classification: testClassification || {
+          medium: "ebook",
+          style: "poetic",
+          themes: ["nature", "summer"],
+          confidence: 0.9,
+          source: "rules",
+        },
+      };
+
+      const res = await request(app)
+        .post("/api/generate")
+        .send(payload)
+        .expect(201);
+
+      expect(res.body).toHaveProperty("out_envelope");
+      expect(res.body).toHaveProperty("resultId");
+      expect(typeof res.body.out_envelope).toBe("object");
+      expect(typeof res.body.resultId).toBe("string");
+
+      testResultId = res.body.resultId;
+    });
+
+    it("should return 400 for missing prompt", async () => {
+      const payload = {
+        medium: "ebook",
+        classification: { medium: "ebook" },
+      };
+
+      const res = await request(app)
+        .post("/api/generate")
+        .send(payload)
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("should return 400 for missing medium", async () => {
+      const payload = {
+        prompt: "Test prompt",
+        classification: { medium: "ebook" },
+      };
+
+      const res = await request(app)
+        .post("/api/generate")
+        .send(payload)
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("should return 400 for missing classification", async () => {
+      const payload = {
+        prompt: "Test prompt",
+        medium: "ebook",
+      };
+
+      const res = await request(app)
+        .post("/api/generate")
+        .send(payload)
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("should return 400 for invalid medium", async () => {
+      const payload = {
+        prompt: "Test prompt",
+        medium: "invalid_medium",
+        classification: { medium: "ebook" },
+      };
+
+      const res = await request(app)
+        .post("/api/generate")
+        .send(payload)
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("should generate for all valid media", async () => {
+      const media = ["ebook", "demo", "sample"];
+
+      for (const medium of media) {
+        const payload = {
+          prompt: `Generate ${medium}`,
+          medium: medium,
+          classification: {
+            medium: medium,
+            style: "modern",
+            themes: ["test"],
+            confidence: 0.8,
+            source: "rules",
+          },
+        };
+
+        const res = await request(app)
+          .post("/api/generate")
+          .send(payload)
+          .expect(201);
+
+        expect(res.body).toHaveProperty("out_envelope");
+        expect(res.body).toHaveProperty("resultId");
+      }
+    });
+
+    it("should include classification in response metadata", async () => {
+      const payload = {
+        prompt: "Test",
+        medium: "ebook",
+        classification: {
+          medium: "ebook",
+          style: "poetic",
+          themes: ["test"],
+          confidence: 0.9,
+          source: "rules",
+        },
+      };
+
+      const res = await request(app)
+        .post("/api/generate")
+        .send(payload)
+        .expect(201);
+
+      // Classification should be stored in envelope metadata
+      expect(res.body.out_envelope).toBeDefined();
+    });
+
+    it("should handle various classification confidence levels", async () => {
+      const confidenceLevels = [0.5, 0.75, 0.85, 0.95, 1.0];
+
+      for (const confidence of confidenceLevels) {
+        const payload = {
+          prompt: "Test",
+          medium: "ebook",
+          classification: {
+            medium: "ebook",
+            style: "test",
+            themes: ["test"],
+            confidence: confidence,
+            source: "rules",
+          },
+        };
+
+        const res = await request(app)
+          .post("/api/generate")
+          .send(payload)
+          .expect(201);
+
+        expect(res.body).toHaveProperty("out_envelope");
+      }
+    });
+
+    it("should generate unique resultIds", async () => {
+      const ids = new Set();
+
+      for (let i = 0; i < 5; i++) {
+        const payload = {
+          prompt: `Test ${i}`,
+          medium: "ebook",
+          classification: {
+            medium: "ebook",
+            style: "test",
+            themes: [],
+            confidence: 0.8,
+            source: "rules",
+          },
+        };
+
+        const res = await request(app)
+          .post("/api/generate")
+          .send(payload)
+          .expect(201);
+
+        ids.add(res.body.resultId);
+      }
+
+      // All IDs should be unique
+      expect(ids.size).toBe(5);
+    });
+  });
+
+  describe("POST /api/override - Style Overrides", () => {
+    it("should apply valid overrides", async () => {
+      // First generate a result
+      const genRes = await request(app)
+        .post("/api/generate")
+        .send({
+          prompt: "Test",
+          medium: "ebook",
+          classification: {
+            medium: "ebook",
+            style: "modern",
+            themes: ["test"],
+            confidence: 0.9,
+            source: "rules",
+          })
+        .expect(201);
+
+      const resultId = genRes.body.resultId;
+
+      // Now apply overrides
+      const payload = {
+        resultId: resultId,
+        overrides: {
+          colors: { primary: "#FF0000" },
+          fonts: { heading: "Arial" },
+        },
+        classification: {
+          medium: "ebook",
+          style: "modern",
+          themes: ["test"],
+          confidence: 0.9,
+          source: "rules",
+        },
+      };
+
+      const res = await request(app)
+        .post("/api/override")
+        .send(payload)
+        .expect(200);
+
+      expect(res.body).toHaveProperty("costMultiplier");
+      expect(res.body).toHaveProperty("regenerationStrategy");
+      expect(typeof res.body.costMultiplier).toBe("number");
+      expect(typeof res.body.regenerationStrategy).toBe("string");
+    });
+
+    it("should return 400 for missing resultId", async () => {
+      const payload = {
+        overrides: { colors: { primary: "#FF0000" } },
+        classification: { medium: "ebook" },
+      };
+
+      const res = await request(app)
+        .post("/api/override")
+        .send(payload)
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("should return 400 for missing overrides", async () => {
+      const payload = {
+        resultId: "test-id",
+        classification: { medium: "ebook" },
+      };
+
+      const res = await request(app)
+        .post("/api/override")
+        .send(payload)
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("should return 400 for non-object overrides", async () => {
+      const payload = {
+        resultId: "test-id",
+        overrides: "not an object",
+        classification: { medium: "ebook" },
+      };
+
+      const res = await request(app)
+        .post("/api/override")
+        .send(payload)
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("should return 400 for missing classification", async () => {
+      const payload = {
+        resultId: "test-id",
+        overrides: { colors: { primary: "#FF0000" } },
+      };
+
+      const res = await request(app)
+        .post("/api/override")
+        .send(payload)
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("should handle empty overrides object", async () => {
+      const genRes = await request(app)
+        .post("/api/generate")
+        .send({
+          prompt: "Test",
+          medium: "ebook",
+          classification: {
+            medium: "ebook",
+            style: "modern",
+            themes: [],
+            confidence: 0.9,
+            source: "rules",
+          },
+        })
+        .expect(201);
+
+      const payload = {
+        resultId: genRes.body.resultId,
+        overrides: {},
+        classification: {
+          medium: "ebook",
+          style: "modern",
+          themes: [],
+          confidence: 0.9,
+          source: "rules",
+        },
+      };
+
+      const res = await request(app)
+        .post("/api/override")
+        .send(payload)
+        .expect(200);
+
+      expect(res.body).toHaveProperty("costMultiplier");
+      expect(res.body).toHaveProperty("regenerationStrategy");
+    });
+
+    it("should apply color overrides", async () => {
+      const genRes = await request(app)
+        .post("/api/generate")
+        .send({
+          prompt: "Test",
+          medium: "ebook",
+          classification: {
+            medium: "ebook",
+            style: "modern",
+            themes: [],
+            confidence: 0.9,
+            source: "rules",
+          },
+        })
+        .expect(201);
+
+      const payload = {
+        resultId: genRes.body.resultId,
+        overrides: {
+          colors: {
+            primary: "#FF0000",
+            secondary: "#00FF00",
+            accent: "#0000FF",
+          },
+        },
+        classification: {
+          medium: "ebook",
+          style: "modern",
+          themes: [],
+          confidence: 0.9,
+          source: "rules",
+        },
+      };
+
+      const res = await request(app)
+        .post("/api/override")
+        .send(payload)
+        .expect(200);
+
+      expect(res.body).toHaveProperty("costMultiplier");
+      expect(res.body.costMultiplier).toBeGreaterThan(0);
+    });
+
+    it("should apply font overrides", async () => {
+      const genRes = await request(app)
+        .post("/api/generate")
+        .send({
+          prompt: "Test",
+          medium: "ebook",
+          classification: {
+            medium: "ebook",
+            style: "modern",
+            themes: [],
+            confidence: 0.9,
+            source: "rules",
+          },
+        })
+        .expect(201);
+
+      const payload = {
+        resultId: genRes.body.resultId,
+        overrides: {
+          fonts: {
+            heading: "Arial",
+            body: "Times New Roman",
+          },
+        },
+        classification: {
+          medium: "ebook",
+          style: "modern",
+          themes: [],
+          confidence: 0.9,
+          source: "rules",
+        },
+      };
+
+      const res = await request(app)
+        .post("/api/override")
+        .send(payload)
+        .expect(200);
+
+      expect(res.body).toHaveProperty("costMultiplier");
+    });
+
+    it("should apply layout overrides", async () => {
+      const genRes = await request(app)
+        .post("/api/generate")
+        .send({
+          prompt: "Test",
+          medium: "ebook",
+          classification: {
+            medium: "ebook",
+            style: "modern",
+            themes: [],
+            confidence: 0.9,
+            source: "rules",
+          },
+        })
+        .expect(201);
+
+      const payload = {
+        resultId: genRes.body.resultId,
+        overrides: {
+          layout: {
+            columns: 2,
+            spacing: "comfortable",
+          },
+        },
+        classification: {
+          medium: "ebook",
+          style: "modern",
+          themes: [],
+          confidence: 0.9,
+          source: "rules",
+        },
+      };
+
+      const res = await request(app)
+        .post("/api/override")
+        .send(payload)
+        .expect(200);
+
+      expect(res.body).toHaveProperty("costMultiplier");
+    });
+
+    it("should calculate reasonable cost multiplier", async () => {
+      const genRes = await request(app)
+        .post("/api/generate")
+        .send({
+          prompt: "Test",
+          medium: "ebook",
+          classification: {
+            medium: "ebook",
+            style: "modern",
+            themes: [],
+            confidence: 0.9,
+            source: "rules",
+          },
+        })
+        .expect(201);
+
+      const payload = {
+        resultId: genRes.body.resultId,
+        overrides: {
+          colors: { primary: "#FF0000" },
+        },
+        classification: {
+          medium: "ebook",
+          style: "modern",
+          themes: [],
+          confidence: 0.9,
+          source: "rules",
+        },
+      };
+
+      const res = await request(app)
+        .post("/api/override")
+        .send(payload)
+        .expect(200);
+
+      expect(res.body.costMultiplier).toBeGreaterThanOrEqual(0);
+      expect(res.body.costMultiplier).toBeLessThanOrEqual(10); // Reasonable upper bound
+    });
+
+    it("should support multiple override types together", async () => {
+      const genRes = await request(app)
+        .post("/api/generate")
+        .send({
+          prompt: "Test",
+          medium: "ebook",
+          classification: {
+            medium: "ebook",
+            style: "modern",
+            themes: [],
+            confidence: 0.9,
+            source: "rules",
+          },
+        })
+        .expect(201);
+
+      const payload = {
+        resultId: genRes.body.resultId,
+        overrides: {
+          colors: { primary: "#FF0000" },
+          fonts: { heading: "Arial" },
+          layout: { columns: 2 },
+        },
+        classification: {
+          medium: "ebook",
+          style: "modern",
+          themes: [],
+          confidence: 0.9,
+          source: "rules",
+        },
+      };
+
+      const res = await request(app)
+        .post("/api/override")
+        .send(payload)
+        .expect(200);
+
+      expect(res.body).toHaveProperty("costMultiplier");
+      expect(res.body).toHaveProperty("regenerationStrategy");
+    });
+  });
+
+  describe("Endpoint Integration", () => {
+    it("should complete full flow: classify → generate → override", async () => {
+      // Step 1: Classify
+      const classifyRes = await request(app)
+        .post("/api/classify")
+        .send({
+          prompt: "Create ebook about nature",
+          selectedMedium: null,
+        })
+        .expect(200);
+
+      const classification = classifyRes.body.classification;
+
+      // Step 2: Generate
+      const genRes = await request(app)
+        .post("/api/generate")
+        .send({
+          prompt: "Create ebook about nature",
+          medium: classification.medium,
+          classification: classification,
+        })
+        .expect(201);
+
+      const resultId = genRes.body.resultId;
+
+      // Step 3: Override
+      const overrideRes = await request(app)
+        .post("/api/override")
+        .send({
+          resultId: resultId,
+          overrides: { colors: { primary: "#FF0000" } },
+          classification: classification,
+        })
+        .expect(200);
+
+      // All steps should succeed
+      expect(classifyRes.status).toBe(200);
+      expect(genRes.status).toBe(201);
+      expect(overrideRes.status).toBe(200);
+    });
+
+    it("should work with different media across flows", async () => {
+      const media = ["ebook", "demo", "sample"];
+
+      for (const medium of media) {
+        const classifyRes = await request(app)
+          .post("/api/classify")
+          .send({
+            prompt: `Create ${medium}`,
+            selectedMedium: medium,
+          })
+          .expect(200);
+
+        const genRes = await request(app)
+          .post("/api/generate")
+          .send({
+            prompt: `Create ${medium}`,
+            medium: classifyRes.body.classification.medium,
+            classification: classifyRes.body.classification,
+          })
+          .expect(201);
+
+        expect(genRes.body).toHaveProperty("out_envelope");
+        expect(genRes.body).toHaveProperty("resultId");
+      }
+    });
+  });
+
+  describe("Error Scenarios", () => {
+    it("should return 400 for malformed JSON", async () => {
+      const res = await request(app)
+        .post("/api/classify")
+        .set("Content-Type", "application/json")
+        .send("{invalid json}")
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("should handle null body gracefully", async () => {
+      const res = await request(app)
+        .post("/api/classify")
+        .send(null)
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("should handle undefined values", async () => {
+      const res = await request(app)
+        .post("/api/classify")
+        .send({
+          prompt: undefined,
+          selectedMedium: undefined,
+        })
+        .expect(400);
+
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("should not expose internal errors in responses", async () => {
+      const res = await request(app)
+        .post("/api/classify")
+        .send({
+          prompt: "Test",
+          selectedMedium: null,
+        });
+
+      // Response should have error property, not stack trace
+      if (res.status >= 400) {
+        expect(res.body.error).toBeDefined();
+        expect(res.body.stack).toBeUndefined();
+      }
+    });
+  });
+});

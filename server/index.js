@@ -71,60 +71,10 @@ async function startServer(options = {}) {
     serviceState.db.startupPhase = "ready";
     console.log("Database initialized successfully");
 
-    // 1.b Initialize jobs DB for background export queue (optional)
-    try {
-      if (jobsModule && jobsModule.openJobsDb) {
-        const jobsDbPath =
-          process.env.JOBS_DB || path.join(process.cwd(), "data", "jobs.db");
-        // Open and keep a handle to reuse across requests/workers
-        module.exports._jobsDb = await jobsModule.openJobsDb(jobsDbPath);
-        console.log("Jobs DB opened at", jobsDbPath);
-
-        // Run one immediate recovery pass at startup so any stale 'processing'
-        // jobs from a previous crash or shutdown are returned to 'queued'
-        // before the regular recovery interval begins.
-        try {
-          const requeuedAtStart = await jobsModule.requeueStaleJobs(
-            module.exports._jobsDb,
-            parseInt(process.env.JOBS_STALE_MS) || 10 * 60 * 1000
-          );
-          if (requeuedAtStart && requeuedAtStart > 0) {
-            console.log(
-              `Startup recovery: requeued ${requeuedAtStart} stale jobs`
-            );
-          }
-        } catch (e) {
-          console.warn(
-            "Startup requeueStaleJobs failed",
-            e && e.message ? e.message : e
-          );
-        }
-
-        // Start periodic recovery pass to requeue stale jobs
-        const recoveryInterval =
-          parseInt(process.env.JOBS_RECOVERY_INTERVAL_MS) || 5 * 60 * 1000; // default 5m
-        module.exports._jobsRecoveryTimer = setInterval(async () => {
-          try {
-            const requeued = await jobsModule.requeueStaleJobs(
-              module.exports._jobsDb,
-              parseInt(process.env.JOBS_STALE_MS) || 10 * 60 * 1000
-            );
-            if (requeued && requeued > 0)
-              console.log(`Requeued ${requeued} stale jobs`);
-          } catch (e) {
-            console.warn(
-              "requeueStaleJobs failed",
-              e && e.message ? e.message : e
-            );
-          }
-        }, recoveryInterval);
-      }
-    } catch (e) {
-      console.warn(
-        "Failed to initialize jobs DB or recovery timer:",
-        e && e.message ? e.message : e
-      );
-    }
+    // 1.b DEPRECATED: Legacy jobs DB initialization removed
+    // Phase cleanup: jobsModule and old export queue replaced by Phase 3/4 architecture
+    // Old endpoints: /api/export/job, /api/export/job/:id removed
+    // Use new endpoints: /api/export/generate, /api/export/status/:jobId, /api/export/download/:jobId
 
     // 2. Then initialize Puppeteer (skip if explicitly disabled for tests)
     const skipPuppeteer =
@@ -138,6 +88,60 @@ async function startServer(options = {}) {
       serviceState.puppeteer.ready = false;
     } else {
       await startPuppeteer();
+    }
+
+    // 2.b Initialize Phase 3/4: Export Queue, Processor, and Cleanup Scheduler
+    const skipExportQueue =
+      process.env.SKIP_EXPORT_QUEUE === "true" ||
+      process.env.SKIP_EXPORT_QUEUE === "1";
+    if (!skipExportQueue) {
+      try {
+        const exportQueue = require("./utils/exportQueue");
+        const exportProcessor = require("./utils/exportProcessor");
+        const cleanupScheduler = require("./utils/cleanupScheduler");
+        const resultDb = require("./utils/resultDb");
+        const { PrismaClient } = require("@prisma/client");
+        const prisma = new PrismaClient();
+
+        // Initialize export queue with fallback database
+        const exportQueueDbPath =
+          process.env.EXPORT_QUEUE_DB ||
+          path.join(process.cwd(), "data", "export-queue-fallback.db");
+        await exportQueue.initialize(exportQueueDbPath);
+
+        // Initialize export processor with dependencies
+        await exportProcessor.initialize(exportQueue, resultDb, prisma);
+
+        // Start background processor loop (checks every 1 second)
+        const processorIntervalMs =
+          parseInt(process.env.EXPORT_PROCESSOR_INTERVAL_MS) || 1000;
+        exportProcessor.start(processorIntervalMs);
+
+        // Initialize cleanup scheduler
+        cleanupScheduler.initialize(exportQueue, resultDb);
+
+        // Start cleanup scheduler (runs every hour)
+        const cleanupIntervalMs =
+          parseInt(process.env.EXPORT_CLEANUP_INTERVAL_MS) || 60 * 60 * 1000;
+        cleanupScheduler.start(cleanupIntervalMs);
+
+        console.log(
+          "Phase 3/4: Export Queue, Processor, and Cleanup initialized"
+        );
+        module.exports._exportQueue = exportQueue;
+        module.exports._exportProcessor = exportProcessor;
+        module.exports._cleanupScheduler = cleanupScheduler;
+      } catch (err) {
+        console.warn(
+          "Failed to initialize export queue/processor/cleanup:",
+          err.message
+        );
+        if (process.env.EXPORT_QUEUE_REQUIRED === "true") {
+          throw err; // Fail startup if export queue is required
+        }
+      }
+    } else {
+      console.log("SKIP_EXPORT_QUEUE=true - export queue disabled (test mode)");
     }
 
     // 3. Start the server only after all dependencies are ready
@@ -656,41 +660,168 @@ app.post("/prompt", (req, res, next) => {
 const { service: serviceImpl } = require("./serviceAdapter");
 // Demo genieService (delegates to sampleService) used by POST /prompt
 const genieService = require("./genieService");
+const { validatePayload } = require("./validators/promptPayload");
 
 app.post("/prompt", async (req, res, next) => {
-  const { prompt } = req.body;
-
-  // Input validation with structured error
-  if (typeof prompt !== "string" || !prompt.trim()) {
-    return sendValidationError(
-      res,
-      "Prompt is required and must be a non-empty string",
-      {
-        provided: typeof prompt,
-        required: "non-empty string",
-      }
-    );
+  // Validate enhanced payload structure
+  const validation = validatePayload(req.body);
+  if (!validation.valid) {
+    return sendValidationError(res, validation.message, {
+      error: validation.error,
+      fields: validation.fields,
+    });
   }
 
   try {
-    // Default to the demo genieService which delegates to sampleService.
-    // This keeps the frontend wiring unchanged while allowing the demo
-    // implementation to run locally without client changes.
-    const genieResult = await genieService.generate(prompt);
+    // Process enhanced payload through genieService
+    // genieService.process() handles mode-based routing and service delegation
+    const result = await genieService.process(req.body);
 
-    // Ensure we have a data envelope to return
-    const data = genieResult && genieResult.data ? { ...genieResult.data } : {};
-
-    // Persistence is owned by genieService.generate(). Controller no longer
-    // performs DB writes. genieService will perform read-first lookup and
-    // best-effort persist-on-miss (and exposes test hooks such as
-    // _lastPersistencePromise for deterministic tests).
-
-    return res.status(201).json({ success: true, data });
+    // Return standardized response envelope
+    return res.status(201).json(result);
   } catch (err) {
     // Surface generator errors consistently
     err.status = err.status || 500;
+    err.code = err.code || "GENERATION_ERROR";
     err.message = `Generation Error: ${err.message}`;
+    next(err);
+  }
+});
+
+// --- PHASE A-B: NEW ENDPOINTS ---
+
+/**
+ * POST /api/classify - Classify a prompt to extract metadata
+ * Request: { prompt: string, selectedMedium?: string }
+ * Response: { classification: { medium, style, themes, confidence, source } }
+ */
+app.post("/api/classify", async (req, res, next) => {
+  try {
+    const { prompt } = req.body;
+
+    // Validate
+    if (!prompt || !String(prompt).trim()) {
+      return res.status(400).json({
+        error: "INVALID_REQUEST",
+        message: "Prompt is required and must be non-empty",
+      });
+    }
+
+    // Classify
+    const classification = await genieService.classifyPrompt(prompt);
+
+    // Return
+    return res.status(200).json({ classification });
+  } catch (err) {
+    err.status = err.status || 500;
+    err.code = err.code || "CLASSIFICATION_ERROR";
+    err.message = `Classification Error: ${err.message}`;
+    next(err);
+  }
+});
+
+/**
+ * POST /api/generate - Generate content with explicit medium
+ * Request: { prompt: string, medium: string, classification?: object }
+ * Response: { out_envelope, resultId }
+ */
+app.post("/api/generate", async (req, res, next) => {
+  try {
+    const { prompt, medium, classification } = req.body;
+
+    // Validate
+    if (!prompt || !String(prompt).trim()) {
+      return res.status(400).json({
+        error: "INVALID_REQUEST",
+        message: "Prompt is required and must be non-empty",
+      });
+    }
+
+    if (!medium || !String(medium).trim()) {
+      return res.status(400).json({
+        error: "INVALID_REQUEST",
+        message: "Medium is required",
+      });
+    }
+
+    // Build payload
+    const payload = {
+      mode: medium,
+      prompt: String(prompt).trim(),
+      _classification: classification || null,
+      ...(req.body.options && { options: req.body.options }),
+    };
+
+    // Process
+    const result = await genieService.process(payload);
+
+    // Return
+    return res.status(201).json(result);
+  } catch (err) {
+    err.status = err.status || 500;
+    err.code = err.code || "GENERATION_ERROR";
+    err.message = `Generation Error: ${err.message}`;
+    next(err);
+  }
+});
+
+/**
+ * POST /api/override - Apply style overrides to existing result
+ * Request: { resultId: string, overrides: object }
+ * Response: { out_envelope, costMultiplier, regenerationStrategy }
+ */
+app.post("/api/override", async (req, res, next) => {
+  try {
+    const { resultId, overrides, classification } = req.body;
+
+    // Validate
+    if (!resultId || !String(resultId).trim()) {
+      return res.status(400).json({
+        error: "INVALID_REQUEST",
+        message: "resultId is required",
+      });
+    }
+
+    if (!overrides || typeof overrides !== "object") {
+      return res.status(400).json({
+        error: "INVALID_REQUEST",
+        message: "Overrides must be an object",
+      });
+    }
+
+    // Calculate cost using overrideSystem
+    const { OverrideSystem } = require("./utils/overrideSystem");
+    const overrideSystem = new OverrideSystem();
+
+    // Detect what changed and estimate cost
+    const changes = overrideSystem.detectChanges(classification, overrides);
+    const costEstimate = overrideSystem.estimateCost(changes);
+
+    // Determine regeneration strategy
+    let regenerationStrategy = "restyling"; // Default: CSS only
+    if (overrides.medium && overrides.medium !== classification.medium) {
+      regenerationStrategy = "full"; // Full regeneration needed
+    } else if (changes.style || changes.theme) {
+      regenerationStrategy = "partial"; // Partial regeneration
+    }
+
+    // For Phase 1, return cost metadata only
+    // Phase 2 will implement actual override regeneration
+    return res.status(200).json({
+      resultId,
+      overrides: {
+        applied: Object.keys(overrides),
+        skipped: [],
+      },
+      costMultiplier: costEstimate.multiplier,
+      costBreakdown: costEstimate.breakdown,
+      regenerationStrategy,
+      message: "Override validated (regeneration in Phase 2)",
+    });
+  } catch (err) {
+    err.status = err.status || 500;
+    err.code = err.code || "OVERRIDE_ERROR";
+    err.message = `Override Error: ${err.message}`;
     next(err);
   }
 });
@@ -1075,32 +1206,22 @@ app.post("/export", async (req, res) => {
   const {
     sendValidationError,
     sendProcessingError,
-    sendServiceUnavailableError,
   } = require("./utils/errorHandler");
-  // Delegate to genieService.export which centralizes content selection
-  // and PDF generation. This reduces duplication and makes it easier to
-  // swap generation services (sample/demo/ebook) without changing the
-  // controller logic.
+  // Accept only canonical envelope format with pages array
   try {
-    const { prompt, promptId, resultId, content, validate, title, body } =
-      req.body || {};
-    const arg = {};
-    if (prompt) arg.prompt = prompt;
-    if (promptId) arg.promptId = promptId;
-    if (resultId) arg.resultId = resultId;
-    // Accept a direct content object via `content` or legacy title/body fields
-    if (content) arg.prompt = content; // accept direct content object
-    else if (
-      (typeof title === "string" && title) ||
-      (typeof body === "string" && body)
-    ) {
-      // Backwards-compat: allow callers to POST { title, body } directly
-      arg.prompt = { title: title || "", body: body || "" };
+    const envelope = req.body || {};
+
+    // Validate canonical envelope structure
+    if (!envelope || !Array.isArray(envelope.pages)) {
+      return sendValidationError(
+        res,
+        "Export requires canonical envelope with pages array"
+      );
     }
 
     const exportResult = await genieService.export({
-      ...arg,
-      validate: !!validate,
+      envelope,
+      validate: !!envelope.validate,
     });
 
     let buffer =
@@ -1145,7 +1266,7 @@ app.post("/export", async (req, res) => {
   } catch (err) {
     const status = err && err.status ? err.status : 500;
     if (status === 400) return sendValidationError(res, err.message);
-    console.error("Export generation error (delegated)", err && err.message);
+    console.error("Export generation error", err && err.message);
     return sendProcessingError(res, `PDF Generation Failed: ${err.message}`, {
       code: "PDF_GENERATION_ERROR",
     });
@@ -1153,134 +1274,6 @@ app.post("/export", async (req, res) => {
 });
 
 // Maintain existing GET /export behaviour for legacy clients (keeps file save path)
-app.get("/export", async (req, res) => {
-  // Backwards-compatible GET /export that accepts ?content=<json>
-  // Harmonized to use the standardized error response helpers and
-  // to return binary PDF with proper headers.
-  const { content, promptId, resultId } = req.query;
-  const {
-    sendValidationError,
-    sendProcessingError,
-    sendServiceUnavailableError,
-  } = require("./utils/errorHandler");
-
-  if (!content) {
-    return sendValidationError(res, "Content parameter is required");
-  }
-
-  let page;
-  try {
-    let contentObj = content ? JSON.parse(content) : null;
-
-    // If promptId/resultId provided prefer persisted content and require it to exist
-    if (!contentObj && (promptId || resultId)) {
-      const persisted = await genieService.getPersistedContent({
-        promptId,
-        resultId,
-      });
-      if (!persisted || !persisted.content) {
-        return sendValidationError(
-          res,
-          "Persisted content not found for provided promptId/resultId",
-          {
-            promptId,
-            resultId,
-          }
-        );
-      }
-      contentObj =
-        persisted.content && persisted.content.content
-          ? persisted.content.content
-          : persisted.content;
-    }
-
-    if (!serviceState.puppeteer.ready || !browserInstance) {
-      try {
-        const {
-          generatePdfBuffer,
-          validatePdfBuffer,
-        } = require("./pdfGenerator");
-        const htmlToRender = await rewriteImagesForExportAsync(
-          previewTemplate(contentObj)
-        );
-        // Use the generator: pass the rendered HTML as 'body' and a title
-        const generated = await generatePdfBuffer({
-          title: contentObj.title || "",
-          body: htmlToRender,
-          validate: true,
-        });
-        let pdfBuffer;
-        let validation;
-        if (Buffer.isBuffer(generated)) {
-          pdfBuffer = generated;
-          validation = await validatePdfBuffer(pdfBuffer).catch(() => ({
-            ok: true,
-          }));
-        } else {
-          pdfBuffer = generated.buffer;
-          validation = generated.validation;
-        }
-
-        if (!validation || validation.ok === false) {
-          return res.status(422).json({
-            ok: false,
-            errors: validation && validation.errors ? validation.errors : [],
-            warnings:
-              validation && validation.warnings ? validation.warnings : [],
-            pageCount:
-              validation && validation.pageCount ? validation.pageCount : 0,
-          });
-        }
-
-        res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Length", pdfBuffer.length);
-        res.end(pdfBuffer);
-        return;
-      } catch (fallbackErr) {
-        console.warn(
-          "GET /export fallback failed:",
-          fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr
-        );
-        return sendServiceUnavailableError(
-          res,
-          "PDF generation service not ready",
-          { code: "SERVICE_UNAVAILABLE" }
-        );
-      }
-    }
-
-    page = await browserInstance.newPage();
-    if (!page) throw new Error("Failed to create browser page");
-
-    const htmlToRender = await rewriteImagesForExportAsync(
-      previewTemplate(contentObj)
-    );
-    const EXPORT_BASE_URL =
-      process.env.EXPORT_BASE_URL ||
-      `http://localhost:${process.env.PORT || 3000}`;
-    await page.setContent(htmlToRender, {
-      waitUntil: "networkidle2",
-      timeout: 60000,
-      url: EXPORT_BASE_URL,
-    });
-    const pdf = await page.pdf({ format: "A4", printBackground: true });
-
-    // Set headers to match POST export endpoints
-    res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Length", pdf.length);
-    res.end(pdf);
-    return;
-  } catch (err) {
-    console.error("Export generation error (GET /export)", err);
-    return sendProcessingError(res, `PDF Generation Failed: ${err.message}`, {
-      code: "PDF_GENERATION_ERROR",
-    });
-  } finally {
-    if (page) await page.close();
-  }
-});
 
 // --- PROMPTS CRUD API ---
 app.post("/api/prompts", (req, res, next) => {
@@ -2276,231 +2269,311 @@ app.post("/api/export/book", async (req, res) => {
   }
 });
 
-// --- Background export job API (SQLite-backed with in-memory fallback) ---
-let jobsModule = null;
-try {
-  jobsModule = require("./jobs");
-} catch (e) {
-  console.warn(
-    "jobs module not available, will use in-memory fallback",
-    e.message
-  );
-}
+// --- DEPRECATED: Legacy export job endpoints removed in Phase cleanup ---
+// These old endpoints have been replaced by Phase 3/4 new architecture:
+// - OLD: POST /api/export/job { poems, generateImages }
+// - NEW: POST /api/export/generate { resultId }
+//
+// - OLD: GET /api/export/job/:id
+// - NEW: GET /api/export/status/:jobId
+//
+// - OLD: GET /api/export/jobs/metrics
+// - NEW: Query individual jobs via GET /api/export/status/:jobId
+//
+// For migration guidance, see PHASE_4_ENDPOINTS_IMPLEMENTATION.md
 
-const exportJobs = {}; // fallback in-memory jobs
-
+// Deprecated stub for backwards compatibility
 app.post("/api/export/job", async (req, res) => {
-  const payload = req.body && Object.keys(req.body).length ? req.body : null;
+  return res.status(410).json({
+    error: "Deprecated endpoint",
+    code: "DEPRECATED",
+    message: "POST /api/export/job has been replaced",
+    migrateToNewWorkflow: {
+      step1:
+        "POST /prompt { mode, prompt } → returns { resultId, out_envelope }",
+      step2:
+        "POST /api/export/generate { resultId } → returns { jobId, status }",
+      step3:
+        "GET /api/export/status/:jobId → returns { status, progress, pdfUrl? }",
+      step4: "GET /api/export/download/:jobId → returns PDF binary",
+    },
+  });
+});
 
-  // Primary path: try to enqueue in SQLite-backed jobs table
-  if (jobsModule) {
-    try {
-      // Prefer explicit DB path when provided (tests set JOBS_DB), otherwise use server default
-      const dbPath =
-        process.env.JOBS_DB ||
-        path.join(process.cwd(), "data", "your-database-name.db");
-      const db = await jobsModule.openJobsDb(dbPath);
-      try {
-        const id = await jobsModule.enqueueJob(db, payload);
-        await db.close();
-        // Respond with DB id
-        res.status(202).json({ jobId: String(id) });
-        return;
-      } catch (e) {
-        // ensure DB closed on error
-        try {
-          await db.close();
-        } catch (ee) {
-          // ignore errors closing DB
-        }
-        console.warn(
-          "jobs.enqueueJob failed, falling back to in-memory",
-          e && e.message ? e.message : e
-        );
-      }
-    } catch (e) {
-      console.warn(
-        "jobs DB open failed, falling back to in-memory",
-        e && e.message ? e.message : e
-      );
-    }
+// ============================================================================
+// PHASE 3/4: REFERENCE-BASED EXPORT ENDPOINTS
+// Reference architecture: result by UUID -> queue job -> async process -> download
+// ============================================================================
+
+/**
+ * POST /api/export/generate
+ * Queue an async export job for a result
+ * Request: { resultId: "uuid-..." }
+ * Response 202: { jobId: "uuid-...", status: "queued" }
+ * Response 400: { error: "Result not found", code: "RESULT_NOT_FOUND" }
+ * Response 503: { error: "Export queue full", code: "QUEUE_FULL" }
+ */
+app.post("/api/export/generate", async (req, res) => {
+  const { resultId } = req.body || {};
+
+  if (!resultId || typeof resultId !== "string") {
+    return sendValidationError(res, "resultId is required", {
+      provided: typeof resultId === "string" ? resultId : typeof resultId,
+      required: "non-empty string (UUID)",
+    });
   }
 
-  // Fallback: in-memory behavior (existing logic)
-  const jobId = uuidv4();
-  exportJobs[jobId] = { state: "queued", progress: 0 };
+  try {
+    const resultDb = require("./utils/resultDb");
+    const exportQueue = require("./utils/exportQueue");
+    const { v4: uuidv4 } = require("uuid");
 
-  (async () => {
+    // 1. Validate result exists
+    let result;
     try {
-      exportJobs[jobId].state = "preparing";
-      exportJobs[jobId].progress = 10;
-
-      let poems = payload && payload.poems ? payload.poems : null;
-      if (!poems) {
-        const samplePath = path.resolve(__dirname, "samples", "poems.json");
-        const raw = fs.readFileSync(samplePath, "utf8");
-        const parsed = JSON.parse(raw);
-        poems =
-          Array.isArray(parsed) && parsed.length > 0 && parsed[0].poems
-            ? parsed[0].poems
-            : parsed && parsed.poems
-            ? parsed.poems
-            : parsed;
-      }
-
-      const { generateImages } = payload || {};
-      if (generateImages) {
-        const { generatePoemAndImage } = require("./imageGenerator.cjs");
-        let i = 0;
-        for (let p of poems) {
-          exportJobs[jobId].state = "generating_images";
-          exportJobs[jobId].progress = 10 + Math.round((i / poems.length) * 30);
-          try {
-            const result = await generatePoemAndImage({
-              theme: p.title || p.theme,
-            });
-            if (result && result.image) p.background = result.image;
-          } catch (e) {
-            console.warn("Image generation failed for poem", i, e.message || e);
-          }
-          i++;
-        }
-      } else {
-        for (let p of poems) {
-          if (!p.background) {
-            const generated = generateBackgroundForPoem(p);
-            if (generated) p.background = generated;
-          }
-        }
-      }
-
-      exportJobs[jobId].state = "composing";
-      exportJobs[jobId].progress = 50;
-
-      const pdf = await renderBookToPDF(poems, browserInstance);
-
-      exportJobs[jobId].state = "saving";
-      exportJobs[jobId].progress = 85;
-
-      const outDir = path.resolve(__dirname, "samples", "exports");
-      if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-      const outPath = path.join(outDir, `ebook_${jobId}.pdf`);
-      fs.writeFileSync(outPath, pdf);
-
-      exportJobs[jobId].state = "done";
-      exportJobs[jobId].progress = 100;
-      exportJobs[jobId].filePath = outPath;
+      result = await resultDb.getResultById(resultId);
     } catch (err) {
-      exportJobs[jobId].state = "error";
-      exportJobs[jobId].error = err && err.message ? err.message : String(err);
-      exportJobs[jobId].progress = 0;
-      console.error("Export job failed", jobId, err);
-    }
-  })();
-
-  res.status(202).json({ jobId });
-});
-
-// Job queue metrics endpoint - returns counts per state (queued/processing/done/failed)
-app.get("/api/jobs/metrics", async (req, res) => {
-  try {
-    if (jobsModule && jobsModule.openJobsDb) {
-      const dbPath =
-        process.env.JOBS_DB ||
-        path.join(process.cwd(), "data", "your-database-name.db");
-      const db = await jobsModule.openJobsDb(dbPath);
-      try {
-        const rows = await db.all(
-          `SELECT state, COUNT(*) as count FROM jobs GROUP BY state`
-        );
-        const metrics = { queued: 0, processing: 0, done: 0, failed: 0 };
-        for (const r of rows) {
-          if (r.state && typeof r.count !== "undefined")
-            metrics[r.state] = r.count;
-        }
-        await db.close();
-        return res.status(200).json({ success: true, metrics });
-      } catch (e) {
-        try {
-          await db.close();
-        } catch (ee) {
-          // ignore errors closing DB
-        }
-        throw e;
-      }
-    }
-
-    // Fallback to in-memory metrics
-    const counts = { queued: 0, processing: 0, done: 0, failed: 0 };
-    for (const id of Object.keys(exportJobs)) {
-      const s =
-        exportJobs[id] && exportJobs[id].state
-          ? exportJobs[id].state
-          : "queued";
-      counts[s] = (counts[s] || 0) + 1;
-    }
-    return res.status(200).json({ success: true, metrics: counts });
-  } catch (err) {
-    console.error(
-      "Failed to compute job metrics",
-      err && err.message ? err.message : err
-    );
-    return res
-      .status(500)
-      .json({ success: false, error: "Failed to compute metrics" });
-  }
-});
-
-app.get("/api/export/job/:id", async (req, res) => {
-  const id = req.params.id;
-  // Try DB lookup first
-  if (jobsModule) {
-    try {
-      const row = await jobsModule.getJob(id);
-      if (row) return res.json({ jobId: id, ...row });
-    } catch (e) {
-      console.warn("jobs.getJob failed", e.message);
-    }
-  }
-
-  const job = exportJobs[id];
-  if (!job) return res.status(404).json({ error: "Job not found" });
-  res.json({ jobId: id, ...job });
-});
-
-// Job queue metrics: return counts for queued/processing/done
-app.get("/api/export/jobs/metrics", async (req, res) => {
-  try {
-    // Prefer DB-backed metrics when jobs DB is open
-    if (module.exports._jobsDb) {
-      const q = await module.exports._jobsDb.get(
-        `SELECT COUNT(*) as cnt FROM jobs WHERE state = 'queued'`
-      );
-      const p = await module.exports._jobsDb.get(
-        `SELECT COUNT(*) as cnt FROM jobs WHERE state = 'processing'`
-      );
-      const d = await module.exports._jobsDb.get(
-        `SELECT COUNT(*) as cnt FROM jobs WHERE state = 'done'`
-      );
-      return res.json({
-        queued: q.cnt || 0,
-        processing: p.cnt || 0,
-        done: d.cnt || 0,
+      return res.status(500).json({
+        error: "Database error retrieving result",
+        code: "DB_ERROR",
       });
     }
 
-    // Fallback: in-memory exportJobs
-    const counts = { queued: 0, processing: 0, done: 0 };
-    Object.values(exportJobs).forEach((j) => {
-      if (j && j.state && counts[j.state] !== undefined) counts[j.state]++;
+    if (!result) {
+      return res.status(400).json({
+        error: "Result not found",
+        code: "RESULT_NOT_FOUND",
+      });
+    }
+
+    // 2. Create export job in database
+    const jobId = uuidv4();
+    let exportJob;
+    try {
+      exportJob = await resultDb.createExportJob(jobId, resultId);
+    } catch (err) {
+      console.error("Failed to create export job:", err.message);
+      return res.status(500).json({
+        error: "Failed to create export job",
+        code: "JOB_CREATION_ERROR",
+      });
+    }
+
+    // 3. Enqueue to export queue (in-memory or fallback)
+    try {
+      await exportQueue.enqueue(jobId, resultId);
+    } catch (err) {
+      console.error("Failed to enqueue export job:", err.message);
+      if (
+        err.message.includes("queue full") ||
+        err.message.includes("Queue full")
+      ) {
+        return res.status(503).json({
+          error: "Export queue full",
+          code: "QUEUE_FULL",
+        });
+      }
+      return res.status(500).json({
+        error: "Failed to enqueue export job",
+        code: "ENQUEUE_ERROR",
+      });
+    }
+
+    // 4. Return success (202 Accepted)
+    return res.status(202).json({
+      jobId,
+      status: "queued",
     });
-    return res.json(counts);
-  } catch (e) {
-    console.warn(
-      "Failed to collect job metrics",
-      e && e.message ? e.message : e
-    );
-    return res.status(500).json({ error: "Failed to collect job metrics" });
+  } catch (err) {
+    console.error("/api/export/generate error:", err.message);
+    return res.status(500).json({
+      error: "Export generation failed",
+      code: "GENERATION_ERROR",
+    });
+  }
+});
+
+/**
+ * GET /api/export/status/:jobId
+ * Check the status of an export job
+ * Response 200: { jobId, status, progress, pdfUrl?, error? }
+ * Response 404: { error: "Export job not found", code: "JOB_NOT_FOUND" }
+ * Response 410: { error: "Export expired", code: "EXPIRED" }
+ */
+app.get("/api/export/status/:jobId", async (req, res) => {
+  const { jobId } = req.params;
+
+  if (!jobId || typeof jobId !== "string") {
+    return sendValidationError(res, "jobId is required", {
+      provided: jobId,
+      required: "non-empty string (UUID)",
+    });
+  }
+
+  try {
+    const exportQueue = require("./utils/exportQueue");
+    const resultDb = require("./utils/resultDb");
+
+    // 1. Get job from queue or database
+    let job;
+    try {
+      job = await exportQueue.getJob(jobId);
+    } catch (err) {
+      console.error("Failed to get job from queue:", err.message);
+    }
+
+    // Fallback: check database if not in queue
+    if (!job) {
+      try {
+        job = await resultDb.getExportJobById(jobId);
+      } catch (err) {
+        console.error("Failed to get job from database:", err.message);
+      }
+    }
+
+    if (!job) {
+      return res.status(404).json({
+        error: "Export job not found",
+        code: "JOB_NOT_FOUND",
+      });
+    }
+
+    // 2. Check if job is expired (>24 hours old)
+    const EXPIRY_MS = 24 * 60 * 60 * 1000;
+    const age = Date.now() - job.createdAt;
+    if (age > EXPIRY_MS) {
+      return res.status(410).json({
+        error: "Export expired",
+        code: "EXPIRED",
+      });
+    }
+
+    // 3. Build response
+    const response = {
+      jobId,
+      status: job.status,
+      progress: job.progress || 0,
+    };
+
+    // Add PDF URL if complete
+    if (job.status === "complete") {
+      response.pdfUrl = `/api/export/download/${jobId}`;
+    }
+
+    // Add error if failed
+    if (job.status === "failed" && job.errorMessage) {
+      response.error = job.errorMessage;
+    }
+
+    return res.status(200).json(response);
+  } catch (err) {
+    console.error("/api/export/status/:jobId error:", err.message);
+    return res.status(500).json({
+      error: "Failed to retrieve job status",
+      code: "STATUS_ERROR",
+    });
+  }
+});
+
+/**
+ * GET /api/export/download/:jobId
+ * Download a generated PDF export
+ * Response 200: binary PDF
+ * Response 404: { error: "Export not found", code: "NOT_FOUND" }
+ * Response 202: { error: "Export not ready", code: "NOT_READY" }
+ * Response 410: { error: "Export expired", code: "EXPIRED" }
+ */
+app.get("/api/export/download/:jobId", async (req, res) => {
+  const { jobId } = req.params;
+
+  if (!jobId || typeof jobId !== "string") {
+    return sendValidationError(res, "jobId is required", {
+      provided: jobId,
+      required: "non-empty string (UUID)",
+    });
+  }
+
+  try {
+    const exportQueue = require("./utils/exportQueue");
+    const resultDb = require("./utils/resultDb");
+    const fs = require("fs").promises;
+
+    // 1. Get job
+    let job;
+    try {
+      job = await exportQueue.getJob(jobId);
+    } catch (err) {
+      console.error("Failed to get job from queue:", err.message);
+    }
+
+    if (!job) {
+      try {
+        job = await resultDb.getExportJobById(jobId);
+      } catch (err) {
+        console.error("Failed to get job from database:", err.message);
+      }
+    }
+
+    if (!job) {
+      return res.status(404).json({
+        error: "Export not found",
+        code: "NOT_FOUND",
+      });
+    }
+
+    // 2. Check if expired
+    const EXPIRY_MS = 24 * 60 * 60 * 1000;
+    const age = Date.now() - job.createdAt;
+    if (age > EXPIRY_MS) {
+      return res.status(410).json({
+        error: "Export expired",
+        code: "EXPIRED",
+      });
+    }
+
+    // 3. Check if ready
+    if (job.status !== "complete") {
+      return res.status(202).json({
+        error: "Export not ready",
+        code: "NOT_READY",
+        status: job.status,
+        progress: job.progress || 0,
+      });
+    }
+
+    // 4. Verify PDF file exists
+    const pdfPath = job.pdfPath;
+    if (!pdfPath) {
+      return res.status(404).json({
+        error: "PDF path not found in job record",
+        code: "PATH_NOT_FOUND",
+      });
+    }
+
+    // 5. Read and send PDF
+    try {
+      const buffer = await fs.readFile(pdfPath);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="export_${jobId}.pdf"`
+      );
+      return res.send(buffer);
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        return res.status(404).json({
+          error: "PDF file not found on disk",
+          code: "FILE_NOT_FOUND",
+        });
+      }
+      throw err;
+    }
+  } catch (err) {
+    console.error("/api/export/download/:jobId error:", err.message);
+    return res.status(500).json({
+      error: "Failed to download export",
+      code: "DOWNLOAD_ERROR",
+    });
   }
 });
 

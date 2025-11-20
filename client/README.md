@@ -16,8 +16,7 @@ Notes:
 
 - Demo loader populates the editor and triggers a preview automatically.
 - The preview flow surfaces errors and shows inline loading text.
-- The dev proxy injects a `x-dev-auth` header when `DEV_AUTH_TOKEN` is set to support Codespaces port forwarding; the server enforces the token when present.
-- Work in progress: in-UI smoke test, Playwright e2e script, and CI integration (see `docs/focus/V0.1_objectives_and_plan.md`).
+- Work in progress: in-UI smoke test, Playwright e2e script, and CI integration (see `docs/design/misc/V0.1_objectives_and_plan.md`).
 
 ## Recommended IDE Setup
 

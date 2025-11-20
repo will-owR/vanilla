@@ -22,6 +22,7 @@
     "e2e:smoke": "node ./scripts/e2e-smoke.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^6.18.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
@@ -47,7 +48,7 @@
     "eslint": "^8.50.0",
     "eslint-plugin-react": "^7.32.2",
     "eslint-plugin-react-hooks": "^4.6.0",
-    "nodemon": "^3.1.10",
+    "nodemon": "^3.1.11",
     "pdfjs-dist": "^5.4.54",
     "prisma": "^6.18.0",
     "supertest": "^7.1.3",

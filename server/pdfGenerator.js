@@ -100,6 +100,7 @@ async function generatePdfBuffer({
     // If a canonical envelope was provided, render one HTML page per envelope page
     let contentHtml;
     if (envelope && Array.isArray(envelope.pages)) {
+      console.log("[pdfGenerator] Routing: envelope provided");
       const pagesHtml = envelope.pages
         .map((p) => {
           const blocks = (p.blocks || [])
@@ -116,13 +117,34 @@ async function generatePdfBuffer({
         })
         .join("\n");
       contentHtml = `<!doctype html><html><body>${pagesHtml}</body></html>`;
+    } else if (
+      body &&
+      String(body).trim().toLowerCase().startsWith("<!doctype")
+    ) {
+      // If body already contains a full HTML document (e.g., from pdfStructureBuilder),
+      // use it as-is without wrapping
+      console.log(
+        "[pdfGenerator] Routing: body is full HTML (<!doctype detected)"
+      );
+      contentHtml = body;
     } else {
+      console.log("[pdfGenerator] Routing: wrapping body");
       contentHtml = `<!doctype html><html><body><h1>${title}</h1><div>${body}</div></body></html>`;
     }
     await page.setContent(contentHtml, { waitUntil: "networkidle0" });
-    const buffer = await page.pdf({ format: "A4", printBackground: true });
+    let buffer = await page.pdf({ format: "A4", printBackground: true });
+    console.log(
+      "[pdfGenerator] PDF generated, buffer size:",
+      buffer.length || "unknown"
+    );
     if (page && launched) await page.close();
     if (launched && browser) await browser.close();
+
+    // Ensure buffer is a Node.js Buffer (convert from ArrayBuffer if needed)
+    if (buffer && !Buffer.isBuffer(buffer)) {
+      buffer = Buffer.from(buffer);
+    }
+    console.log("[pdfGenerator] Final buffer size:", buffer.length);
 
     if (validate) {
       // Run non-fatal validation and return both buffer and validation summary.
