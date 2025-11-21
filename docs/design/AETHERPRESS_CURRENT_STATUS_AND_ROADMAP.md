@@ -47,7 +47,7 @@
 
 **What We Built**:
 
-- ✅ **demoService**: Transforms any prompt → 5-page dark-themed eBook PDF
+- ✅ **demoService (→ ie, ebookService)**: Transforms any prompt → 5-page dark-themed eBook PDF
 - ✅ **Classification Layer**: Hybrid rule engine + LLM enrichment (8 dimensions)
 - ✅ **Routing Architecture**: Medium-aware service orchestration
 - ✅ **Frontend Integration**: Media selector + live preview + override controls
@@ -80,7 +80,7 @@ Phase A:  413+ tests (100% - ZERO REGRESSIONS)
 
 ### **Objective**
 
-Transform demoService into a production-grade, feature-rich eBook engine that handles multiple themes, intelligent content chunking, and variable page counts.
+Transform demoService (→ ie, ebookService) into a production-grade, feature-rich eBook engine that handles multiple themes, intelligent content chunking, and variable page counts.
 
 ### **Core Deliverables**
 
@@ -99,8 +99,8 @@ enum ThemeVariant {
 
 **Visual Specifications**:
 
-| Theme     | Background | Text Color | Accent  | Typography     | Use Case                 |
-| --------- | ---------- | ---------- | ------- | -------------- | ------------------------ |
+| Theme     | Background   | Text Color   | Accent     | Typography     | Use Case                |
+| --------- | ------------ | ------------ | ---------- | -------------- | ----------------------- |
 | Dark      | #1a1a1a    | #f5f5f5    | #6d28d9 | Serif + modern | Poetry, creative writing |
 | Light     | #ffffff    | #1f1f1f    | #0284c7 | Sans-serif     | Tutorials, reference     |
 | Corporate | #f3f4f6    | #1f2937    | #1e40af | Sans-serif     | Reports, business        |
@@ -797,7 +797,7 @@ docs/design/
 ✅ Zero regressions from Phase A  
 ✅ SVG library foundation for cost optimization
 
-**Phase B is next.** Over the next 3 weeks, we'll transform demoService into a feature-rich intelligent eBook engine with:
+**Phase B is next.** Over the next 3 weeks, we'll transform demoService (→ ie, ebookService) into a feature-rich intelligent eBook engine with:
 
 🎯 Multi-theme support (dark, light, corporate, bold)  
 🎯 NLP-based intelligent chunking (3-20 pages)  
