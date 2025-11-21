@@ -42,7 +42,7 @@ describe("ThemeEngine", () => {
     const theme = ThemeEngine.getTheme("bold");
 
     expect(theme.name).toBe("bold");
-    expect(theme.colors.accent).toBe("#ff6600");
+    expect(theme.colors.accent).toBe("#d84000");
     expect(theme.colors.headings).toBe("#cc0000");
   });
 

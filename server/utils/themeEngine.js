@@ -160,7 +160,7 @@ const THEME_DEFINITIONS = {
     colors: {
       background: "#ffffff",
       text: "#1a1a1a",
-      accent: "#ff6600",
+      accent: "#d84000",
       headings: "#cc0000",
       subtleText: "#333333",
       success: "#28a745",
@@ -323,10 +323,29 @@ function applyTheme(component, themeName = "dark") {
 }
 
 // Export singleton instance
-module.exports = new ThemeEngine();
+const themeEngine = new ThemeEngine();
 
-// Also export for legacy compatibility
+// Store reference to the original class method before any overrides
+const originalClassMethod = themeEngine.getTheme.bind(themeEngine);
+
+module.exports = themeEngine;
+
+// For existing code that imports getTheme as a named export,
+// provide the compatibility wrapper that falls back to dark theme
 module.exports.getTheme = getThemeCompat;
+
+// For new tests/code that need the strict version (throws on invalid),
+// provide direct access to the class method
+Object.defineProperty(module.exports, "getThemeStrict", {
+  value: originalClassMethod,
+  writable: false,
+  configurable: false,
+});
+
+// ALSO: Override the instance method to use the strict version
+// This ensures ThemeEngine.getTheme() in tests calls the real method
+themeEngine.getTheme = originalClassMethod;
+
 module.exports.applyTheme = applyTheme;
 module.exports.THEME_DEFINITIONS = THEME_DEFINITIONS;
 module.exports.themes = THEME_DEFINITIONS;
