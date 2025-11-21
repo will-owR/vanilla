@@ -22,7 +22,7 @@
 
 ---
 
-## **WEEK 1: Core Modules (Nov 24-28)**
+## **WEEK 1: Core Modules (Nov 24-28)** 🟢 [Started: 11/21/2025 @2:15PM]
 
 ### **Objectives**
 
