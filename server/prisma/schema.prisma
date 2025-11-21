@@ -4,73 +4,71 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Prompt {
-  id        Int      @id @default(autoincrement())
-  prompt    String
+  id             Int        @id @default(autoincrement())
+  prompt         String
   normalizedText String?
-  normalizedHash String? @unique
-  createdAt DateTime @default(now())
-  aiResults AIResult[]
+  normalizedHash String?    @unique
+  createdAt      DateTime   @default(now())
+  aiResults      AIResult[]
 }
 
 model AIResult {
-  id        Int      @id @default(autoincrement())
-  prompt    Prompt   @relation(fields: [promptId], references: [id])
-  promptId  Int
-  result    Json
-  createdAt DateTime @default(now())
-  overrides Override[]
+  id         Int         @id @default(autoincrement())
+  promptId   Int
+  result     Json
+  createdAt  DateTime    @default(now())
+  prompt     Prompt      @relation(fields: [promptId], references: [id])
+  overrides  Override[]
   pdfExports PDFExport[]
 }
 
 model Override {
   id         Int      @id @default(autoincrement())
-  aiResult   AIResult @relation(fields: [aiResultId], references: [id])
   aiResultId Int
   override   Json
   createdAt  DateTime @default(now())
+  aiResult   AIResult @relation(fields: [aiResultId], references: [id])
 }
 
 model PDFExport {
-  id        Int      @id @default(autoincrement())
-  aiResult  AIResult @relation(fields: [aiResultId], references: [id])
+  id         Int      @id @default(autoincrement())
   aiResultId Int
-  filePath  String
-  createdAt DateTime @default(now())
+  filePath   String
+  createdAt  DateTime @default(now())
+  aiResult   AIResult @relation(fields: [aiResultId], references: [id])
 }
 
-// Results table: persistent storage of generated content (reference-based export)
 model Result {
-  id          Int       @id @default(autoincrement())
-  resultId    String    @unique @db.Uuid // UUID for anonymous/distributed access
-  outEnvelope Json      @db.JsonB // Canonical { pages, metadata, actions }
-  mode        String    @db.VarChar(50) // "basic", "demo", "ebook"
-  promptId    Int? // Optional link to original prompt
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  exportJobs  ExportJob[] // Relationship to export jobs
-  
+  id          Int         @id @default(autoincrement())
+  resultId    String      @unique @db.Uuid
+  outEnvelope Json
+  mode        String      @db.VarChar(50)
+  promptId    Int?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  exportJobs  ExportJob[]
+
   @@index([resultId])
   @@index([createdAt])
   @@map("results")
 }
 
-// Export jobs table: async job tracking for reference-based export
 model ExportJob {
-  id            Int       @id @default(autoincrement())
-  jobId         String    @unique @db.Uuid // UUID for anonymous job reference
-  result        Result    @relation(fields: [resultId], references: [resultId])
-  resultId      String    @db.Uuid // Foreign key to results.resultId
-  status        String    @default("queued") @db.VarChar(50)
-    // Values: queued, processing, complete, failed
-  progress      Int       @default(0)
-  pdfPath       String?   @db.VarChar(500) // Path to generated PDF
-  errorMessage  String?   // Error details if status is failed
-  createdAt     DateTime  @default(now())
-  completedAt   DateTime? // Timestamp when job completed
-  
+  id           Int       @id @default(autoincrement())
+  jobId        String    @unique @db.Uuid
+  resultId     String    @db.Uuid
+  status       String    @default("queued") @db.VarChar(50)
+  progress     Int       @default(0)
+  pdfPath      String?   @db.VarChar(500)
+  errorMessage String?
+  createdAt    DateTime  @default(now())
+  completedAt  DateTime?
+  result       Result    @relation(fields: [resultId], references: [resultId])
+
   @@index([jobId])
   @@index([resultId])
   @@index([status])
@@ -78,7 +76,20 @@ model ExportJob {
   @@map("export_jobs")
 }
 
-// Minimal Calendar model to satisfy health checks that expect a Calendar table.
+model SvgLibrary {
+  id        String   @id @default(cuid())
+  svg       String
+  metadata  Json
+  usage     Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([metadata])
+  @@index([usage])
+  @@index([createdAt])
+  @@map("svg_library")
+}
+
 model Calendar {
   id        Int      @id @default(autoincrement())
   name      String
