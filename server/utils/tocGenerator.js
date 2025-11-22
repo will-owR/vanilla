@@ -152,4 +152,4 @@ class TOCGenerator {
   }
 }
 
-export default new TOCGenerator();
+module.exports = new TOCGenerator();

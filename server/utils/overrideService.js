@@ -275,4 +275,4 @@ class OverrideService {
   }
 }
 
-export default new OverrideService();
+module.exports = new OverrideService();

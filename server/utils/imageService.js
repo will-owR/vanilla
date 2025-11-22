@@ -316,4 +316,4 @@ Requirements:
   }
 }
 
-export default new ImageService();
+module.exports = new ImageService();
