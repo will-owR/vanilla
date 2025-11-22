@@ -121,6 +121,24 @@
           {/if}
         </div>
         
+        <div class="ebook-prompt-form">
+          <label for="ebook-prompt">Enter your prompt:</label>
+          <textarea 
+            id="ebook-prompt" 
+            bind:value={prompt} 
+            rows="3" 
+            class="prompt-input"
+            placeholder="e.g., A children's mystery tale about a blind mouse detective..."
+          ></textarea>
+          <button 
+            class="generate-button"
+            on:click={() => ebookStore.generate(prompt)}
+            disabled={ebookLoading || !prompt.trim()}
+          >
+            {ebookLoading ? 'Generating eBook...' : 'Generate eBook'}
+          </button>
+        </div>
+        
         {#if ebookLoading}
           <p class="loading-message">Generating e-book...</p>
         {/if}
@@ -262,6 +280,23 @@
     border-radius: 8px;
     padding: 1rem;
     margin-top: 1.5rem;
+  }
+
+  .ebook-prompt-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: #f0f7ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+  }
+
+  .ebook-prompt-form label {
+    font-weight: 600;
+    color: #1e40af;
+    font-size: 0.95rem;
   }
 
   form {

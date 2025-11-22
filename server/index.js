@@ -662,6 +662,14 @@ const { service: serviceImpl } = require("./serviceAdapter");
 const genieService = require("./genieService");
 const { validatePayload } = require("./validators/promptPayload");
 
+// Phase B: E-book Generation Modules (singleton instances)
+const contentChunker = require("./utils/contentChunker");
+const themeEngine = require("./utils/themeEngine");
+const pageLayout = require("./utils/pageLayout");
+const tocGenerator = require("./utils/tocGenerator");
+const overrideService = require("./utils/overrideService");
+const ebookService = require("./ebookService");
+
 app.post("/prompt", async (req, res, next) => {
   // Validate enhanced payload structure
   const validation = validatePayload(req.body);
@@ -2829,11 +2837,9 @@ app.post("/api/ebook/generate", async (req, res) => {
 
   const validThemes = ["dark", "light", "corporate", "bold"];
   if (!validThemes.includes(theme)) {
-    return res
-      .status(400)
-      .json({
-        error: `Invalid theme. Must be one of: ${validThemes.join(", ")}`,
-      });
+    return res.status(400).json({
+      error: `Invalid theme. Must be one of: ${validThemes.join(", ")}`,
+    });
   }
 
   const pageCountNum = parseInt(pageCount, 10);

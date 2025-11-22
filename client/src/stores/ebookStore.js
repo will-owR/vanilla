@@ -4,7 +4,7 @@
  * Orchestrates all API calls, manages configuration, tracks history
  */
 
-import { writable, derived } from "svelte/store";
+import { writable, derived, get } from "svelte/store";
 import * as ebookApi from "../lib/ebookApi.js";
 
 /**
@@ -123,12 +123,7 @@ function createEbookStore() {
       }));
 
       try {
-        const currentStore = await new Promise((resolve) => {
-          const unsubscribe = subscribe((state) => {
-            unsubscribe();
-            resolve(state);
-          });
-        });
+        const currentStore = get({ subscribe });
 
         const response = await ebookApi.generateEbook({
           prompt,
