@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model Prompt {
@@ -77,16 +76,19 @@ model ExportJob {
 }
 
 model SvgLibrary {
-  id        String   @id @default(cuid())
-  svg       String
-  metadata  Json
-  usage     Int      @default(1)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String    @id @default(uuid()) @db.Uuid
+  svg_data         String
+  png_url          String?   @db.VarChar(512)
+  metadata         Json
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @default(now()) @updatedAt
+  deleted_at       DateTime?
+  created_by       String?   @db.VarChar(255)
+  file_size_bytes  Int?
+  render_time_ms   Int?
 
   @@index([metadata])
-  @@index([usage])
-  @@index([createdAt])
+  @@index([created_at])
   @@map("svg_library")
 }
 
