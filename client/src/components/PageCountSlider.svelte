@@ -53,7 +53,7 @@
     />
 
     <div class="slider-track" style="--percentage: {getDensityPercent(pageCount)}%">
-      <div class="slider-fill" />
+      <div class="slider-fill"></div>
     </div>
 
     <div class="slider-labels">

@@ -69,7 +69,7 @@
           <div
             class="color-sample"
             style="background-color: {themeColors[theme.id].bg}; border: 2px solid {themeColors[theme.id].accent};"
-          />
+          ></div>
         </div>
         <div class="theme-info">
           <span class="icon">{theme.icon}</span>

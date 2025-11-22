@@ -28,7 +28,6 @@
         <button
             class="mode-button {$modeStore.current === mode.id ? 'active' : ''}"
             on:click={() => switchMode(mode.id)}
-            disabled={mode.id === 'ebook'} 
         >
             {mode.label}
         </button>

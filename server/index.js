@@ -2804,6 +2804,212 @@ process.on("SIGHUP", () => gracefulShutdown("SIGHUP"));
 module.exports.closeServices = closeServices;
 module.exports.gracefulShutdown = gracefulShutdown;
 
+// ==================== PHASE B: E-BOOK GENERATION ====================
+
+/**
+ * POST /api/ebook/generate
+ * Generate a themed e-book from a prompt
+ * Body: { prompt, theme, pageCount, colorPalette, fontSizeScale }
+ * Returns: { id, content, html, metadata, pages, can_export, can_override }
+ */
+app.post("/api/ebook/generate", async (req, res) => {
+  const {
+    prompt,
+    theme = "dark",
+    pageCount = 10,
+    colorPalette = "default",
+    fontSizeScale = 1.0,
+  } = req.body;
+
+  if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+    return res
+      .status(400)
+      .json({ error: "Prompt is required and must be a non-empty string" });
+  }
+
+  const validThemes = ["dark", "light", "corporate", "bold"];
+  if (!validThemes.includes(theme)) {
+    return res
+      .status(400)
+      .json({
+        error: `Invalid theme. Must be one of: ${validThemes.join(", ")}`,
+      });
+  }
+
+  const pageCountNum = parseInt(pageCount, 10);
+  if (isNaN(pageCountNum) || pageCountNum < 3 || pageCountNum > 20) {
+    return res
+      .status(400)
+      .json({ error: "Page count must be between 3 and 20" });
+  }
+
+  const fontScaleNum = parseFloat(fontSizeScale);
+  if (isNaN(fontScaleNum) || fontScaleNum < 0.8 || fontScaleNum > 1.2) {
+    return res
+      .status(400)
+      .json({ error: "Font size scale must be between 0.8 and 1.2" });
+  }
+
+  try {
+    // Generate with existing genieService (generates content based on prompt)
+    const generatedContent = await genieService.processMessage(prompt, []);
+
+    if (!generatedContent) {
+      return res.status(500).json({ error: "Failed to generate content" });
+    }
+
+    // Chunk the content
+    const chunks = await contentChunker.chunk(
+      generatedContent.text,
+      pageCountNum
+    );
+
+    // Apply theme
+    const themedChunks = themeEngine.applyTheme(chunks, theme, {
+      colorPalette,
+      fontSizeScale,
+    });
+
+    // Generate layout
+    const layout = pageLayout.generateLayout(themedChunks, pageCountNum);
+
+    // Generate TOC
+    const toc = tocGenerator.generateTOC(themedChunks, {
+      includePageNumbers: true,
+      depth: 2,
+    });
+
+    // Generate HTML
+    const html = ebookService.generateHTML(themedChunks, layout, toc, {
+      theme,
+      title: "Generated E-book",
+      author: "Aether AI",
+      fontSizeScale,
+    });
+
+    // Compute metadata
+    const metadata = {
+      title: "Generated E-book",
+      author: "Aether AI",
+      theme,
+      pageCount: layout.pages.length,
+      wordCount: generatedContent.text.split(/\s+/).length,
+      colorPalette,
+      fontSizeScale,
+      density:
+        pageCountNum <= 5
+          ? "sparse"
+          : pageCountNum <= 10
+          ? "standard"
+          : pageCountNum <= 15
+          ? "dense"
+          : "very-dense",
+    };
+
+    const ebookId = `ebook_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+
+    res.json({
+      id: ebookId,
+      content: generatedContent.text,
+      html,
+      metadata,
+      pages: layout.pages.length,
+      can_export: true,
+      can_override: true,
+    });
+  } catch (error) {
+    console.error("Error generating ebook:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to generate e-book", details: error.message });
+  }
+});
+
+/**
+ * POST /api/override
+ * Apply style overrides to an existing e-book
+ * Body: { ebookId, overrides: { theme, colorPalette, fontSizeScale, density } }
+ * Returns: { id, html, metadata }
+ */
+app.post("/api/override", async (req, res) => {
+  const { ebookId, html, metadata, overrides } = req.body;
+
+  if (!ebookId || !html || !metadata) {
+    return res
+      .status(400)
+      .json({ error: "Missing ebookId, html, or metadata" });
+  }
+
+  if (!overrides || typeof overrides !== "object") {
+    return res.status(400).json({ error: "Overrides object is required" });
+  }
+
+  try {
+    // Use OverrideService to apply changes
+    const result = overrideService.applyOverride(html, metadata, overrides);
+
+    res.json({
+      id: ebookId,
+      html: result.html,
+      metadata: result.metadata,
+      can_override: true,
+    });
+  } catch (error) {
+    console.error("Error applying override:", error);
+    res
+      .status(400)
+      .json({ error: "Failed to apply override", details: error.message });
+  }
+});
+
+/**
+ * GET /api/themes
+ * Return available themes and their metadata
+ * Returns: { themes: [ { id, name, description, preview } ] }
+ */
+app.get("/api/themes", (req, res) => {
+  const themes = [
+    {
+      id: "dark",
+      name: "Dark Theme",
+      description: "Dark background with light text. Best for night reading.",
+      colors: { background: "#1a1a1a", text: "#ffffff", accent: "#4a9eff" },
+      wcag: "AA",
+    },
+    {
+      id: "light",
+      name: "Light Theme",
+      description:
+        "Light background with dark text. Classic reading experience.",
+      colors: { background: "#ffffff", text: "#000000", accent: "#0066cc" },
+      wcag: "AA",
+    },
+    {
+      id: "corporate",
+      name: "Corporate Theme",
+      description:
+        "Professional theme with muted colors for business documents.",
+      colors: { background: "#f5f5f5", text: "#2c3e50", accent: "#34495e" },
+      wcag: "AA",
+    },
+    {
+      id: "bold",
+      name: "Bold Theme",
+      description:
+        "High contrast theme with vibrant colors. Accessible and striking.",
+      colors: { background: "#000000", text: "#ffff00", accent: "#ff6b35" },
+      wcag: "AAA",
+    },
+  ];
+
+  res.json({
+    themes,
+    count: themes.length,
+  });
+});
+
 // Centralized error handler (placed at end to capture errors from all routes)
 app.use((err, req, res, _next) => {
   const timestamp = new Date().toISOString();

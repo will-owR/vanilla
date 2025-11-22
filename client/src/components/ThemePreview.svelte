@@ -73,7 +73,7 @@
   </div>
 
   <div class="preview-container">
-    {/* Cover Page Preview */}
+    <!-- Cover Page Preview -->
     <div class="page-preview cover-page">
       <div
         class="page-background"
@@ -92,13 +92,13 @@
           <div
             class="accent-line"
             style="background-color: {config.accent};"
-          />
+          ></div>
         </div>
       </div>
       <p class="page-label">Cover</p>
     </div>
 
-    {/* Content Page Preview */}
+    <!-- Content Page Preview -->
     <div class="page-preview content-page">
       <div
         class="page-background"
@@ -129,10 +129,10 @@
       <div class="detail-box">
         <span class="detail-label">Colors</span>
         <div class="color-palette">
-          <div class="color-swatch" style="background: {config.background}; border: 1px solid #ccc;" title="Background" />
-          <div class="color-swatch" style="background: {config.text};" title="Text" />
-          <div class="color-swatch" style="background: {config.accent};" title="Accent" />
-          <div class="color-swatch" style="background: {config.headings};" title="Headings" />
+          <div class="color-swatch" style="background: {config.background}; border: 1px solid #ccc;" title="Background"></div>
+          <div class="color-swatch" style="background: {config.text};" title="Text"></div>
+          <div class="color-swatch" style="background: {config.accent};" title="Accent"></div>
+          <div class="color-swatch" style="background: {config.headings};" title="Headings"></div>
         </div>
       </div>
 

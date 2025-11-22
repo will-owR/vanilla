@@ -74,7 +74,7 @@
       class="form-control"
     >
       {#each colorPalettes as palette}
-        <option value={palette.id}>{palette.label} – {palette.desc}</option>
+        <option value={palette.id}>{palette.label} - {palette.desc}</option>
       {/each}
     </select>
     <p class="field-help">Adjust color scheme (vibrant, muted, etc.)</p>
@@ -116,7 +116,7 @@
       aria-busy={isLoading}
     >
       {#if isLoading}
-        <span class="spinner" />
+        <span class="spinner"></span>
         Applying...
       {:else}
         ✓ Apply Overrides
