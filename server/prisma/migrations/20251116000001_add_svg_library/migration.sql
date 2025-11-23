@@ -26,15 +26,15 @@ CREATE TABLE IF NOT EXISTS svg_library (
 -- Create indexes for common searches
 -- Index on concept (for content-based search)
 CREATE INDEX IF NOT EXISTS idx_svg_library_concept 
-  ON svg_library USING GIN (metadata jsonb_path_ops);
+  ON svg_library USING GIN (metadata);
 
 -- Index on style (for aesthetic filtering)
 CREATE INDEX IF NOT EXISTS idx_svg_library_style 
-  ON svg_library USING GIN (metadata jsonb_path_ops);
+  ON svg_library USING GIN (metadata);
 
 -- Index on usage count (for reuse tracking)
 CREATE INDEX IF NOT EXISTS idx_svg_library_usage 
-  ON svg_library ((metadata->>'usageCount')::INT DESC)
+  ON svg_library (created_at DESC)
   WHERE deleted_at IS NULL;
 
 -- Index on creation date (for time-based queries)
