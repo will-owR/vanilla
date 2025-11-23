@@ -106,7 +106,9 @@ check_prisma_schema_exists() {
 
 check_prisma_client() {
     # Validate schema and client setup
-    if npx --yes prisma validate --schema="$PRISMA_SCHEMA_PATH" >/dev/null 2>&1; then
+    # Change to server directory to ensure correct Prisma version is used
+    local server_dir=$(dirname "$0")/../..
+    if (cd "$server_dir/server" && npx --yes prisma validate) >/dev/null 2>&1; then
         echo "Prisma: OK"
         return 0
     else
