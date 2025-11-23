@@ -1,10 +1,37 @@
 # ebookService - Core Business Logic Service
 
-**Date**: November 23, 2025  (Sunday)
+**Date**: November 23, 2025 (Sunday)
 
 **Purpose**: Generate structured ebook content data from user prompts via sequential AI conversations.
 
 **Scope**: `ebookService` is a **core business logic service** that implements the intelligent content generation for ebooks. It receives a prompt and metadata, orchestrates sequential AI conversations to generate structured chapter data, and returns it for composition by `genieService`.
+
+**Current Status**: Implementation in progress (see checklist below)
+
+---
+
+## Current Implementation Status
+
+**Context**: Option 2 frontend was fully implemented and wired, but manual browser testing revealed insufficient backend logic. This document specifies what the ebookService must do to enable Option 2 to work end-to-end.
+
+**Branch**: `feat/B_Frontend_option2`
+
+**Current State**:
+
+- ✅ ebookService skeleton: basic handle() method exists
+- 🔄 **IN PROGRESS**: Sequential AI conversations, image concepts, structured output
+- ⏳ Pending: Validation against enhanced backend
+
+**Blocker for Option 2**: ebookService must return structured data matching the contract below (see "ebookService Output Contract")
+
+**Next Steps**:
+
+1. [ ] Complete sequential AI conversations (2-6 hours)
+2. [ ] Implement image concept generation
+3. [ ] Validate output contract
+4. [ ] Re-test Option 2 frontend against enhanced backend
+
+**See**: "ebookService Implementation Checklist" section below
 
 ---
 
@@ -89,6 +116,143 @@
   },
 }
 ```
+
+---
+
+## Data Flow & Architecture
+
+### Complete Flow: User Request to Final eBook
+
+```
+User Request (Frontend)
+  └─ prompt: "A detective story..."
+  └─ metadata: { theme, pageCount, colorPalette, fontSizeScale }
+       ↓
+genieService.process(payload, mode="ebook")
+       ↓
+ebookService.handle(payload)
+  ├─ Conversation 1: Request structure
+  │   AI → { title, chapters: 4, outline: [...] }
+  │
+  ├─ Conversation 2a: Chapter 1 content + image concept
+  │   AI → { title, content, image: { concept, style, tone } }
+  │
+  ├─ Conversation 2b: Chapter 2 content + image concept
+  │   AI → { ... }
+  │
+  ├─ Conversation 2c: Chapter 3 content + image concept
+  │   AI → { ... }
+  │
+  ├─ Conversation 2d: Chapter 4 content + image concept
+  │   AI → { ... }
+  │
+  └─ Return: Structured data { title, chapters[], metadata, actions }
+       ↓
+genieService.compose(structuredData)
+  ├─ For each chapter:
+  │   ├─ Resolve image: SVG library query (50/50 with Gemini)
+  │   └─ Store in imageMap
+  │
+  ├─ Generate final HTML:
+  │   ├─ Cover page
+  │   ├─ Copyright page
+  │   ├─ TOC (with resolved image IDs)
+  │   ├─ Content pages (with embedded images)
+  │   └─ Epilogue
+  │
+  └─ Return: Complete ebook HTML
+       ↓
+Frontend
+  └─ Display HTML preview
+  └─ Options: Override theme, export PDF, etc.
+```
+
+---
+
+## Service Responsibilities
+
+### ✅ ebookService DO:
+
+- Generate prompt structure via AI
+- Request chapter content via sequential AI calls
+- Request image concepts per chapter
+- Determine image style (theme-based + AI flexibility)
+- Treat all content as "edited" and pass through
+- Return structured data (chapters, metadata, actions)
+- Throw descriptive errors on AI failures
+
+### ❌ ebookService DON'T:
+
+- Generate final HTML
+- Embed images (only store concepts/references)
+- Validate content quality
+- Call other services (only geminiClient)
+- Manage database persistence
+- Handle HTTP requests
+
+### ✅ genieService DO:
+
+- Receive structured data from ebookService
+- Resolve image concepts:
+  - Query SVG library (50% hit strategy)
+  - Generate via Gemini on miss/pass
+  - Cache all Gemini-generated images
+- Compose final ebook:
+  - Create cover, copyright, TOC, content pages, epilogue
+  - Embed resolved image IDs
+  - Apply theme styling
+- Return production-ready HTML
+
+### ❌ genieService DON'T:
+
+- Generate chapter content (ebookService does)
+- Make initial chapter outline decisions (ebookService does)
+
+---
+
+## Key Metrics
+
+### Cost Optimization
+
+Per-ebook cost breakdown for typical 8-chapter ebook:
+
+| Operation                                  | Cost          | Frequency (100 ebooks) | Total       |
+| ------------------------------------------ | ------------- | ---------------------- | ----------- |
+| Prompt classification                      | ~$0.0001      | 100                    | ~$0.01      |
+| Structure generation                       | ~$0.001       | 100                    | ~$0.10      |
+| Chapter content (8 chapters × 100)         | ~$0.0005 each | 800                    | ~$0.40      |
+| Image generation (8 images × 100, 50% hit) | ~$0.05 each   | 400                    | ~$20.00     |
+| **Total**                                  | —             | —                      | **~$20.51** |
+
+**Per-Ebook Cost**: **~$0.21**
+
+**Cost Optimization Strategy**:
+
+- SVG library reduces 50% of image generation costs (via cache hits)
+- Semantic search on library cuts API calls
+- Gemini fallback ensures quality when cache misses
+- Result: ~$0.05 per image instead of $0.10
+
+---
+
+## Quality Checkpoints
+
+### What's Validated ✅
+
+- Input validation (prompt, pageCount, theme)
+- AI response structure (has chapters, has content)
+- Image concept validity (non-empty, descriptive)
+- JSON parsing success
+
+### What's NOT Validated ❌
+
+- Content word count
+- Content readability/quality
+- Spelling/grammar
+- Factual accuracy
+- Image concept quality
+
+**Why**: User editing coming soon (Phase B+). MVP focuses on generation speed, not content perfection.
 
 ---
 
@@ -600,6 +764,158 @@ const result = await ebookService.handle(payload);
 
 ---
 
+## ebookService Implementation Checklist
+
+**Current Priority**: Complete these items to unblock Option 2 frontend validation
+
+### **Conversation Pipeline Implementation** (2-3 hours)
+
+- [ ] **Conversation 1: Structure Generation**
+
+  - [ ] Send prompt to Gemini (request: outline, chapter count, titles)
+  - [ ] Parse response: extract title, chapters[], outline[]
+  - [ ] Validate: has chapters, has titles, page count matches request
+  - [ ] Test: "Write a detective story" → returns 4-5 chapters
+
+- [ ] **Conversation 2+: Sequential Chapter Generation (loop for each chapter)**
+  - [ ] Send: chapter title + topic + overall prompt context
+  - [ ] Request: content (600-800 words) + image concept
+  - [ ] Parse response: extract content, image {concept, style, tone, palette_hint, size_hint}
+  - [ ] Validate: content non-empty, image concept descriptive
+  - [ ] Store in chapters[] array before moving to next
+  - [ ] Test: "Chapter 1: The Mystery Begins" → returns content + image concept
+
+**Success**: Sequential conversations preserve context and generate coherent chapter content
+
+### **Image Concept Generation** (1 hour)
+
+- [ ] **Theme-based Default Styling**
+
+  - [ ] Map theme → default image style:
+    - "dark" → "gothic, moody, dramatic"
+    - "light" → "bright, airy, clean, whimsical"
+    - "corporate" → "professional, minimal, modern"
+    - "bold" → "vibrant, high-contrast, energetic"
+
+- [ ] **AI-guided Per-Chapter Flexibility**
+
+  - [ ] Extract style suggestion from AI response (if present)
+  - [ ] If differs from theme default AND is valid, use AI suggestion for that chapter only
+  - [ ] Otherwise use theme default
+
+- [ ] **Image Concept Validation**
+  - [ ] Concept: non-empty, descriptive (3+ words)
+  - [ ] Style: matches theme OR AI suggestion
+  - [ ] Tone: valid (peaceful, energetic, mysterious, dramatic, etc.)
+  - [ ] Size hint: valid (full-width, half-width, inline)
+
+**Success**: Each chapter has valid image concept with style, tone, and hints
+
+### **Output Contract Implementation** (1 hour)
+
+- [ ] **Return Structured Data**
+
+  - [ ] chapters[] array with: id, chapter number, title, content, image{concept, style, tone, palette_hint, size_hint}
+  - [ ] metadata: model, pages_count, source, theme, colorPalette, fontSizeScale, density, classification
+  - [ ] actions: persist_prompt, generate_pdf, can_export, can_preview, can_override
+
+- [ ] **Validate Output**
+  - [ ] All chapters present (count = pageCount ÷ ~2)
+  - [ ] All chapters have content
+  - [ ] All chapters have valid image concepts
+  - [ ] Metadata complete and accurate
+  - [ ] Actions all true (for MVP)
+
+**Success**: Output matches contract in "ebookService Output Contract" section above
+
+### **Error Handling** (30 mins)
+
+- [ ] **AI Conversation Failures**
+
+  - [ ] Timeout: throw error "Conversation timeout (>30s)"
+  - [ ] Empty response: throw error "AI returned empty response"
+  - [ ] Malformed JSON: throw error "Failed to parse AI response"
+
+- [ ] **Validation Failures**
+
+  - [ ] Missing chapters: throw error "Insufficient chapters generated"
+  - [ ] Missing content: throw error "Chapter content missing"
+  - [ ] Invalid image concept: throw error "Invalid image concept for chapter"
+
+- [ ] **Propagate to genieService**
+  - [ ] Errors throw with descriptive message
+  - [ ] genieService catches and returns to Option 2 frontend
+
+**Success**: All error paths tested and handled gracefully
+
+### **Testing & Validation** (1-2 hours)
+
+- [ ] **Unit Tests** (>85% coverage of ebookService.handle())
+
+  - [ ] Happy path: valid prompt → valid output
+  - [ ] Short prompt (3-5 pages) → correct chapter count
+  - [ ] Long prompt (15-20 pages) → correct chapter count
+  - [ ] Each theme variant → correct image styles
+
+- [ ] **Integration Tests** (against genieService)
+
+  - [ ] ebookService output → genieService.compose() → valid HTML
+  - [ ] Image concepts resolve to actual images (via SVG library or Gemini)
+
+- [ ] **Manual Testing** (Option 2 Frontend)
+  - [ ] Frontend generates ebook → receives structured data
+  - [ ] Preview displays correctly
+  - [ ] Theme override works
+  - [ ] Export to PDF works
+
+**Success**: All tests passing, Option 2 frontend E2E flow works
+
+---
+
+**Estimated Total Time**: 4-6 hours development + testing
+
+**Blocker Resolution**: Once complete, Option 2 frontend can be re-validated and Option 3 can proceed.
+
+---
+
+## Frontend Implementation: Three Progressive Options
+
+This backend architecture is **frontend-agnostic**. Implementation can follow three progressive pathways documented in `/docs/design/phaseB/B_Frontend/to_Come/README_PhaseB.md`:
+
+### **Option 2: Store-Based MVP** (4-5 hours)
+
+- Simple Svelte store pattern (`ebookStore.js`)
+- HTTP API client (`ebookApi.js`)
+- 4 Phase B components wired to store
+- 3 new backend endpoints (generate, override, themes)
+- **Best for**: MVP + quick iteration
+- **Risk**: 🟢 Low
+
+### **Option 3: Dedicated Pages** (6-8 hours after Option 2)
+
+- Builds on Option 2 (80% code reuse)
+- Adds routing: dashboard, editor pages
+- Project management (save/load/delete)
+- Version history + auto-save
+- Batch generation
+- **Best for**: Production workflow
+- **Risk**: 🟡 Medium
+
+### **Option 5: Schema-Driven UI** (12-16 hours long-term)
+
+- Backend controls frontend structure (JSON schema)
+- Server-driven UI (no frontend deploy for changes)
+- A/B testing + feature flags
+- Zero coupling between frontend/backend
+- **Best for**: Enterprise scalability
+- **Risk**: 🔴 High
+
+**Recommendation**: Start with Option 2 (MVP), then migrate incrementally to Option 3 (production), then Option 5 (enterprise).
+
+See `/docs/design/phaseB/B_Frontend/to_Come/README_PhaseB.md` for detailed implementation roadmap.
+
+---
+
 ## Related Files
 
 - **Frontend State**: `/client/src/stores/ebookStore.js`
@@ -608,6 +924,7 @@ const result = await ebookService.handle(payload);
 - **Orchestrator**: `/server/genieService.js` (routes to ebookService)
 - **Composition**: `/server/genieService.compose()` (creates final ebook)
 - **SVG Cache**: `/server/utils/svgLibrary.js` (image resolution)
+- **Frontend Roadmap**: `/docs/design/phaseB/B_Frontend/to_Come/README_PhaseB.md`
 
 ---
 

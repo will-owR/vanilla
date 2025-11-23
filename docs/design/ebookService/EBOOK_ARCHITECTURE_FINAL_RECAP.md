@@ -1,11 +1,33 @@
-# ebookService Architecture - FINAL RECAP
+# ebookService Architecture - QUICK REFERENCE
 
 **Date**: November 23, 2025  
-**Status**: ✅ DESIGN FINALIZED - READY FOR IMPLEMENTATION
+**Status**: 🔄 In Implementation (see README_ebook.md for details)
 
 ---
 
-## Strategic Decisions (Confirmed)
+## ⚠️ Note: Documentation Consolidated
+
+This file is now a **quick reference** for the 4 strategic decisions. For complete implementation details, see:
+
+**Full Implementation Guide**: `/docs/design/ebookService/README_ebook.md`
+
+This README includes:
+
+- ✅ Data Flow diagram
+- ✅ Service Responsibilities matrix
+- ✅ Data Structures (input/output contracts)
+- ✅ Sequential AI Conversation Pipeline (detailed)
+- ✅ Image Style Determination (with logic)
+- ✅ Content Validation Strategy
+- ✅ Image Cache Strategy (with code examples)
+- ✅ Implementation Checklist (with checkboxes)
+- ✅ Cost Analysis ($0.21 per ebook)
+- ✅ Quality Checkpoints
+- ✅ Testing & Validation framework
+
+---
+
+## 4 Strategic Decisions (Quick Reference)
 
 ### 1. ✅ Sequential AI Conversations
 
@@ -119,96 +141,41 @@ return generated;
 
 ```
 User Request (Frontend)
-  └─ prompt: "A detective story..."
-  └─ metadata: { theme, pageCount, colorPalette, fontSizeScale }
+  └─ prompt + metadata
        ↓
-genieService.process(payload, mode="ebook")
+ebookService.handle()
+  ├─ Conversation 1: Structure
+  ├─ Conversation 2+: Sequential chapters
+  └─ Return: Structured data
        ↓
-ebookService.handle(payload)
-  ├─ Conversation 1: Request structure
-  │   AI → { title, chapters: 4, outline: [...] }
-  │
-  ├─ Conversation 2a: Chapter 1 content + image concept
-  │   AI → { title, content, image: { concept, style, tone } }
-  │
-  ├─ Conversation 2b: Chapter 2 content + image concept
-  │   AI → { ... }
-  │
-  ├─ Conversation 2c: Chapter 3 content + image concept
-  │   AI → { ... }
-  │
-  ├─ Conversation 2d: Chapter 4 content + image concept
-  │   AI → { ... }
-  │
-  └─ Return: Structured data { title, chapters[], metadata, actions }
+genieService.compose()
+  ├─ Resolve images (SVG library + Gemini)
+  └─ Return: Final HTML
        ↓
-genieService.compose(structuredData)
-  ├─ For each chapter:
-  │   ├─ Resolve image: SVG library query (50/50 with Gemini)
-  │   └─ Store in imageMap
-  │
-  ├─ Generate final HTML:
-  │   ├─ Cover page
-  │   ├─ Copyright page
-  │   ├─ TOC (with resolved image IDs)
-  │   ├─ Content pages (with embedded images)
-  │   └─ Epilogue
-  │
-  └─ Return: Complete ebook HTML
-       ↓
-Frontend
-  └─ Display HTML preview
-  └─ Options: Override theme, export PDF, etc.
+Frontend (Display + Override + Export)
 ```
 
----
-
-## ebookService Responsibilities
-
-### ✅ DO:
-
-- Generate prompt structure via AI
-- Request chapter content via sequential AI calls
-- Request image concepts per chapter
-- Determine image style (theme-based + AI flexibility)
-- Treat all content as "edited" and pass through
-- Return structured data (chapters, metadata, actions)
-- Throw descriptive errors on AI failures
-
-### ❌ DON'T:
-
-- Generate final HTML
-- Embed images (only store concepts/references)
-- Validate content quality
-- Call other services (only geminiClient)
-- Manage database persistence
-- Handle HTTP requests
+**For detailed flow**: See README_ebook.md "Data Flow & Architecture"
 
 ---
 
-## genieService Responsibilities
+## ebookService vs genieService: Responsibilities
 
-### ✅ DO:
+| Aspect               | ebookService                        | genieService                   |
+| -------------------- | ----------------------------------- | ------------------------------ |
+| **Generates**        | Chapter content via AI              | Final HTML with images         |
+| **Input**            | User prompt + metadata              | Structured data from ebook     |
+| **Output**           | Structured chapters data            | Production-ready ebook HTML    |
+| **AI Calls**         | Multiple (structure + chapters)     | Zero (uses cached data)        |
+| **Image Generation** | Concepts only                       | Actual images (SVG + Gemini)   |
+| **Validation**       | Input validation, AI response check | Output HTML validation         |
+| **Scope**            | Content generation logic            | Composition + asset management |
 
-- Receive structured data from ebookService
-- Resolve image concepts:
-  - Query SVG library (50% hit strategy)
-  - Generate via Gemini on miss/pass
-  - Cache all Gemini-generated images
-- Compose final ebook:
-  - Create cover, copyright, TOC, content pages, epilogue
-  - Embed resolved image IDs
-  - Apply theme styling
-- Return production-ready HTML
-
-### ❌ DON'T:
-
-- Generate chapter content (ebookService does)
-- Make initial chapter outline decisions (ebookService does)
+**For detailed responsibilities**: See README_ebook.md "Service Responsibilities"
 
 ---
 
-## Key Metrics
+## Key Metrics Summary
 
 ### Cost Optimization
 
@@ -278,16 +245,57 @@ Frontend
 
 ## Documentation Locations
 
-- **Full Design**: `/server/README_ebook_REVISED.md`
-- **Vision Architecture**: `/docs/design/AETHERPRESS_VISION_ARCHITECTURE.md`
-- **SVG Library**: `/docs/design/phaseB/SVGLIBRARY_ADDITION.md`
-- **This Recap**: This file
+**Primary Resource** (Complete Implementation):
+
+- **Full Implementation Guide**: `/docs/design/ebookService/README_ebook.md` (850+ lines)
+  - Data Flow diagram
+  - Service Responsibilities matrix
+  - Input/Output contracts
+  - Sequential AI conversation pipeline
+  - Image style determination
+  - Content validation strategy
+  - Image cache strategy with code examples
+  - Implementation checklist (with progress tracking)
+  - Cost analysis & metrics
+  - Quality checkpoints
+  - Testing framework
+
+**Quick References**:
+
+- **This File**: `/docs/design/ebookService/EBOOK_ARCHITECTURE_FINAL_RECAP.md` (4 strategic decisions + key metrics)
+- **Vision Architecture**: `/docs/design/phaseA/AETHERPRESS_VISION_ARCHITECTURE.md`
+- **SVG Library Strategy**: `/docs/design/phaseB/SVGLIBRARY_ADDITION.md`
+
+**Frontend Implementation Roadmap**:
+
+- **Complete Roadmap**: `/docs/design/phaseB/B_Frontend/to_Come/README_PhaseB.md`
+  - Option 2: Store-based MVP (4-5 hours)
+  - Option 3: Dedicated pages with project management (6-8 hours)
+  - Option 5: Schema-driven UI system (12-16 hours)
+
+**Master Status Document**:
+
+- **Current Status & Roadmap**: `/docs/design/AETHERPRESS_CURRENT_STATUS_AND_ROADMAP.md`
+  - Phase B status (in-progress ebookService enhancement)
+  - Current blockers and priorities
+  - Next steps for Option 2 validation and Option 3 planning
+
+---
+
+## Cost Summary
+
+**Per-Ebook Cost**: **~$0.21**
+
+- Structure generation: ~$0.001
+- Chapter content (8 chapters): ~$0.0005 per chapter
+- Image generation (8 images, 50% SVG cache hit): ~$0.025 average
+- Overhead: ~$0.0001
+
+**See README_ebook.md "Key Metrics"** for detailed cost breakdown
 
 ---
 
 ## Success Criteria
-
-### Phase B (MVP) Complete When:
 
 ✅ ebookService generates structured content via sequential AI conversations  
 ✅ genieService composes final ebook with resolved images  
@@ -301,11 +309,51 @@ Frontend
 
 ## Next Steps
 
-1. **Review** this recap with team
-2. **Implement** ebookService.handle() using README_ebook_REVISED.md
-3. **Implement** genieService.compose()
-4. **Test** end-to-end in browser
-5. **Deploy** Phase B to staging
+### Phase B Backend: ✅ COMPLETE
+
+- ✅ Design finalized and documented
+- ✅ Strategic decisions confirmed (4 key decisions)
+- ✅ Data contracts specified
+- ✅ Cost analysis completed ($0.21 per ebook)
+- ✅ Architecture documented in README_ebook.md
+
+### Phase B Frontend: READY TO IMPLEMENT
+
+**Choose your path** (see `/docs/design/phaseB/B_Frontend/to_Come/README_PhaseB.md`):
+
+1. **Option 2 - MVP** (Start here: 4-5 hours)
+
+   - [ ] Implement ebookStore.js (state + business logic)
+   - [ ] Implement ebookApi.js (HTTP client)
+   - [ ] Wire 4 Phase B components to store
+   - [ ] Create 3 backend endpoints
+   - [ ] Basic integration testing
+   - **Outcome**: Phase B UI fully functional, ready for MVP release
+
+2. **Option 3 - Production** (After Option 2: 6-8 hours)
+
+   - [ ] Add routing (dashboard, editor pages)
+   - [ ] Create projectStore.js (CRUD + persistence)
+   - [ ] Build Dashboard page (list/search/delete)
+   - [ ] Build Editor page (full-screen editing)
+   - [ ] Version history + auto-save
+   - **Outcome**: Team can manage multiple eBook projects
+
+3. **Option 5 - Enterprise** (Long-term: 12-16 hours)
+   - [ ] Define UISchema TypeScript types
+   - [ ] Implement SchemaRenderer component
+   - [ ] Build SchemaValidator
+   - [ ] Create SchemaBuilder (backend)
+   - [ ] Add A/B testing + feature flags
+   - **Outcome**: UI changes no longer require frontend deploy
+
+---
+
+**Recommended Timeline**:
+
+- **This week**: Implement Option 2 (MVP ready by end of session)
+- **Next week**: Migrate to Option 3 (production workflow)
+- **January**: Plan Option 5 (enterprise features)
 
 ---
 
