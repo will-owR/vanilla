@@ -84,9 +84,11 @@ if (!process.env.DATABASE_URL) {
 
   afterAll(async () => {
     try {
-      await prisma.$disconnect();
+      if (prisma) {
+        await prisma.$disconnect();
+      }
     } catch (e) {
-      /* ignore */ void 0;
+      console.warn("Error disconnecting Prisma:", e.message);
     }
     if (typeof serverModule.stopServer === "function")
       await serverModule.stopServer();

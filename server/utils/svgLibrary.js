@@ -61,8 +61,12 @@ function getDB() {
       const { PrismaClient } = require("@prisma/client");
       db = new PrismaClient();
     } catch (error) {
-      console.error("Failed to initialize Prisma client:", error.message);
-      throw error;
+      // Provide a clearer error message
+      const err = new Error(
+        `Prisma Client initialization failed: ${error.message}. Please ensure DATABASE_URL is set and "prisma generate" has been run.`
+      );
+      err.originalError = error;
+      throw err;
     }
   }
   return db;
@@ -146,11 +150,13 @@ class SVGLibrary {
    * @returns {Promise<string>} UUID of stored item
    */
   async store(svgData, metadata) {
+    // Validate parameters first (before connecting to DB)
+    if (!svgData || !metadata) {
+      throw new Error("svgData and metadata required");
+    }
+
     try {
       const db = getDB();
-      if (!svgData || !metadata) {
-        throw new Error("svgData and metadata required");
-      }
 
       // Ensure metadata has required fields
       const normalizedMetadata = {

@@ -64,8 +64,12 @@ describe("concurrency integration (Postgres)", () => {
 
   afterAll(async () => {
     try {
-      await prisma.$disconnect();
-    } catch (e) {}
+      if (prisma) {
+        await prisma.$disconnect();
+      }
+    } catch (e) {
+      console.warn("Error disconnecting Prisma:", e.message);
+    }
     if (typeof dbUtils._resetPrisma === "function") dbUtils._resetPrisma();
   });
 

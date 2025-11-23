@@ -10,17 +10,20 @@
  * Built on top of Prisma Client.
  */
 
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+let prisma = null;
 
 /**
- * Save a generated result with canonical out_envelope
- * @param {string} resultId - UUID for the result
- * @param {Object} outEnvelope - Canonical { pages, metadata, actions }
- * @param {string} mode - Generation mode (basic, demo, ebook)
- * @param {number} [promptId] - Optional link to original prompt
- * @returns {Promise<Object>} Created result record
+ * Lazy-initialize Prisma Client
+ * This allows tests to mock the client before it's instantiated
  */
+function getPrisma() {
+  if (prisma) return prisma;
+
+  const { PrismaClient } = require("@prisma/client");
+  prisma = new PrismaClient();
+  return prisma;
+}
+
 async function saveResult(resultId, outEnvelope, mode, promptId = null) {
   if (!resultId || !outEnvelope || !mode) {
     const err = new Error("resultId, outEnvelope, and mode are required");
@@ -29,7 +32,7 @@ async function saveResult(resultId, outEnvelope, mode, promptId = null) {
   }
 
   try {
-    const result = await prisma.result.create({
+    const result = await getPrisma().result.create({
       data: {
         resultId,
         outEnvelope,
@@ -59,7 +62,7 @@ async function getResultById(resultId) {
   }
 
   try {
-    const result = await prisma.result.findUnique({
+    const result = await getPrisma().result.findUnique({
       where: { resultId },
     });
     return result;
@@ -93,7 +96,7 @@ async function createExportJob(jobId, resultId) {
   }
 
   try {
-    const job = await prisma.exportJob.create({
+    const job = await getPrisma().exportJob.create({
       data: {
         jobId,
         resultId,
@@ -122,7 +125,7 @@ async function getExportJobById(jobId) {
   }
 
   try {
-    const job = await prisma.exportJob.findUnique({
+    const job = await getPrisma().exportJob.findUnique({
       where: { jobId },
       include: { result: true },
     });
@@ -149,7 +152,7 @@ async function updateExportJob(jobId, updates) {
   }
 
   try {
-    const job = await prisma.exportJob.update({
+    const job = await getPrisma().exportJob.update({
       where: { jobId },
       data: updates,
     });
@@ -168,7 +171,7 @@ async function updateExportJob(jobId, updates) {
  */
 async function getQueuedExportJobs(limit = 10) {
   try {
-    const jobs = await prisma.exportJob.findMany({
+    const jobs = await getPrisma().exportJob.findMany({
       where: { status: "queued" },
       orderBy: { createdAt: "asc" },
       take: limit,
@@ -191,7 +194,7 @@ async function getQueuedExportJobs(limit = 10) {
 async function deleteExpiredExportJobs(maxAgeMs = 24 * 60 * 60 * 1000) {
   try {
     const cutoff = new Date(Date.now() - maxAgeMs);
-    const result = await prisma.exportJob.deleteMany({
+    const result = await getPrisma().exportJob.deleteMany({
       where: {
         createdAt: { lt: cutoff },
       },
@@ -216,7 +219,7 @@ async function deleteExpiredExportJobs(maxAgeMs = 24 * 60 * 60 * 1000) {
  */
 async function getExportJobStats() {
   try {
-    const stats = await prisma.exportJob.groupBy({
+    const stats = await getPrisma().exportJob.groupBy({
       by: ["status"],
       _count: true,
     });
@@ -259,7 +262,7 @@ async function getExportJobsByStatus(status, filters = {}) {
       where.createdAt = { lt: filters.olderThan };
     }
 
-    const jobs = await prisma.exportJob.findMany({
+    const jobs = await getPrisma().exportJob.findMany({
       where,
       orderBy: { createdAt: "asc" },
       take: filters.limit || 1000,
@@ -284,7 +287,7 @@ async function markJobsAsExpired(maxAgeMs = 24 * 60 * 60 * 1000) {
   try {
     const cutoff = new Date(Date.now() - maxAgeMs);
 
-    const result = await prisma.exportJob.updateMany({
+    const result = await getPrisma().exportJob.updateMany({
       where: {
         createdAt: { lt: cutoff },
         status: { not: "expired" },

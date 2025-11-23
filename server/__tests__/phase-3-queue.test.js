@@ -37,7 +37,7 @@ describe("Phase 3: Export Queue, Processor, and Cleanup", () => {
     // Cleanup: remove test results and jobs from database
     // Note: Must delete export jobs BEFORE results due to foreign key constraint
     try {
-      if (testResultId) {
+      if (prisma && testResultId) {
         // Delete all export jobs that reference this result
         await prisma.exportJob.deleteMany({
           where: { resultId: testResultId },
@@ -52,7 +52,9 @@ describe("Phase 3: Export Queue, Processor, and Cleanup", () => {
     }
 
     // Close Prisma client
-    await prisma.$disconnect();
+    if (prisma) {
+      await prisma.$disconnect();
+    }
 
     // Clear queue memory
     exportQueue.jobs.clear();
