@@ -129,10 +129,8 @@ function createEbookStore() {
           prompt,
           theme: currentStore.config.theme,
           pageCount: currentStore.config.pageCount,
-          options: {
-            colorPalette: currentStore.config.colorPalette,
-            fontSizeScale: currentStore.config.fontSizeScale,
-          },
+          colorPalette: currentStore.config.colorPalette,
+          fontSizeScale: currentStore.config.fontSizeScale,
         });
 
         update((store) => ({
@@ -174,8 +172,18 @@ function createEbookStore() {
       }));
 
       try {
+        const currentStore = get({ subscribe });
+        const html = currentStore.result?.html;
+        const metadata = currentStore.result?.metadata;
+
+        if (!html || !metadata) {
+          throw new Error("No generated eBook found for override");
+        }
+
         const response = await ebookApi.applyOverride({
           ebookId,
+          html,
+          metadata,
           overrides,
         });
 

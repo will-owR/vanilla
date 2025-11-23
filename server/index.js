@@ -2857,71 +2857,57 @@ app.post("/api/ebook/generate", async (req, res) => {
   }
 
   try {
-    // Generate with existing genieService (generates content based on prompt)
-    const generatedContent = await genieService.processMessage(prompt, []);
-
-    if (!generatedContent) {
-      return res.status(500).json({ error: "Failed to generate content" });
-    }
-
-    // Chunk the content
-    const chunks = await contentChunker.chunk(
-      generatedContent.text,
-      pageCountNum
-    );
-
-    // Apply theme
-    const themedChunks = themeEngine.applyTheme(chunks, theme, {
-      colorPalette,
-      fontSizeScale,
-    });
-
-    // Generate layout
-    const layout = pageLayout.generateLayout(themedChunks, pageCountNum);
-
-    // Generate TOC
-    const toc = tocGenerator.generateTOC(themedChunks, {
-      includePageNumbers: true,
-      depth: 2,
-    });
-
-    // Generate HTML
-    const html = ebookService.generateHTML(themedChunks, layout, toc, {
-      theme,
-      title: "Generated E-book",
-      author: "Aether AI",
-      fontSizeScale,
-    });
-
-    // Compute metadata
-    const metadata = {
-      title: "Generated E-book",
-      author: "Aether AI",
-      theme,
-      pageCount: layout.pages.length,
-      wordCount: generatedContent.text.split(/\s+/).length,
-      colorPalette,
-      fontSizeScale,
-      density:
-        pageCountNum <= 5
-          ? "sparse"
-          : pageCountNum <= 10
-          ? "standard"
-          : pageCountNum <= 15
-          ? "dense"
-          : "very-dense",
+    // Route through genieService orchestrator with ebook mode
+    // This allows genieService to decide routing and coordinate services
+    const payload = {
+      mode: "ebook",
+      prompt,
+      metadata: {
+        theme,
+        pageCount: pageCountNum,
+        colorPalette,
+        fontSizeScale,
+      },
     };
 
+    const result = await genieService.process(payload);
+
+    if (!result || !result.pages) {
+      return res.status(500).json({ error: "Failed to generate e-book" });
+    }
+
+    // Extract content from orchestrator result
     const ebookId = `ebook_${Date.now()}_${Math.random()
       .toString(36)
       .substr(2, 9)}`;
 
+    // Compute density classification
+    const density =
+      pageCountNum <= 5
+        ? "sparse"
+        : pageCountNum <= 10
+        ? "standard"
+        : pageCountNum <= 15
+        ? "dense"
+        : "very-dense";
+
+    // Build response envelope matching frontend expectations
     res.json({
       id: ebookId,
-      content: generatedContent.text,
-      html,
-      metadata,
-      pages: layout.pages.length,
+      content: result.content || "",
+      html: result.html || "<html><body>Generated eBook</body></html>",
+      metadata: {
+        title: "Generated E-book",
+        author: "Aether AI",
+        theme,
+        pageCount: pageCountNum,
+        wordCount: (prompt || "").split(/\s+/).length,
+        colorPalette,
+        fontSizeScale,
+        density,
+        ...result.metadata,
+      },
+      pages: result.pages.length,
       can_export: true,
       can_override: true,
     });
