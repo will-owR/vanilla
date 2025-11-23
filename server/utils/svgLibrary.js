@@ -286,13 +286,13 @@ class SVGLibrary {
       const db = getDB();
       const stats = await db.$queryRaw`
         SELECT
-          COUNT(*)::integer as totalItems,
-          COALESCE(AVG(CAST(metadata->>'usageCount' AS INTEGER)), 0)::float as avgUsage,
-          COALESCE(MAX(CAST(metadata->>'usageCount' AS INTEGER)), 0)::integer as maxUsage,
-          COUNT(DISTINCT metadata->>'concept')::integer as uniqueConcepts,
-          COUNT(DISTINCT metadata->>'style')::integer as uniqueStyles,
-          MAX(created_at) as newestItem,
-          MIN(created_at) as oldestItem
+          COUNT(*)::integer as "totalItems",
+          COALESCE(AVG(CAST(metadata->>'usageCount' AS INTEGER)), 0)::float as "avgUsage",
+          COALESCE(MAX(CAST(metadata->>'usageCount' AS INTEGER)), 0)::integer as "maxUsage",
+          COUNT(DISTINCT metadata->>'concept')::integer as "uniqueConcepts",
+          COUNT(DISTINCT metadata->>'style')::integer as "uniqueStyles",
+          MAX(created_at) as "newestItem",
+          MIN(created_at) as "oldestItem"
         FROM svg_library
         WHERE deleted_at IS NULL
       `;
