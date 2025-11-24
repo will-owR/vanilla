@@ -182,15 +182,6 @@ async function handle(payload, classification) {
             chapterResp.content?.title ||
             chapterResp.rawText)) ||
         "";
-      if (process && process.env && process.env.NODE_ENV === "test") {
-        try {
-          // eslint-disable-next-line no-console
-          console.debug(
-            "ebookService: raw chapterText:",
-            String(chapterText).slice(0, 400)
-          );
-        } catch (e) {}
-      }
       let chapterData = tryParse(chapterText);
 
       if (!chapterData) {
