@@ -126,17 +126,17 @@ curl -X POST http://localhost:3000/api/ebook/generate \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "A mysterious detective story set in Victorian London",
-    "metadata": {
-      "theme": "dark",
-      "pageCount": 5,
-      "colorPalette": "standard",
-      "fontSizeScale": 1.0
-    }
+    "theme": "dark",
+    "pageCount": 5,
+    "colorPalette": "standard",
+    "fontSizeScale": 1.0
   }' | jq .
 
 # Expected response structure:
 # {
-#   "pages": [
+#   "id": "ebook_...",
+#   "resultId": "...",
+#   "chapters": [
 #     {
 #       "id": "ch_1",
 #       "title": "Chapter 1: ...",
@@ -190,42 +190,38 @@ curl -X POST http://localhost:3000/api/ebook/generate \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "A quick bedtime story for children",
-    "metadata": {
-      "theme": "light",
-      "pageCount": 3,
-      "colorPalette": "vibrant",
-      "fontSizeScale": 1.0
-    }
-  }' | jq '.pages | length, .[0].image.concept'
+    "theme": "light",
+    "pageCount": 3,
+    "colorPalette": "vibrant",
+    "fontSizeScale": 1.0
+  }' | jq '.chapters | length, .[0].image.concept'
 ```
 
 **Expected**:
 
-- Pages: 3 (or close)
-- Concept: Semantic and colorful
+- Chapters: 3 (or close)
+- Concept: Semantic and colorful (e.g., "A cozy woodland scene at twilight")
 
 ---
 
-#### Test 2: Medium prompt (8 pages, dark theme)
+#### Test 2: Medium prompt (5 pages, dark theme)
 
 ```bash
 curl -X POST http://localhost:3000/api/ebook/generate \
   -H "Content-Type: application/json" \
   -d '{
-    "prompt": "A thrilling sci-fi adventure on Mars",
-    "metadata": {
-      "theme": "dark",
-      "pageCount": 8,
-      "colorPalette": "standard",
-      "fontSizeScale": 1.0
-    }
-  }' | jq '.pages | length, .[0:2] | map(.image.concept)'
+    "prompt": "A mysterious detective story set in Victorian London",
+    "theme": "dark",
+    "pageCount": 5,
+    "colorPalette": "standard",
+    "fontSizeScale": 1.0
+  }' | jq '.chapters | length, .[0:2] | map(.image.concept)'
 ```
 
 **Expected**:
 
-- Pages: ~6-8
-- Concepts: Mars-related, sci-fi themed
+- Chapters: ~5
+- Concepts: Semantic, detective/mystery themed (e.g., "A foggy London street with gas lamps")
 
 ---
 
@@ -236,19 +232,17 @@ curl -X POST http://localhost:3000/api/ebook/generate \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "Professional business strategy guide",
-    "metadata": {
-      "theme": "corporate",
-      "pageCount": 5,
-      "colorPalette": "standard",
-      "fontSizeScale": 1.0
-    }
-  }' | jq '.pages[0].image | {concept, style}'
+    "theme": "corporate",
+    "pageCount": 5,
+    "colorPalette": "standard",
+    "fontSizeScale": 1.0
+  }' | jq '.chapters[0].image | {concept, style}'
 ```
 
 **Expected**:
 
 - Style: "professional" or "minimalist" (from corporate theme)
-- Concept: Business-related
+- Concept: Business-related (e.g., "Modern office building with skyline")
 
 ---
 
@@ -644,7 +638,8 @@ curl -X POST http://localhost:3000/api/ebook/generate \
 ### Issue Discovered
 
 After enabling `USE_REAL_AI=1` globally in devcontainer, automated test suite fails with 48 failures:
-- **Error**: "Gemini call failed: Unknown Gemini error" 
+
+- **Error**: "Gemini call failed: Unknown Gemini error"
 - **Root Cause**: Tests now execute with real Gemini API instead of fast mock
 - **Impact**: API rate limiting, timeouts (20s limit), quota consumption
 - **Status**: Expected behavior; not a regression
@@ -654,11 +649,13 @@ After enabling `USE_REAL_AI=1` globally in devcontainer, automated test suite fa
 **Maintain real AI for manual/browser testing** while preserving fast mocks for CI:
 
 #### 1. Keep devcontainer `USE_REAL_AI=1` (as configured)
+
 ✅ Server runs with real Gemini by default  
 ✅ Manual browser testing uses semantic content  
 ✅ Curl API validation works as documented
 
 #### 2. Override for automated tests
+
 ```bash
 # During CI/local test runs, force mock AI:
 FORCE_MOCK_AI=1 npm --prefix server run test:run
@@ -668,41 +665,46 @@ process.env.FORCE_MOCK_AI = "1";  // Before test suite starts
 ```
 
 #### 3. Update `aiService.js` to respect priority
+
 ```javascript
 function createAIService() {
   // Priority 1: Explicit force-mock for CI/testing
-  if (process.env.FORCE_MOCK_AI === "1" || process.env.FORCE_MOCK_AI === "true") {
+  if (
+    process.env.FORCE_MOCK_AI === "1" ||
+    process.env.FORCE_MOCK_AI === "true"
+  ) {
     return new MockAIService();
   }
-  
+
   // Priority 2: Explicit enable real AI
   if (process.env.USE_REAL_AI === "1" || process.env.USE_REAL_AI === "true") {
     return new RealAIService();
   }
-  
+
   // Priority 3: Default to mock (backward compatible)
   return new MockAIService();
 }
 ```
 
 #### 4. Update npm scripts in server/package.json
+
 ```json
 {
   "scripts": {
     "test:run": "FORCE_MOCK_AI=1 vitest run",
     "test:watch": "FORCE_MOCK_AI=1 vitest watch",
-    "dev": "node index.js"  // Uses USE_REAL_AI=1 from devcontainer
+    "dev": "node index.js" // Uses USE_REAL_AI=1 from devcontainer
   }
 }
 ```
 
 ### Expected Outcome
 
-| Scenario | Command | AI Service | Speed | Cost |
-|----------|---------|-----------|-------|------|
-| Manual Testing | `npm run dev` | Real (Gemini) | 5-15s/request | ~$0.01/test |
-| CI/Unit Tests | `npm run test:run` | Mock | <1s/test | $0.00 |
-| Browser Testing | Visit http://localhost:5173 | Real (Gemini) | 5-15s/gen | ~$0.01/gen |
+| Scenario        | Command                     | AI Service    | Speed         | Cost        |
+| --------------- | --------------------------- | ------------- | ------------- | ----------- |
+| Manual Testing  | `npm run dev`               | Real (Gemini) | 5-15s/request | ~$0.01/test |
+| CI/Unit Tests   | `npm run test:run`          | Mock          | <1s/test      | $0.00       |
+| Browser Testing | Visit http://localhost:5173 | Real (Gemini) | 5-15s/gen     | ~$0.01/gen  |
 
 ### Implementation Checklist
 
@@ -719,7 +721,6 @@ function createAIService() {
 - **Then**: Resume manual API testing with real Gemini (1-2 hours)
 
 **No code regression; just environment tuning for efficiency.**
-
 
 ## Summary
 
@@ -740,4 +741,3 @@ function createAIService() {
 **Status**: 🟢 **Ready to Execute Immediately**  
 **Date**: November 24, 2025  
 **Next Review**: November 25, 2025 (after manual API testing)
-

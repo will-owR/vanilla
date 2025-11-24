@@ -32,6 +32,18 @@ async function callGemini({
       ? process.env.GEMINI_API_KEY_IMAGE
       : null) || process.env.GEMINI_API_KEY;
 
+  if (process.env.DEBUG_GEMINI_API === "1") {
+    console.error("[DEBUG_GEMINI_API] Modality:", modality);
+    console.error(
+      "[DEBUG_GEMINI_API] API URL:",
+      apiUrl ? apiUrl.substring(0, 50) + "..." : "MISSING"
+    );
+    console.error(
+      "[DEBUG_GEMINI_API] API Key:",
+      rawKey ? "SET (length=" + rawKey.length + ")" : "MISSING"
+    );
+  }
+
   if (!apiUrl || !rawKey) {
     return {
       ok: false,
@@ -60,26 +72,36 @@ async function callGemini({
     headers["Authorization"] = `Bearer ${rawKey}`;
   else headers["X-goog-api-key"] = rawKey;
 
-  // Build request body: use Google `contents.parts` shape for text and image prompts
-  // For IMAGERY (image understanding) include an image part when provided.
+  // Build request body using Gemini 2.5 multimodal payload format
+  // Supports both text-only and text+image payloads
+  // Reference: https://ai.google.dev/gemini-api/docs/vision
   const textPart =
     typeof prompt !== "undefined" && prompt !== null
       ? { text: String(prompt) }
       : null;
   const parts = [];
   if (textPart) parts.push(textPart);
+
   if (imageB64) {
-    // best-effort image part - providers vary on exact field names
+    // Gemini 2.5 uses inline_data structure for embedded images
+    // This allows mixing text and images freely within parts array
     parts.push({
-      image: {
-        mimeType: "image/png",
+      inline_data: {
+        mime_type: "image/png",
         data: String(imageB64).replace(/\s+/g, ""),
       },
     });
   }
 
+  // Gemini 2.5 requires role field in contents
+  // role: "user" for prompts, "model" for model responses
   const body = {
-    contents: [{ parts }],
+    contents: [
+      {
+        role: "user",
+        parts,
+      },
+    ],
     ...(Object.keys(generationConfig || {}).length ? { generationConfig } : {}),
   };
 
@@ -95,6 +117,29 @@ async function callGemini({
       json = JSON.parse(raw);
     } catch (e) {
       /* not JSON */
+    }
+
+    // Debug logging for troubleshooting API issues
+    if (process.env.DEBUG_GEMINI_API === "1") {
+      console.error("[DEBUG_GEMINI_API] Status:", resp.status);
+      console.error("[DEBUG_GEMINI_API] Raw response:", raw.substring(0, 500));
+      console.error(
+        "[DEBUG_GEMINI_API] Parsed JSON:",
+        JSON.stringify(json).substring(0, 500)
+      );
+    }
+
+    // Check if the API response contains an error (even if HTTP 200)
+    // Gemini API returns error structure: { error: { code, message, ... } }
+    if (json?.error) {
+      const errorMsg = json.error.message || JSON.stringify(json.error);
+      return {
+        ok: false,
+        status: json.error.code || 400,
+        error: errorMsg,
+        json,
+        rawText: raw,
+      };
     }
 
     // Attempt to find text candidate

@@ -10,6 +10,27 @@ This server powers the backend for AetherPress, handling:
 - HTML preview and PDF export (via Puppeteer)
 - API endpoints for prompt, preview, override, and export
 
+## 🚀 Quick Start
+
+### AI Integration (Gemini API)
+
+This server requires Gemini API credentials for real content generation. See [`../docs/GEMINI_SETUP.md`](../docs/GEMINI_SETUP.md) for:
+
+- GitHub Codespaces setup (credentials auto-available) ✅
+- Local development setup (environment variables or `.env.local`)
+- API key configuration and verification
+- Troubleshooting guide
+
+**Quick verification**:
+
+```bash
+DEBUG_GEMINI_API=1 node test-gemini-credentials.js
+```
+
+For comprehensive Gemini 2.5 payload documentation, see [`../docs/GEMINI_2.5_PAYLOAD_REFERENCE.md`](../docs/GEMINI_2.5_PAYLOAD_REFERENCE.md).
+
+For manual API testing templates, see [`../docs/design/ebookService/TEST_RESULTS_SESSION2.md`](../docs/design/ebookService/TEST_RESULTS_SESSION2.md).
+
 ## Quick prerequisites
 
 - Node.js and npm

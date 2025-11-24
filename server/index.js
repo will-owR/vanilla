@@ -3,10 +3,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // Basic Express server setup
-// Load local environment variables from .env when present (dev only)
+// Load local environment variables from .env and .env.local when present (dev only)
 try {
   // eslint-disable-next-line global-require
-  require("dotenv").config();
+  const dotenv = require("dotenv");
+  // Load .env first, then .env.local (which can override)
+  dotenv.config(); // Load .env
+  dotenv.config({ path: ".env.local" }); // Load .env.local if it exists (overrides .env)
 } catch (e) {
   // dotenv is optional; if it's not installed we'll ignore the error.
 }
@@ -2872,7 +2875,9 @@ app.post("/api/ebook/generate", async (req, res) => {
 
     const result = await genieService.process(payload);
 
-    if (!result || !result.pages) {
+    // Extract envelope (genieService returns { out_envelope, resultId })
+    const envelope = result.out_envelope || result;
+    if (!envelope || !envelope.pages || !Array.isArray(envelope.pages)) {
       return res.status(500).json({ error: "Failed to generate e-book" });
     }
 
@@ -2894,10 +2899,10 @@ app.post("/api/ebook/generate", async (req, res) => {
     // Build response envelope matching frontend expectations
     res.json({
       id: ebookId,
-      content: result.content || "",
-      html: result.html || "<html><body>Generated eBook</body></html>",
+      resultId: result.resultId,
+      chapters: envelope.pages,
       metadata: {
-        title: "Generated E-book",
+        title: envelope.metadata?.title || "Generated E-book",
         author: "Aether AI",
         theme,
         pageCount: pageCountNum,
@@ -2905,11 +2910,15 @@ app.post("/api/ebook/generate", async (req, res) => {
         colorPalette,
         fontSizeScale,
         density,
-        ...result.metadata,
+        ...(envelope.metadata || {}),
       },
-      pages: result.pages.length,
-      can_export: true,
-      can_override: true,
+      actions: envelope.actions || {
+        persist_prompt: true,
+        generate_pdf: true,
+        can_export: true,
+        can_preview: true,
+        can_override: true,
+      },
     });
   } catch (error) {
     console.error("Error generating ebook:", error);

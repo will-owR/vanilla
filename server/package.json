@@ -14,11 +14,11 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "worker": "node worker-sqlite.mjs",
-    "test": "vitest",
-    "test:export": "vitest run ./__tests__/export_text.test.mjs --reporter dot",
-    "test:run": "vitest run",
-    "test:watch": "vitest",
-    "test:ci": "vitest run --coverage",
+    "test": "FORCE_MOCK_AI=1 vitest",
+    "test:export": "FORCE_MOCK_AI=1 vitest run ./__tests__/export_text.test.mjs --reporter dot",
+    "test:run": "FORCE_MOCK_AI=1 vitest run",
+    "test:watch": "FORCE_MOCK_AI=1 vitest",
+    "test:ci": "FORCE_MOCK_AI=1 vitest run --coverage",
     "e2e:smoke": "node ./scripts/e2e-smoke.js"
   },
   "dependencies": {

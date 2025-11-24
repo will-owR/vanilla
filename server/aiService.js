@@ -109,6 +109,15 @@ class RealAIService {
 }
 
 function createAIService() {
+  // Priority 1: Explicit force-mock for CI/testing (highest priority)
+  const forceMock =
+    process.env.FORCE_MOCK_AI === "1" || process.env.FORCE_MOCK_AI === "true";
+  if (forceMock) {
+    console.log("AI service: MockAIService enabled (FORCE_MOCK_AI=1)");
+    return new MockAIService();
+  }
+
+  // Priority 2: Explicit enable real AI
   const useReal =
     process.env.USE_REAL_AI === "1" || process.env.USE_REAL_AI === "true";
   if (useReal) {
@@ -126,6 +135,8 @@ function createAIService() {
     console.log("AI service: RealAIService enabled (Gemini)");
     return new RealAIService();
   }
+
+  // Priority 3: Default to mock (backward compatible)
   console.log("AI service: MockAIService enabled (USE_REAL_AI not set)");
   return new MockAIService();
 }

@@ -98,6 +98,28 @@ To empower creators (writers, poets, educators, marketers) to effortlessly desig
 
 ## Documentation
 
+All project documentation lives in [`docs/`](docs/). Key resources:
+
+### Getting Started
+
+- **Backend Setup**: [`server/README.md`](server/README.md) — Backend development guide
+- **Gemini AI Setup**: [`docs/GEMINI_SETUP.md`](docs/GEMINI_SETUP.md) — Configure API credentials
+- **Quick Start**: [`docs/QUICK_START_REAL_AI.md`](docs/QUICK_START_REAL_AI.md) — 10-minute setup guide
+
+### Session Documentation (Transitory)
+
+Session-specific files are organized in [`docs/design/ebookService/`](docs/design/ebookService/):
+
+- **Session 2 Index**: [`docs/design/ebookService/SESSION2_CHECKLIST.md`](docs/design/ebookService/SESSION2_CHECKLIST.md) — What was completed
+- **Test Results**: [`docs/design/ebookService/TEST_RESULTS_SESSION2.md`](docs/design/ebookService/TEST_RESULTS_SESSION2.md) — Manual API test templates
+- **Payload Reference**: [`docs/GEMINI_2.5_PAYLOAD_REFERENCE.md`](docs/GEMINI_2.5_PAYLOAD_REFERENCE.md) — API payload guide (permanent)
+
+### Full Documentation Index
+
+See [`docs/`](docs/) directory for complete documentation on setup, configuration, API reference, and troubleshooting.
+
+See [`docs/design/ebookService/`](docs/design/ebookService/) for session-specific work (transitory during development).
+
 See the `docs/` directory for devcontainer setup, dependency management, and architecture notes.
 
 ## Getting Started

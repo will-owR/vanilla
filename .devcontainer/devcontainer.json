@@ -107,7 +107,11 @@
     "POSTGRES_DB": "${localEnv:POSTGRES_DB:aether_dev}",
     "DATABASE_URL": "postgresql://postgres:postgres@db:5432/aether_dev",
     "CHROME_PATH": "/usr/bin/google-chrome-stable",
-    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
+    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true",
+    "GEMINI_API_URL": "${localEnv:GEMINI_API_URL}",
+    "GEMINI_API_KEY": "${localEnv:GEMINI_API_KEY}",
+    "GEMINI_VISION_API_URL": "${localEnv:GEMINI_VISION_API_URL}",
+    "USE_REAL_AI": "1"
   },
   "remoteUser": "node",
   "hostRequirements": {
