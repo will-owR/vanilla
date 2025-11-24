@@ -639,6 +639,88 @@ curl -X POST http://localhost:3000/api/ebook/generate \
 
 ---
 
+## ADDENDUM: Test Environment Configuration (Nov 24, 2025 - Post-Rebuild)
+
+### Issue Discovered
+
+After enabling `USE_REAL_AI=1` globally in devcontainer, automated test suite fails with 48 failures:
+- **Error**: "Gemini call failed: Unknown Gemini error" 
+- **Root Cause**: Tests now execute with real Gemini API instead of fast mock
+- **Impact**: API rate limiting, timeouts (20s limit), quota consumption
+- **Status**: Expected behavior; not a regression
+
+### Solution: Environment Precedence
+
+**Maintain real AI for manual/browser testing** while preserving fast mocks for CI:
+
+#### 1. Keep devcontainer `USE_REAL_AI=1` (as configured)
+✅ Server runs with real Gemini by default  
+✅ Manual browser testing uses semantic content  
+✅ Curl API validation works as documented
+
+#### 2. Override for automated tests
+```bash
+# During CI/local test runs, force mock AI:
+FORCE_MOCK_AI=1 npm --prefix server run test:run
+
+# Or in test files:
+process.env.FORCE_MOCK_AI = "1";  // Before test suite starts
+```
+
+#### 3. Update `aiService.js` to respect priority
+```javascript
+function createAIService() {
+  // Priority 1: Explicit force-mock for CI/testing
+  if (process.env.FORCE_MOCK_AI === "1" || process.env.FORCE_MOCK_AI === "true") {
+    return new MockAIService();
+  }
+  
+  // Priority 2: Explicit enable real AI
+  if (process.env.USE_REAL_AI === "1" || process.env.USE_REAL_AI === "true") {
+    return new RealAIService();
+  }
+  
+  // Priority 3: Default to mock (backward compatible)
+  return new MockAIService();
+}
+```
+
+#### 4. Update npm scripts in server/package.json
+```json
+{
+  "scripts": {
+    "test:run": "FORCE_MOCK_AI=1 vitest run",
+    "test:watch": "FORCE_MOCK_AI=1 vitest watch",
+    "dev": "node index.js"  // Uses USE_REAL_AI=1 from devcontainer
+  }
+}
+```
+
+### Expected Outcome
+
+| Scenario | Command | AI Service | Speed | Cost |
+|----------|---------|-----------|-------|------|
+| Manual Testing | `npm run dev` | Real (Gemini) | 5-15s/request | ~$0.01/test |
+| CI/Unit Tests | `npm run test:run` | Mock | <1s/test | $0.00 |
+| Browser Testing | Visit http://localhost:5173 | Real (Gemini) | 5-15s/gen | ~$0.01/gen |
+
+### Implementation Checklist
+
+- [ ] Update `server/aiService.js` with environment priority logic
+- [ ] Update `server/package.json` test scripts with `FORCE_MOCK_AI=1`
+- [ ] Verify: `npm --prefix server run test:run` passes (should return to 678/684)
+- [ ] Verify: `npm run dev` uses real Gemini (check logs for RealAIService)
+- [ ] Proceed with manual browser testing (Phase 1, Action 1)
+
+### Timeline
+
+- **Now**: Implement environment precedence (15 min)
+- **Next**: Verify tests pass with mock (5 min)
+- **Then**: Resume manual API testing with real Gemini (1-2 hours)
+
+**No code regression; just environment tuning for efficiency.**
+
+
 ## Summary
 
 **Where We Are**: Option A validated, ready to execute
@@ -658,3 +740,4 @@ curl -X POST http://localhost:3000/api/ebook/generate \
 **Status**: 🟢 **Ready to Execute Immediately**  
 **Date**: November 24, 2025  
 **Next Review**: November 25, 2025 (after manual API testing)
+
