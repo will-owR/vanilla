@@ -147,12 +147,53 @@
           <p class="error-message">Error: {ebookError}</p>
         {/if}
         
-        {#if ebookResult && ebookResult.html}
-          <div class="preview-container">
-            <ThemePreview 
-              theme={ebookConfig.theme}
-              pageCount={ebookResult.pages}
-            />
+        {#if ebookResult}
+          <div class="result-section">
+            <h4>✅ eBook Generated Successfully!</h4>
+            {#if ebookResult.metadata && ebookResult.metadata.title}
+              <p><strong>Title:</strong> {ebookResult.metadata.title}</p>
+            {/if}
+            {#if ebookResult.chapters}
+              <p><strong>Chapters:</strong> {ebookResult.chapters.length}</p>
+            {/if}
+            {#if ebookResult.metadata}
+              <p><strong>Theme:</strong> {ebookResult.metadata.theme}</p>
+              <p><strong>Pages:</strong> {ebookResult.metadata.pageCount}</p>
+            {/if}
+            
+            <div class="export-button-wrapper">
+              <button 
+                class="export-btn"
+                on:click={async () => {
+                  try {
+                    // Export expects: { pages, metadata, actions }
+                    // Transform backend response to export format
+                    const exportPayload = {
+                      pages: ebookResult.chapters || [],
+                      metadata: ebookResult.metadata || {},
+                      actions: ebookResult.actions || {},
+                    };
+                    // Use the export function from api
+                    const { exportToPdf } = await import('./lib/api.js');
+                    await exportToPdf(exportPayload);
+                  } catch (err) {
+                    ebookStore.update(s => ({...s, error: err.message}));
+                  }
+                }}
+              >
+                📥 Export as PDF
+              </button>
+            </div>
+            
+            {#if ebookResult.metadata}
+              <div class="preview-container">
+                <h5>Preview</h5>
+                <ThemePreview 
+                  theme={ebookConfig.theme}
+                  pageCount={ebookResult.chapters ? ebookResult.chapters.length : 1}
+                />
+              </div>
+            {/if}
           </div>
         {/if}
       </div>
@@ -274,6 +315,53 @@
     margin: 1rem 0;
   }
   
+  .result-section {
+    background: #f0fdf4;
+    border: 2px solid #22c55e;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+  }
+  
+  .result-section h4 {
+    color: #16a34a;
+    margin-top: 0;
+    font-size: 1.1rem;
+  }
+  
+  .result-section p {
+    margin: 0.5rem 0;
+    color: #15803d;
+  }
+  
+  .export-button-wrapper {
+    margin-top: 1rem;
+    display: flex;
+    gap: 0.75rem;
+  }
+  
+  .export-btn {
+    background: #22c55e;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+    flex: 1;
+  }
+  
+  .export-btn:hover {
+    background: #16a34a;
+  }
+  
+  .export-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+  }
+  
   .preview-container {
     background: #fff;
     border: 1px solid #e5e7eb;
@@ -281,6 +369,12 @@
     padding: 1rem;
     margin-top: 1.5rem;
   }
+  
+  .preview-container h5 {
+    margin-top: 0;
+    color: #374151;
+  }
+
 
   .ebook-prompt-form {
     display: flex;

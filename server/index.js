@@ -443,7 +443,8 @@ function isInGracePeriod() {
 // Startup Readiness Probe Middleware
 app.use((req, res, next) => {
   // Allow health check and root route to bypass readiness check
-  if (req.path === "/health" || req.path === "/") {
+  // Also allow OPTIONS (CORS preflight) requests to always succeed
+  if (req.path === "/health" || req.path === "/" || req.method === "OPTIONS") {
     return next();
   }
 
@@ -2824,6 +2825,12 @@ module.exports.gracefulShutdown = gracefulShutdown;
  * Returns: { id, content, html, metadata, pages, can_export, can_override }
  */
 app.post("/api/ebook/generate", async (req, res) => {
+  const startTime = Date.now();
+  const reqId = req.id || "unknown";
+  console.log(
+    `[${new Date().toISOString()}] [${reqId}] POST /api/ebook/generate started`
+  );
+
   const {
     prompt,
     theme = "dark",
@@ -2873,11 +2880,24 @@ app.post("/api/ebook/generate", async (req, res) => {
       },
     };
 
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] Calling genieService.process()`
+    );
+    const processStartTime = Date.now();
     const result = await genieService.process(payload);
+    const processEndTime = Date.now();
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] genieService.process() completed in ${
+        processEndTime - processStartTime
+      }ms`
+    );
 
     // Extract envelope (genieService returns { out_envelope, resultId })
     const envelope = result.out_envelope || result;
     if (!envelope || !envelope.pages || !Array.isArray(envelope.pages)) {
+      console.log(
+        `[${new Date().toISOString()}] [${reqId}] Invalid envelope structure, returning 500`
+      );
       return res.status(500).json({ error: "Failed to generate e-book" });
     }
 
@@ -2897,7 +2917,12 @@ app.post("/api/ebook/generate", async (req, res) => {
         : "very-dense";
 
     // Build response envelope matching frontend expectations
-    res.json({
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] Building response object with ${
+        envelope.pages.length
+      } chapters`
+    );
+    const responseObj = {
       id: ebookId,
       resultId: result.resultId,
       chapters: envelope.pages,
@@ -2919,12 +2944,32 @@ app.post("/api/ebook/generate", async (req, res) => {
         can_preview: true,
         can_override: true,
       },
-    });
+    };
+
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] Sending response to client (${
+        JSON.stringify(responseObj).length
+      } bytes)`
+    );
+    res.json(responseObj);
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] Response sent successfully. Total time: ${
+        Date.now() - startTime
+      }ms`
+    );
   } catch (error) {
-    console.error("Error generating ebook:", error);
+    console.error(
+      `[${new Date().toISOString()}] [${reqId}] Error generating ebook:`,
+      error
+    );
     res
       .status(500)
       .json({ error: "Failed to generate e-book", details: error.message });
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] Error response sent. Total time: ${
+        Date.now() - startTime
+      }ms`
+    );
   }
 });
 
