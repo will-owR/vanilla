@@ -675,6 +675,17 @@ const genieService = {
         case "ebook": {
           const ebookService = require("./ebookService");
           result = await ebookService.handle(payload, classification);
+          // WEEK 1 FIX: Generate HTML from structured data
+          try {
+            const html = await this.compose(result);
+            result.html = html; // Include HTML in result
+          } catch (err) {
+            console.warn(
+              "compose() failed, continuing without HTML:",
+              err?.message
+            );
+            result.html = null; // Graceful degradation
+          }
           break;
         }
         case "basic":
@@ -687,6 +698,7 @@ const genieService = {
       const envelope = {
         out_envelope: {
           pages: result.pages || [],
+          html: result.html || null, // WEEK 1: Include composed HTML
           metadata: {
             // Service-generated fields
             ...result.metadata,

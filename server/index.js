@@ -2926,6 +2926,7 @@ app.post("/api/ebook/generate", async (req, res) => {
       id: ebookId,
       resultId: result.resultId,
       chapters: envelope.pages,
+      html: envelope.html || null, // WEEK 1: Include composed HTML
       metadata: {
         title: envelope.metadata?.title || "Generated E-book",
         author: "Aether AI",
