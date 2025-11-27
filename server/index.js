@@ -2917,14 +2917,20 @@ app.post("/api/ebook/generate", async (req, res) => {
     console.log("[ENDPOINT] - html length:", envelope.html?.length || "NULL");
     console.log("[ENDPOINT] - title:", envelope.metadata?.title || "NOT SET");
 
+    // WEEK 1: Extract actual title from first chapter instead of placeholder
+    const actualTitle =
+      envelope.pages?.[0]?.title ||
+      envelope.metadata?.title ||
+      "Generated E-book";
+
     const responseObj = {
       id: ebookId,
       resultId: result.resultId,
       chapters: envelope.pages,
       html: envelope.html || null, // WEEK 1: Include composed HTML
-      title: envelope.metadata?.title || "Generated E-book",
+      title: actualTitle,
       metadata: {
-        title: envelope.metadata?.title || "Generated E-book",
+        title: actualTitle,
         author: "Aether AI",
         theme,
         pageCount: pageCountNum,
