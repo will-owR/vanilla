@@ -1,10 +1,10 @@
 # Bug Fix: Phase B Option 2 - Week 1 Implementation Issues
 
 **Date Created**: November 26, 2025  
-**Last Updated**: November 27, 2025 (Session 1 - Step 1, 3 & partial Step 2 Complete)  
+**Last Updated**: November 27, 2025 (Session 1 - Steps 1, 2, 3, 4 Partially Complete)  
 **Related Bug Report**: `/docs/design/bug_report/bug_report_phase_b_option2_week1.md`  
 **Branch**: `feat/B_Frontend_option2`  
-**Status**: 🟠 IN PROGRESS (7/17 Fixes Completed)  
+**Status**: 🟠 IN PROGRESS (11/17 Fixes Completed = 65%)  
 **Severity**: Critical
 
 ---
@@ -1137,9 +1137,9 @@ Test Case B (Test 1 - Mouse):
 
 ---
 
-## Session 1 Progress (November 27, 2025 - 2 Hours)
+## Session 1 Progress (November 27, 2025 - 2+ Hours)
 
-### ✅ Completed (7 fixes)
+### ✅ Completed (11/17 fixes = 65%)
 
 **Step 1: Compose Integration Verification** (4/4 fixes) ✅
 
@@ -1147,24 +1147,51 @@ Test Case B (Test 1 - Mouse):
 - **Fix 1.2** (index.js): Added [ENDPOINT] layer logging before response + explicit html + title fields in JSON
 - **Fix 1.3** (ebookStore.js): Added [FRONTEND] layer logging in response handler with html/title/chapters tracking
 - **Fix 1.4** (App.svelte): Implemented {@html} preview rendering with fallbacks to chapters array → ThemePreview
-- **Status**: 3-layer logging infrastructure complete, ready for end-to-end testing
+- **Status**: 3-layer logging infrastructure complete, ready for end-to-end testing ✅
 
 **Step 3: Title Display** (2/2 fixes) ✅
 
 - **Fix 3.1** (index.js): Extracted title from envelope.metadata and included in response JSON
 - **Fix 3.2** (App.svelte): Display ebookResult.title in summary (shows actual title, not "Generated E-book" placeholder)
-- **Status**: Title field flows through complete pipeline and displays correctly
+- **Status**: Title field flows through complete pipeline and displays correctly ✅
 
-**Step 2: Investigation Prep** (1/2 fixes) ✅
+**Step 2: Investigation & Cache Management** (2/2 fixes) ✅
 
 - **Fix 2.1** (ebookService.js): Added [GEMINI] logging in both Conversation 1 (structure) and Conversation 2 (chapters)
-- **Status**: Logging ready for Test 1 debugging in next session
-- **Pending**: Fix 2.2 (cache clear) - deferred to next session when needed
+- **Fix 2.2** (index.js): Implemented POST /api/cache/clear endpoint for debugging prompt-content mismatch
+  - Clears all stored results from Prisma database
+  - Logs [CACHE_CLEAR] for debugging
+  - Returns count of cleared items
+  - Enables re-testing Test 1 with fresh generation
+- **Status**: Investigation and cache tools ready for Test 1 debugging ✅
 
-### 🔴 Pending (10 fixes)
+**Step 4: PDF Stack-Based Architecture** (3/5 fixes) ✅
 
-**Step 2 Remaining**: Fix 2.2 (cache clear) - deferred
-**Step 4 (PDF Architecture)**: Fixes 4.1-4.5 (300+ line redesign) - deferred to next session (45+ minutes needed)
+- **Fix 4.1** (pdfGenerator.js): Complete HTML restructuring with 3-layer stack-based CSS
+  - Stack 0: Background image at 20% opacity (.page-bg, z-index: 0)
+  - Stack 1: Semi-transparent content at 85% opacity (.content, rgba(255,255,255,0.85), z-index: 1)
+  - Stack 2: Page details/framing (.page-number, z-index: 2)
+  - Result: ~17% combined image visibility while maintaining text readability (Variant B)
+- **Fix 4.2** (pdfGenerator.js): CSS verification in headless Chrome
+  - Font loading check (document.fonts.ready)
+  - Computed style verification (color, backgroundColor, zIndex, visibility, display)
+  - Text-background color conflict detection
+  - Image loading verification
+  - All checks non-fatal (warnings only)
+- **Fix 4.3** (pdfGenerator.js): PDF generation with stack-aware options
+  - pdfOptions: A4 format, printBackground true, scale 1.0, preferCSSPageSize true, 60s timeout
+  - Size validation (expects > 100KB for multi-page documents)
+  - Comprehensive logging at each stage
+- **Fix 4.5** (genieService.js): Conditional font preloading for PDF rendering
+  - Added Google Fonts stylesheet preloading (Georgia serif)
+  - Ensures fonts loaded before PDF generation
+  - Improves text rendering quality in PDF output
+  - Explicit font-family in CSS for consistency
+- **Status**: Stack-based PDF architecture ready for theme testing ✅ (4.4 manual testing deferred)
+
+### 🔴 Pending (6 fixes)
+
+**Step 4 Remaining**: Fix 4.4 (manual theme testing - all 4 themes) - deferred, requires manual verification
 **Step 5 (Chapter-Mismatch)**: Fixes 5.1-5.2 - lowest priority, deferred
 
 ### Implementation Details
@@ -1200,8 +1227,24 @@ Client Request → genieService (compose HTML) → index.js (build response)
 
 ### Code Commits
 
-- **Commit 1** (263b224): ESLint cleanup + Step 4 PDF architecture redesign (documentation)
+- **Commit 1** (263b224): ESLint cleanup (server/index.js) - removed 5 unused imports + comment empty catch
 - **Commit 2** (9175167): Step 1 & 3 implementation + Step 2 logging setup (5 files, 125 insertions)
+  - genieService.js: [COMPOSE] logging
+  - index.js: [ENDPOINT] logging + html + title fields
+  - ebookService.js: [GEMINI] logging in conversations 1-2
+  - ebookStore.js: [FRONTEND] logging
+  - App.svelte: {@html} preview rendering + title display
+- **Commit 3** (d48835a): Step 4.1-4.3 - Stack-based PDF rendering with Variant B (1 file, 249 insertions)
+  - pdfGenerator.js: Complete HTML restructure with 3-layer CSS architecture
+  - Stack 0/1/2 z-index layers with semi-transparent backgrounds
+  - CSS verification in headless Chrome
+  - PDF options configuration for stack-aware rendering
+- **Commit 4** (55ebfa0): Step 4.5 - Conditional font preloading for PDF rendering (1 file, 5 insertions)
+  - genieService.js: Google Fonts stylesheet preloading + explicit font-family in CSS
+- **Commit 5** (d4afbd7): Step 2.2 - Cache clear endpoint for debugging (1 file, 63 insertions)
+  - index.js: POST /api/cache/clear endpoint with [CACHE_CLEAR] logging
+  - Deletes all results + associated export jobs
+  - Enables re-testing with fresh generation
 
 ---
 
