@@ -667,12 +667,7 @@ const genieService = require("./genieService");
 const { validatePayload } = require("./validators/promptPayload");
 
 // Phase B: E-book Generation Modules (singleton instances)
-const contentChunker = require("./utils/contentChunker");
-const themeEngine = require("./utils/themeEngine");
-const pageLayout = require("./utils/pageLayout");
-const tocGenerator = require("./utils/tocGenerator");
 const overrideService = require("./utils/overrideService");
-const ebookService = require("./ebookService");
 
 app.post("/prompt", async (req, res, next) => {
   // Validate enhanced payload structure
@@ -2360,9 +2355,8 @@ app.post("/api/export/generate", async (req, res) => {
 
     // 2. Create export job in database
     const jobId = uuidv4();
-    let exportJob;
     try {
-      exportJob = await resultDb.createExportJob(jobId, resultId);
+      await resultDb.createExportJob(jobId, resultId);
     } catch (err) {
       console.error("Failed to create export job:", err.message);
       return res.status(500).json({
@@ -3147,7 +3141,9 @@ app.use((err, req, res, _next) => {
       } else {
         try {
           res.end();
-        } catch (er) {}
+        } catch (er) {
+          // ignore response end errors
+        }
       }
     } catch (ee) {
       // ignore final shutdown errors

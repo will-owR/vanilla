@@ -20,7 +20,7 @@
 
 ---
 
-## Phase 1: Verify compose() Integration (URGENT) 🔴
+## Step 1: Verify compose() Integration (URGENT) 🔴
 
 **Target Issues**: Issues 3, 5 (with dependency on verifying Issue 1)  
 **Timeline**: Immediate (same day)  
@@ -206,10 +206,10 @@ ebookStore.result = {
 
 ---
 
-## Phase 2: Fix Test 1 Content Mismatch 🔴
+## Step 2: Fix Test 1 Content Mismatch 🔴
 
 **Target Issues**: Issue 1  
-**Timeline**: After Phase 1 (2-4 hours)  
+**Timeline**: After Step 1 (2-4 hours)  
 **Complexity**: Medium
 
 ### Fix 2.1: Add Gemini API Request/Response Logging
@@ -289,10 +289,10 @@ console.log('[GEMINI] Chapter content length:', content.length);
 
 ---
 
-## Phase 3: Fix Title Display 🔴
+## Step 3: Fix Title Display 🔴
 
 **Target Issues**: Issue 2  
-**Timeline**: During Phase 1 (parallel work)  
+**Timeline**: During Step 1 (parallel work)  
 **Complexity**: Low
 
 ### Fix 3.1: Include Title in API Response
@@ -353,16 +353,252 @@ res.json({
 
 ---
 
-## Phase 4: Improve PDF Rendering 🔴
+## Step 4: Improve PDF Rendering with Stack-Based Architecture 🔴
 
 **Target Issues**: Issue 5  
-**Timeline**: After Phase 1 (Phase 3 steps)  
+**Timeline**: After Step 1 (Step 3 steps)  
 **Complexity**: Medium
 
-### Fix 4.1: Update Puppeteer PDF Options
+### Architecture Overview: Three-Layer Stack
+
+The PDF rendering will be restructured to use **layered stacks** to ensure content visibility and professional appearance:
+
+- **Stack 0 (Base)**: Theme image as background with controlled transparency (20%)
+- **Stack 1 (Content)**: Text content layer with **semi-transparent background** (see design variants below) and explicit text color
+- **Stack 2+ (Framing)**: Book details - page borders, page numbers, book title, decorative elements
+
+This prevents content obscuring (text invisible due to image) and ensures proper rendering hierarchy.
+
+#### Design Variants for Stack 1 Background
+
+**Critical Issue**: A fully solid background on Stack 1 will completely block the Stack 0 image behind it, making the image invisible.
+
+**Variant B: Semi-Transparent Background (SELECTED IMPLEMENTATION)** ✅
+
+- Use `background-color: rgba(255, 255, 255, 0.85)` instead of solid white
+- Image shows through at ~15% opacity
+- Text background still provides readability
+- More professional appearance
+- Consistent across all themes with minor tuning
+
+**Variant C: Selective Solid Backgrounds (Alternative)**
+
+- Use solid backgrounds **only for text content elements** (`p`, `h2`, etc.)
+- Leave margins/padding transparent so image shows
+- Maximum image visibility with guaranteed text readability
+- More complex CSS implementation
+- More granular control per theme
+
+**Decision**: Implementing **Variant B** for simplicity and professional appearance while maintaining image visibility.
+
+---
+
+### Fix 4.1: Build Proper HTML Structure with Stacked Layers (Variant B Implementation)
 
 **File**: `/server/pdfGenerator.js`  
-**Location**: Line 136 (PDF generation call)  
+**Location**: Lines 100-150 (HTML preparation before PDF generation)  
+**Status**: 🔴 NOT STARTED
+
+**Current Problem**: Simple HTML without layering causes text to be invisible or cut off.
+
+**Required Change**: Implement stack-based HTML with semi-transparent Stack 1 before Puppeteer receives it:
+
+```javascript
+const preparedHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: 'Georgia', serif;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .page {
+      position: relative;
+      width: 210mm;
+      height: 297mm;
+      page-break-after: always;
+      background: white;
+    }
+    
+    /* Stack 0: Background Image */
+    .page::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: url('${imageDataUrl}');
+      background-size: cover;
+      opacity: 0.2;  /* 20% transparency so text shows */
+      z-index: 0;
+    }
+    
+    /* Stack 1: Text Content - Semi-transparent background (Option B) */
+    .content {
+      position: relative;
+      z-index: 1;
+      padding: 40px;
+      background-color: rgba(255, 255, 255, 0.85);  /* Semi-transparent (85% opacity) */
+      color: #000000;  /* Explicit text color */
+      line-height: 1.6;
+    }
+    
+    .content h2 {
+      color: #333333;
+      margin-top: 0;
+    }
+    
+    .content p {
+      color: #000000;
+      margin: 12px 0;
+    }
+    
+    /* Stack 2: Framing Details */
+    .frame {
+      position: relative;
+      z-index: 2;
+      border: 2px solid #333333;
+      margin: 20px;
+      padding: 10px;
+    }
+    
+    /* Page number (Stack 2) */
+    .page-number {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      z-index: 2;
+      font-size: 10px;
+      color: #666666;
+    }
+    
+    /* Book title (Stack 2) */
+    .book-title {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 2;
+      font-size: 12px;
+      color: #333333;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="book-title">${bookTitle}</div>
+    <div class="content">
+      ${contentHtml}
+    </div>
+    <div class="page-number">Page ${pageNum}</div>
+  </div>
+</body>
+</html>
+`;
+```
+
+**Key Implementation Details (Variant B)**:
+
+- `background-color: rgba(255, 255, 255, 0.85)` - 85% white, 15% transparent (allows image to show through)
+- Stack 0 image at 20% opacity + Stack 1 at 85% opacity = combined visual effect of ~17% image visibility
+- Text remains highly readable with white-based background
+- Image visible enough to enhance aesthetics without obscuring content
+
+**Success Criteria**:
+
+- [ ] HTML structure has 3 distinct z-index layers (0, 1, 2+)
+- [ ] Stack 0 uses `::before` pseudo-element with opacity: 0.2
+- [ ] Stack 1 content uses `background-color: rgba(255, 255, 255, 0.85)` (semi-transparent, not solid)
+- [ ] Stack 2 elements (frame, page number, title) use z-index: 2
+- [ ] No conflicting styles between layers
+- [ ] Image visible through semi-transparent Stack 1 background
+
+---
+
+### Fix 4.2: Verify CSS Rendering in Headless Chrome
+
+**File**: `/server/pdfGenerator.js`  
+**Location**: Lines 150-180 (before PDF generation call)  
+**Status**: 🔴 NOT STARTED
+
+**Required Change**: Add verification logic before PDF generation:
+
+```javascript
+// Wait for fonts and images to load
+await page.setContent(preparedHtml);
+await page.evaluate(() => document.fonts.ready);
+
+// Verify computed styles on content layer (Stack 1)
+const styles = await page.evaluate(() => {
+  const content = document.querySelector(".content");
+  if (content) {
+    const computed = window.getComputedStyle(content);
+    return {
+      color: computed.color,
+      backgroundColor: computed.backgroundColor,
+      zIndex: computed.zIndex,
+      visibility: computed.visibility,
+      display: computed.display,
+    };
+  }
+  return null;
+});
+
+console.log("[PDF] Stack 1 (content) computed styles:", styles);
+
+// Check for visibility issues (text color matches background)
+if (styles) {
+  if (styles.color === styles.backgroundColor) {
+    console.warn("[PDF] ⚠️ VISIBILITY ISSUE: text color matches background!");
+    console.warn(
+      "[PDF] Text color:",
+      styles.color,
+      "Background:",
+      styles.backgroundColor
+    );
+  }
+  if (styles.visibility === "hidden" || styles.display === "none") {
+    console.warn(
+      "[PDF] ⚠️ VISIBILITY ISSUE: content layer is hidden or not displayed!"
+    );
+  }
+}
+
+// Verify image is loaded
+const imageLoaded = await page.evaluate(() => {
+  const images = document.querySelectorAll("img");
+  return Array.from(images).every(
+    (img) => img.complete && img.naturalHeight > 0
+  );
+});
+
+console.log("[PDF] Images loaded:", imageLoaded);
+
+// Verify semi-transparent background (Variant B) allows image visibility
+console.log(
+  "[PDF] Stack 1 background is semi-transparent (Variant B) - image should be visible at ~17% opacity"
+);
+```
+
+**Success Criteria**:
+
+- [ ] Console shows Stack 1 styles with semi-transparent backgroundColor (rgba format)
+- [ ] No "VISIBILITY ISSUE" warnings
+- [ ] Images report as loaded
+- [ ] z-index confirmed as "1" for content layer
+- [ ] backgroundColor confirms semi-transparent (rgba, not solid white)
+
+---
+
+### Fix 4.3: Generate PDF with Stack-Aware Options
+
+**File**: `/server/pdfGenerator.js`  
+**Location**: Line 180-195 (PDF generation call)  
 **Status**: 🔴 NOT STARTED
 
 **Current Code**:
@@ -374,46 +610,103 @@ let buffer = await page.pdf({ format: "A4", printBackground: true });
 **Required Change**:
 
 ```javascript
-console.log("[PDF] Generating PDF with comprehensive options");
-
-let buffer = await page.pdf({
+const pdfOptions = {
   format: "A4",
-  printBackground: true,
-  margin: { top: 40, right: 40, bottom: 40, left: 40 },
-  scale: 1.0,
-  timeout: 60000,
-  preferCSSPageSize: true,
-});
+  printBackground: true, // Render background colors/images (Stack 0)
+  margin: {
+    top: 20,
+    right: 20,
+    bottom: 20,
+    left: 20,
+  },
+  scale: 1.0, // 100% scale for accurate sizing
+  preferCSSPageSize: true, // Respect CSS page dimensions (210mm x 297mm)
+  timeout: 60000, // 60 second timeout for large documents
+};
 
-console.log("[PDF] PDF generated successfully, size:", buffer.length, "bytes");
+console.log(
+  "[PDF] Generating PDF with stack-based options (Variant B):",
+  pdfOptions
+);
+
+let buffer = await page.pdf(pdfOptions);
+
+console.log("[PDF] Generated successfully, size:", buffer.length, "bytes");
+console.log("[PDF] Expected: > 100KB (indicates multi-page, all content)");
+if (buffer.length < 100000) {
+  console.warn(
+    "[PDF] ⚠️ WARNING: PDF smaller than expected, may be incomplete"
+  );
+}
 ```
 
 **Success Criteria**:
 
-- [ ] PDF generation completes without timeout
-- [ ] PDF size > 100KB (indicates content included)
+- [ ] PDF generation completes without timeout (< 60 seconds)
+- [ ] PDF size > 100KB (indicates multi-page with content)
 - [ ] PDF displays all structure pages (cover, TOC, content, epilogue)
 - [ ] PDF text is visible with correct colors
+- [ ] Page backgrounds show faint image (~17% visible through semi-transparent Stack 1)
+- [ ] Page borders and numbers visible (Stack 2)
+- [ ] Image visible but not distracting (Variant B effect)
 
 **Investigation Checkpoints**:
 
 - [ ] Generate Test 2 eBook
 - [ ] Export to PDF
-- [ ] Verify PDF has multiple pages (not just 1)
-- [ ] Verify text is visible (not white on white)
-- [ ] Verify all structure pages present
+- [ ] Open PDF and verify:
+  - ✓ Multiple pages present (not just 1)
+  - ✓ Text is readable (clear black on semi-transparent white)
+  - ✓ Background image **visible through semi-transparent content** (Option B effect)
+  - ✓ Image enhances aesthetics without obscuring text
+  - ✓ Page borders/frames present
+  - ✓ Page numbers visible in footer
+  - ✓ Book title visible in header
+  - ✓ All chapters present
 
 ---
 
-### Fix 4.2: Add Font Preloading (if needed)
+### Fix 4.4: Test All Themes with Stack Rendering (Variant B)
+
+**File**: `/server/pdfGenerator.js` (no changes) + manual testing  
+**Status**: 🔴 NOT STARTED
+
+**Test all 4 themes** to verify stack rendering works consistently with Variant B semi-transparent backgrounds:
+
+```
+For each theme (dark, light, corporate, bold):
+  1. Generate eBook: "Benny the Brave Bunny..."
+  2. Export to PDF
+  3. Verify:
+     - Stack 0: Background image visible at ~17% opacity (through semi-transparent Stack 1)
+     - Stack 1: Text readable with theme-specific colors on semi-transparent background
+     - Stack 2: Borders/numbers visible with theme accent color
+     - No text cutoff or overflow
+     - All pages present
+     - Image visible but not distracting
+```
+
+**Success Criteria**:
+
+- [ ] Light theme: Black text on semi-transparent white with light image visible
+- [ ] Dark theme: White text on semi-transparent dark background with dark image visible
+- [ ] Corporate theme: Professional colors, text clearly visible, image enhances design
+- [ ] Bold theme: High contrast, text very visible, image provides subtle background detail
+- [ ] All themes: Background image visible at consistent ~17% opacity
+- [ ] All themes: Page borders and numbers visible
+- [ ] All themes: Semi-transparent effect (Variant B) consistent
+
+---
+
+### Fix 4.5: Add Font Preloading (Conditional)
 
 **File**: `/server/genieService.js`  
 **Location**: Lines 1030-1050 (CSS section in compose())  
-**Status**: 🟠 CONDITIONAL
+**Status**: 🟠 CONDITIONAL - Only if Step 4.1-4.3 text still not rendering
 
-**Only needed if text still not rendering in PDF**
+**Only needed if PDF text still rendering incorrectly after Steps 4.1-4.3**
 
-**Required Change**:
+**Required Change** (if needed):
 
 ```javascript
 const finalHtml = `
@@ -423,8 +716,12 @@ const finalHtml = `
   <meta charset="UTF-8">
   <link href="https://fonts.googleapis.com/css2?family=Georgia:wght@400;700&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Georgia', serif; }
-    ...
+    body {
+      font-family: 'Georgia', serif;
+    }
+    .content {
+      font-family: 'Georgia', serif;
+    }
   </style>
 </head>
 <body>
@@ -434,18 +731,226 @@ const finalHtml = `
 `;
 ```
 
-**Success Criteria**:
+**Success Criteria** (if applied):
 
 - [ ] Only apply if PDF text still rendering incorrectly
 - [ ] After applying: PDF text renders with Georgia font
 - [ ] Text is visible and readable
+- [ ] Font loads before PDF generation completes
 
 ---
 
-## Phase 5: Investigate Chapter-Page Count Mismatch 🟠
+### Fix 4.2: Verify CSS Rendering in Headless Chrome
+
+**File**: `/server/pdfGenerator.js`  
+**Location**: Lines 150-180 (before PDF generation call)  
+**Status**: 🔴 NOT STARTED
+
+**Required Change**: Add verification logic before PDF generation:
+
+```javascript
+// Wait for fonts and images to load
+await page.setContent(preparedHtml);
+await page.evaluate(() => document.fonts.ready);
+
+// Verify computed styles on content layer (Stack 1)
+const styles = await page.evaluate(() => {
+  const content = document.querySelector(".content");
+  if (content) {
+    const computed = window.getComputedStyle(content);
+    return {
+      color: computed.color,
+      backgroundColor: computed.backgroundColor,
+      zIndex: computed.zIndex,
+      visibility: computed.visibility,
+      display: computed.display,
+    };
+  }
+  return null;
+});
+
+console.log("[PDF] Stack 1 (content) computed styles:", styles);
+
+// Check for visibility issues (text color matches background)
+if (styles) {
+  if (styles.color === styles.backgroundColor) {
+    console.warn("[PDF] ⚠️ VISIBILITY ISSUE: text color matches background!");
+    console.warn(
+      "[PDF] Text color:",
+      styles.color,
+      "Background:",
+      styles.backgroundColor
+    );
+  }
+  if (styles.visibility === "hidden" || styles.display === "none") {
+    console.warn(
+      "[PDF] ⚠️ VISIBILITY ISSUE: content layer is hidden or not displayed!"
+    );
+  }
+}
+
+// Verify image is loaded
+const imageLoaded = await page.evaluate(() => {
+  const images = document.querySelectorAll("img");
+  return Array.from(images).every(
+    (img) => img.complete && img.naturalHeight > 0
+  );
+});
+
+console.log("[PDF] Images loaded:", imageLoaded);
+```
+
+**Success Criteria**:
+
+- [ ] Console shows Stack 1 styles with correct color and backgroundColor
+- [ ] No "VISIBILITY ISSUE" warnings
+- [ ] Images report as loaded
+- [ ] z-index confirmed as "1" for content layer
+
+---
+
+### Fix 4.3: Generate PDF with Stack-Aware Options
+
+**File**: `/server/pdfGenerator.js`  
+**Location**: Line 180-195 (PDF generation call)  
+**Status**: 🔴 NOT STARTED
+
+**Current Code**:
+
+```javascript
+let buffer = await page.pdf({ format: "A4", printBackground: true });
+```
+
+**Required Change**:
+
+```javascript
+const pdfOptions = {
+  format: "A4",
+  printBackground: true, // Render background colors/images (Stack 0)
+  margin: {
+    top: 20,
+    right: 20,
+    bottom: 20,
+    left: 20,
+  },
+  scale: 1.0, // 100% scale for accurate sizing
+  preferCSSPageSize: true, // Respect CSS page dimensions (210mm x 297mm)
+  timeout: 60000, // 60 second timeout for large documents
+};
+
+console.log("[PDF] Generating PDF with stack-based options:", pdfOptions);
+
+let buffer = await page.pdf(pdfOptions);
+
+console.log("[PDF] Generated successfully, size:", buffer.length, "bytes");
+console.log("[PDF] Expected: > 100KB (indicates multi-page, all content)");
+if (buffer.length < 100000) {
+  console.warn(
+    "[PDF] ⚠️ WARNING: PDF smaller than expected, may be incomplete"
+  );
+}
+```
+
+**Success Criteria**:
+
+- [ ] PDF generation completes without timeout (< 60 seconds)
+- [ ] PDF size > 100KB (indicates multi-page with content)
+- [ ] PDF displays all structure pages (cover, TOC, content, epilogue)
+- [ ] PDF text is visible with correct colors
+- [ ] Page backgrounds show faint image (20% opacity)
+- [ ] Page borders and numbers visible (Stack 2)
+
+**Investigation Checkpoints**:
+
+- [ ] Generate Test 2 eBook
+- [ ] Export to PDF
+- [ ] Open PDF and verify:
+  - ✓ Multiple pages present (not just 1)
+  - ✓ Text is readable (not white on white, not invisible)
+  - ✓ Background image visible but doesn't obscure text
+  - ✓ Page borders/frames present
+  - ✓ Page numbers visible in footer
+  - ✓ Book title visible in header
+  - ✓ All chapters present
+
+---
+
+### Fix 4.4: Test All Themes with Stack Rendering
+
+**File**: `/server/pdfGenerator.js` (no changes) + manual testing  
+**Status**: 🔴 NOT STARTED
+
+**Test all 4 themes** to verify stack rendering works consistently:
+
+```
+For each theme (dark, light, corporate, bold):
+  1. Generate eBook: "Benny the Brave Bunny..."
+  2. Export to PDF
+  3. Verify:
+     - Stack 0: Background image visible at 20% opacity
+     - Stack 1: Text readable with theme-specific colors
+     - Stack 2: Borders/numbers visible with theme accent color
+     - No text cutoff or overflow
+     - All pages present
+```
+
+**Success Criteria**:
+
+- [ ] Light theme: Black text on white background with light image
+- [ ] Dark theme: White text on dark background with dark image
+- [ ] Corporate theme: Professional colors, text clearly visible
+- [ ] Bold theme: High contrast, text very visible
+- [ ] All themes: Background image visible but not distracting
+- [ ] All themes: Page borders and numbers visible
+
+---
+
+### Fix 4.5: Add Font Preloading (Conditional)
+
+**File**: `/server/genieService.js`  
+**Location**: Lines 1030-1050 (CSS section in compose())  
+**Status**: 🟠 CONDITIONAL - Only if Step 4.1-4.3 text still not rendering
+
+**Only needed if PDF text still rendering incorrectly after Steps 4.1-4.3**
+
+**Required Change** (if needed):
+
+```javascript
+const finalHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Georgia:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Georgia', serif;
+    }
+    .content {
+      font-family: 'Georgia', serif;
+    }
+  </style>
+</head>
+<body>
+  ...
+</body>
+</html>
+`;
+```
+
+**Success Criteria** (if applied):
+
+- [ ] Only apply if PDF text still rendering incorrectly
+- [ ] After applying: PDF text renders with Georgia font
+- [ ] Text is visible and readable
+- [ ] Font loads before PDF generation completes
+
+---
+
+## Step 5: Investigate Chapter-Page Count Mismatch 🟠
 
 **Target Issues**: Issue 4  
-**Timeline**: After Phases 1-4 (lower priority)  
+**Timeline**: After Steps 1-4 (lower priority)  
 **Complexity**: Medium
 
 ### Fix 5.1: Clarify Density Calculation
@@ -503,7 +1008,7 @@ if (pages.length !== Math.ceil(pageCount * density)) {
 
 ## Tracking Status
 
-### Phase 1 Fixes
+### Step 1 Fixes
 
 | Fix | File            | Status         | Completed |
 | --- | --------------- | -------------- | --------- |
@@ -512,28 +1017,31 @@ if (pages.length !== Math.ceil(pageCount * density)) {
 | 1.3 | Ebook.svelte    | 🔴 NOT STARTED | ❌        |
 | 1.4 | Ebook.svelte    | 🔴 NOT STARTED | ❌        |
 
-### Phase 2 Fixes
+### Step 2 Fixes
 
 | Fix | File            | Status         | Completed |
 | --- | --------------- | -------------- | --------- |
 | 2.1 | ebookService.js | 🔴 NOT STARTED | ❌        |
 | 2.2 | db.js           | 🔴 NOT STARTED | ❌        |
 
-### Phase 3 Fixes
+### Step 3 Fixes
 
 | Fix | File         | Status         | Completed |
 | --- | ------------ | -------------- | --------- |
 | 3.1 | index.js     | 🔴 NOT STARTED | ❌        |
 | 3.2 | Ebook.svelte | 🔴 NOT STARTED | ❌        |
 
-### Phase 4 Fixes
+### Step 4 Fixes
 
 | Fix | File            | Status         | Completed |
 | --- | --------------- | -------------- | --------- |
 | 4.1 | pdfGenerator.js | 🔴 NOT STARTED | ❌        |
-| 4.2 | genieService.js | 🟠 CONDITIONAL | ❌        |
+| 4.2 | pdfGenerator.js | 🔴 NOT STARTED | ❌        |
+| 4.3 | pdfGenerator.js | 🔴 NOT STARTED | ❌        |
+| 4.4 | pdfGenerator.js | 🔴 NOT STARTED | ❌        |
+| 4.5 | genieService.js | 🟠 CONDITIONAL | ❌        |
 
-### Phase 5 Fixes
+### Step 5 Fixes
 
 | Fix | File            | Status         | Completed |
 | --- | --------------- | -------------- | --------- |
@@ -546,11 +1054,11 @@ if (pages.length !== Math.ceil(pageCount * density)) {
 
 ### Validation Checklist
 
-- [ ] **Phase 1 Complete**: Logging shows html field flowing through all layers
-- [ ] **Phase 2 Complete**: Test 1 content matches prompt (or confirmed as cache issue)
-- [ ] **Phase 3 Complete**: Title displayed correctly in summary
-- [ ] **Phase 4 Complete**: PDF renders with all pages and content visible
-- [ ] **Phase 5 Complete** (if needed): Chapter-page count mismatch explained/fixed
+- [ ] **Step 1 Complete**: Logging shows html field flowing through all layers
+- [ ] **Step 2 Complete**: Test 1 content matches prompt (or confirmed as cache issue)
+- [ ] **Step 3 Complete**: Title displayed correctly in summary
+- [ ] **Step 4 Complete**: PDF renders with all pages and content visible
+- [ ] **Step 5 Complete** (if needed): Chapter-page count mismatch explained/fixed
 
 ### Test Cases to Run After Fixes
 
@@ -593,11 +1101,11 @@ Test Case B (Test 1 - Mouse):
 
 **Bug Report and Bug Fix documents will be CLOSED when**:
 
-1. All Phase 1 fixes implemented and verified ✅
-2. Phase 2 investigation complete (Test 1 resolved or documented) ✅
-3. All Phase 3 fixes implemented (title displaying) ✅
-4. All Phase 4 fixes implemented (PDF rendering) ✅
-5. Phase 5 clarified (chapter-page mismatch explained) ✅
+1. All Step 1 fixes implemented and verified ✅
+2. Step 2 investigation complete (Test 1 resolved or documented) ✅
+3. All Step 3 fixes implemented (title displaying) ✅
+4. All Step 4 fixes implemented (PDF rendering) ✅
+5. Step 5 clarified (chapter-page mismatch explained) ✅
 6. All validation test cases pass ✅
 7. Both documents updated with final status and marked **[CLOSED]**
 
@@ -637,7 +1145,7 @@ Test Case B (Test 1 - Mouse):
 
 ## Next Steps
 
-1. **Immediately**: Begin Phase 1 fixes (logging verification)
+1. **Immediately**: Begin Step 1 fixes (logging verification)
 2. **Use this document**: Track progress by updating Status column in tables above
 3. **Each fix**: Mark as 🟡 IN PROGRESS, then ✅ COMPLETED
 4. **When all complete**: Update Overall Status to 🟢 RESOLVED

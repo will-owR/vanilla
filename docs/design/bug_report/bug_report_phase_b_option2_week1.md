@@ -613,7 +613,7 @@ None available at this time.
 
 ## Next Steps (Immediate Actions)
 
-### Phase 1: Investigation (Urgent)
+### Step 1: Investigation (Urgent)
 
 1. **Add comprehensive logging** to trace prompt through entire pipeline
 
@@ -633,7 +633,7 @@ None available at this time.
    - Verify generated content mentions pizza
    - If works, issue is specific to longer prompts
 
-### Phase 2: Fix PDF Rendering
+### Step 2: Fix PDF Rendering
 
 1. **Update pdfGenerator.js** with comprehensive options:
 
@@ -662,7 +662,7 @@ None available at this time.
 3. **Test all 4 themes** in PDF generation
 4. **Compare preview vs PDF** side-by-side
 
-### Phase 3: Content Mismatch Investigation
+### Step 3: Content Mismatch Investigation
 
 1. Check if `ebookService.handle()` is reusing cached AI responses
 2. Verify `classification` object is not overriding prompt
