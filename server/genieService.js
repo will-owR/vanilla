@@ -1016,6 +1016,8 @@ const genieService = {
   <meta name="density" content="${density}">
   <meta name="colorPalette" content="${colorPalette}">
   <title>${structuredData.title || "eBook"}</title>
+  <!-- FIX 4.5: Conditional font preloading for PDF rendering -->
+  <link href="https://fonts.googleapis.com/css2?family=Georgia:wght@400;700&display=swap" rel="stylesheet">
   <style>
     * {
       margin: 0;
@@ -1026,7 +1028,7 @@ const genieService = {
     body {
       background-color: ${colors.bg};
       color: ${colors.text};
-      font-family: Georgia, serif;
+      font-family: 'Georgia', serif;
       font-size: ${fontSize}px;
       line-height: 1.6;
     }
@@ -1049,6 +1051,7 @@ const genieService = {
     h1, h2, h3, h4, h5, h6 {
       color: ${colors.heading};
       margin: 1em 0 0.5em 0;
+      font-family: 'Georgia', serif;
     }
     
     h1 { font-size: ${fontSize * 2.4}px; }
@@ -1057,6 +1060,7 @@ const genieService = {
     
     p {
       margin-bottom: 1em;
+      font-family: 'Georgia', serif;
     }
     
     ul, ol {
