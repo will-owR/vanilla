@@ -133,6 +133,16 @@ function createEbookStore() {
           fontSizeScale: currentStore.config.fontSizeScale,
         });
 
+        // FIX 1.3: Add FRONTEND logging
+        console.log("[FRONTEND] Response received:");
+        console.log("[FRONTEND] - html present:", !!response.html);
+        console.log(
+          "[FRONTEND] - html length:",
+          response.html?.length || "NULL"
+        );
+        console.log("[FRONTEND] - title:", response.title);
+        console.log("[FRONTEND] - chapters:", response.chapters?.length || 0);
+
         update((store) => ({
           ...store,
           result: response,

@@ -2911,16 +2911,18 @@ app.post("/api/ebook/generate", async (req, res) => {
         : "very-dense";
 
     // Build response envelope matching frontend expectations
-    console.log(
-      `[${new Date().toISOString()}] [${reqId}] Building response object with ${
-        envelope.pages.length
-      } chapters`
-    );
+    console.log("[ENDPOINT] Building response:");
+    console.log("[ENDPOINT] - chapters count:", envelope.pages?.length || 0);
+    console.log("[ENDPOINT] - html present:", !!envelope.html);
+    console.log("[ENDPOINT] - html length:", envelope.html?.length || "NULL");
+    console.log("[ENDPOINT] - title:", envelope.metadata?.title || "NOT SET");
+
     const responseObj = {
       id: ebookId,
       resultId: result.resultId,
       chapters: envelope.pages,
       html: envelope.html || null, // WEEK 1: Include composed HTML
+      title: envelope.metadata?.title || "Generated E-book",
       metadata: {
         title: envelope.metadata?.title || "Generated E-book",
         author: "Aether AI",

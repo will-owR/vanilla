@@ -150,7 +150,9 @@
         {#if ebookResult}
           <div class="result-section">
             <h4>✅ eBook Generated Successfully!</h4>
-            {#if ebookResult.metadata && ebookResult.metadata.title}
+            {#if ebookResult.title}
+              <p><strong>Title:</strong> {ebookResult.title}</p>
+            {:else if ebookResult.metadata && ebookResult.metadata.title}
               <p><strong>Title:</strong> {ebookResult.metadata.title}</p>
             {/if}
             {#if ebookResult.chapters}
@@ -170,6 +172,7 @@
                     // Transform backend response to export format
                     const exportPayload = {
                       pages: ebookResult.chapters || [],
+                      html: ebookResult.html || null,
                       metadata: ebookResult.metadata || {},
                       actions: ebookResult.actions || {},
                     };
@@ -185,7 +188,28 @@
               </button>
             </div>
             
-            {#if ebookResult.metadata}
+            {#if ebookResult.html}
+              <div class="preview-container">
+                <h5>Preview</h5>
+                <div class="ebook-preview">
+                  {@html ebookResult.html}
+                </div>
+              </div>
+            {:else if ebookResult.chapters}
+              <!-- Fallback: Show chapters array if HTML missing -->
+              <div class="preview-container">
+                <h5>Preview (Chapters)</h5>
+                <div class="ebook-chapters">
+                  {#each ebookResult.chapters as chapter}
+                    <div class="chapter">
+                      <h6>{chapter.title}</h6>
+                      <p>{chapter.content}</p>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {:else if ebookResult.metadata}
+              <!-- Fallback: Show theme preview -->
               <div class="preview-container">
                 <h5>Preview</h5>
                 <ThemePreview 
@@ -425,5 +449,56 @@
   button:disabled {
     background: #ccc;
     cursor: not-allowed;
+  }
+
+  .ebook-preview {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    padding: 1rem;
+    background: white;
+    max-height: 600px;
+    overflow-y: auto;
+  }
+
+  .ebook-preview :global(h1),
+  .ebook-preview :global(h2),
+  .ebook-preview :global(h3) {
+    color: #111827;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .ebook-preview :global(p) {
+    color: #374151;
+    line-height: 1.6;
+    margin: 0.5rem 0;
+  }
+
+  .ebook-chapters {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .chapter {
+    padding: 1rem;
+    background: #f9fafb;
+    border-left: 4px solid #4f46e5;
+    border-radius: 4px;
+  }
+
+  .chapter h6 {
+    margin: 0 0 0.5rem 0;
+    color: #374151;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .chapter p {
+    margin: 0;
+    color: #6b7280;
+    font-size: 0.95rem;
+    line-height: 1.5;
   }
 </style>

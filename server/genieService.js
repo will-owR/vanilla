@@ -676,14 +676,19 @@ const genieService = {
           const ebookService = require("./ebookService");
           result = await ebookService.handle(payload, classification);
           // WEEK 1 FIX: Generate HTML from structured data
+          console.log("[COMPOSE] Starting compose() call for ebook mode");
           try {
             const html = await this.compose(result);
             result.html = html; // Include HTML in result
-          } catch (err) {
-            console.warn(
-              "compose() failed, continuing without HTML:",
-              err?.message
+            console.log(
+              "[COMPOSE] Success! Generated HTML length:",
+              result.html?.length || "NULL"
             );
+            if (!result.html || result.html.length === 0) {
+              console.warn("[COMPOSE] WARNING: HTML is empty or null");
+            }
+          } catch (err) {
+            console.error("[COMPOSE] FAILED:", err?.message, err?.stack);
             result.html = null; // Graceful degradation
           }
           break;

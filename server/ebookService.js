@@ -87,6 +87,12 @@ async function handle(payload, classification) {
 
   try {
     // Conversation 1: Request structure (try to get JSON from AI)
+    console.log("[GEMINI] Conversation 1 - Requesting structure");
+    console.log(
+      "[GEMINI] Prompt topic:",
+      String(prompt).substring(0, 100) + "..."
+    );
+
     const structurePrompt = `Create a detailed structure for a ${pageCount}-page eBook based on:\n"${String(
       prompt
     )}\"\n\nReturn JSON with keys: title, chapters (number), outline: [{ chapter, title, estimated_topics: [] }]`;
@@ -130,6 +136,19 @@ async function handle(payload, classification) {
       "";
     structure = tryParse(aiText);
 
+    console.log("[GEMINI] Conversation 1 - Response received:");
+    console.log("[GEMINI] Structure title:", structure?.title || "NOT FOUND");
+    console.log("[GEMINI] Chapters outline:", structure?.outline?.length || 0);
+
+    // Check if title matches prompt
+    const promptTopic = String(prompt).split(/\s+/)[0];
+    const titleMatch = structure?.title
+      ?.toLowerCase()
+      .includes(promptTopic.toLowerCase())
+      ? "MATCHES"
+      : "MISMATCH";
+    console.log("[GEMINI] Title-Prompt match:", titleMatch);
+
     // Fallback heuristic: if AI didn't return structured JSON, create a simple outline
     if (!structure || !Array.isArray(structure.outline)) {
       const approxChapters = Math.max(
@@ -153,6 +172,9 @@ async function handle(payload, classification) {
     for (let i = 0; i < structure.outline.length; i++) {
       const ch = structure.outline[i];
       const prevSummary = i > 0 ? chapters[i - 1].summary || "" : "";
+
+      console.log("[GEMINI] Conversation 2 - Generating chapter:", ch.title);
+
       const contentPrompt = `You are writing Chapter ${ch.chapter}: \"${
         ch.title
       }\"\n\nContext: Total eBook: ${pageCount} pages. This chapter ${
