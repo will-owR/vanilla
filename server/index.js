@@ -3053,6 +3053,69 @@ app.get("/api/themes", (req, res) => {
   });
 });
 
+/**
+ * POST /api/cache/clear
+ * FIX 2.2: Clear cache for debugging Test 1 prompt-content mismatch
+ * Clears all stored results to ensure fresh generation on next request
+ * This helps identify if cache is causing outdated content
+ * Returns: { success: boolean, message: string, cleared: number }
+ */
+app.post("/api/cache/clear", async (req, res) => {
+  const startTime = Date.now();
+  const reqId = req.id || "unknown";
+  console.log(
+    `[${new Date().toISOString()}] [${reqId}] POST /api/cache/clear started`
+  );
+  console.log("[CACHE_CLEAR] Clearing all stored results from database");
+
+  try {
+    const { PrismaClient } = require("@prisma/client");
+    const prismaForCache = new PrismaClient();
+
+    // Count existing results before clearing
+    const existingCount = await prismaForCache.result.count();
+    console.log(`[CACHE_CLEAR] Found ${existingCount} results to clear`);
+
+    // Delete all results
+    const deleteResult = await prismaForCache.result.deleteMany({});
+    console.log(
+      `[CACHE_CLEAR] Successfully deleted ${deleteResult.count} results`
+    );
+
+    // Also clear export jobs related to deleted results (optional, for cleanliness)
+    const jobsDeleted = await prismaForCache.exportJob.deleteMany({});
+    console.log(
+      `[CACHE_CLEAR] Cleared ${jobsDeleted.count} associated export jobs`
+    );
+
+    await prismaForCache.$disconnect();
+
+    const duration = Date.now() - startTime;
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] POST /api/cache/clear completed in ${duration}ms`
+    );
+
+    res.json({
+      success: true,
+      message: "Cache cleared successfully",
+      cleared: deleteResult.count,
+      jobsCleared: jobsDeleted.count,
+    });
+  } catch (error) {
+    console.error("[CACHE_CLEAR] Error clearing cache:", error);
+    const duration = Date.now() - startTime;
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] POST /api/cache/clear failed in ${duration}ms`
+    );
+
+    res.status(500).json({
+      success: false,
+      error: "Failed to clear cache",
+      details: error.message,
+    });
+  }
+});
+
 // Centralized error handler (placed at end to capture errors from all routes)
 app.use((err, req, res, _next) => {
   const timestamp = new Date().toISOString();
