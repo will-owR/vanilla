@@ -98,11 +98,16 @@ async function generatePdfBuffer({
 
     page = await browser.newPage();
     // If a canonical envelope was provided, render one HTML page per envelope page
+    // WEEK 1 FIX 4.1-4.3: Stack-based architecture with Variant B (semi-transparent backgrounds)
     let contentHtml;
     if (envelope && Array.isArray(envelope.pages)) {
-      console.log("[pdfGenerator] Routing: envelope provided");
+      console.log(
+        "[pdfGenerator] Routing: envelope provided (stack-based rendering - Variant B)"
+      );
+
+      // Build stack-based pages with semi-transparent backgrounds
       const pagesHtml = envelope.pages
-        .map((p) => {
+        .map((p, pageIndex) => {
           const blocks = (p.blocks || [])
             .map((b) => {
               if (b.type === "html") return String(b.content || "");
@@ -111,12 +116,149 @@ async function generatePdfBuffer({
               return `<pre>${String(b.content || "")}</pre>`;
             })
             .join("\n");
-          return `<section style=\"page-break-after: always;\"><h1>${String(
-            p.title || ""
-          )}</h1>${blocks}</section>`;
+
+          // Stack-based HTML with 3 z-index layers
+          return `
+            <div class="page">
+              <!-- Stack 0: Background image (20% opacity) -->
+              <div class="page-bg"></div>
+              
+              <!-- Stack 1: Semi-transparent content (85% opacity - Variant B) -->
+              <div class="content">
+                <h1>${String(p.title || "")}</h1>
+                ${blocks}
+              </div>
+              
+              <!-- Stack 2: Framing and page details -->
+              <div class="page-number">Page ${pageIndex + 1}</div>
+            </div>
+          `;
         })
         .join("\n");
-      contentHtml = `<!doctype html><html><body>${pagesHtml}</body></html>`;
+
+      // Build complete HTML with stack-based CSS
+      contentHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            
+            body {
+              font-family: 'Georgia', serif;
+              background: white;
+            }
+            
+            /* Container for all pages */
+            .page {
+              position: relative;
+              width: 210mm;
+              height: 297mm;
+              page-break-after: always;
+              background: white;
+              overflow: hidden;
+            }
+            
+            /* Stack 0: Background image (20% opacity) */
+            .page-bg {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              background-size: cover;
+              background-position: center;
+              opacity: 0.2;
+              z-index: 0;
+              pointer-events: none;
+            }
+            
+            /* Stack 1: Content with semi-transparent background (Variant B) */
+            .content {
+              position: relative;
+              z-index: 1;
+              padding: 40px;
+              height: 100%;
+              background-color: rgba(255, 255, 255, 0.85);
+              color: #000000;
+              line-height: 1.6;
+              overflow: hidden;
+            }
+            
+            .content h1 {
+              color: #333333;
+              margin-bottom: 20px;
+              font-size: 1.8em;
+              margin-top: 0;
+            }
+            
+            .content h2 {
+              color: #333333;
+              margin: 20px 0 10px 0;
+              font-size: 1.4em;
+            }
+            
+            .content h3 {
+              color: #444444;
+              margin: 15px 0 8px 0;
+              font-size: 1.1em;
+            }
+            
+            .content p {
+              color: #000000;
+              margin: 12px 0;
+              text-align: justify;
+            }
+            
+            .content section {
+              margin-bottom: 20px;
+            }
+            
+            .content div {
+              color: #000000;
+            }
+            
+            .content pre {
+              background-color: rgba(240, 240, 240, 0.5);
+              padding: 10px;
+              border-radius: 4px;
+              overflow-x: auto;
+              color: #333333;
+            }
+            
+            /* Stack 2: Page framing and numbering */
+            .page-number {
+              position: absolute;
+              bottom: 20px;
+              right: 20px;
+              z-index: 2;
+              font-size: 10px;
+              color: #666666;
+              font-family: sans-serif;
+            }
+            
+            @media print {
+              body {
+                margin: 0;
+                padding: 0;
+              }
+              .page {
+                margin: 0;
+                page-break-after: always;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          ${pagesHtml}
+        </body>
+        </html>
+      `;
     } else if (
       body &&
       String(body).trim().toLowerCase().startsWith("<!doctype")
@@ -131,12 +273,112 @@ async function generatePdfBuffer({
       console.log("[pdfGenerator] Routing: wrapping body");
       contentHtml = `<!doctype html><html><body><h1>${title}</h1><div>${body}</div></body></html>`;
     }
+
+    // FIX 4.2: Verify CSS rendering in headless Chrome
     await page.setContent(contentHtml, { waitUntil: "networkidle0" });
-    let buffer = await page.pdf({ format: "A4", printBackground: true });
+
+    console.log("[PDF] Waiting for fonts and images to load...");
+    try {
+      await page.evaluate(() => {
+        return new Promise((resolve) => {
+          if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(resolve);
+          } else {
+            setTimeout(resolve, 1000);
+          }
+        });
+      });
+    } catch (err) {
+      console.warn("[PDF] Font loading check failed (non-fatal):", err.message);
+    }
+
+    // Verify computed styles on content layer (Stack 1)
+    try {
+      const styles = await page.evaluate(() => {
+        const content = document.querySelector(".content");
+        if (content) {
+          const computed = window.getComputedStyle(content);
+          return {
+            color: computed.color,
+            backgroundColor: computed.backgroundColor,
+            zIndex: computed.zIndex,
+            visibility: computed.visibility,
+            display: computed.display,
+          };
+        }
+        return null;
+      });
+
+      console.log("[PDF] Stack 1 (content) computed styles:", styles);
+
+      if (styles) {
+        if (styles.color === styles.backgroundColor) {
+          console.warn(
+            "[PDF] ⚠️ VISIBILITY ISSUE: text color matches background!"
+          );
+          console.warn(
+            "[PDF] Text color:",
+            styles.color,
+            "Background:",
+            styles.backgroundColor
+          );
+        }
+        if (styles.visibility === "hidden" || styles.display === "none") {
+          console.warn(
+            "[PDF] ⚠️ VISIBILITY ISSUE: content layer is hidden or not displayed!"
+          );
+        }
+      }
+    } catch (err) {
+      console.warn("[PDF] CSS verification failed (non-fatal):", err.message);
+    }
+
+    // Verify images are loaded
+    try {
+      const imageLoaded = await page.evaluate(() => {
+        const images = document.querySelectorAll("img");
+        return Array.from(images).every(
+          (img) => img.complete && img.naturalHeight > 0
+        );
+      });
+      console.log("[PDF] Images loaded:", imageLoaded);
+    } catch (err) {
+      console.warn("[PDF] Image verification failed (non-fatal):", err.message);
+    }
+
+    // FIX 4.3: Generate PDF with stack-aware options
+    const pdfOptions = {
+      format: "A4",
+      printBackground: true,
+      margin: {
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+      },
+      scale: 1.0,
+      preferCSSPageSize: true,
+      timeout: 60000,
+    };
+
+    console.log(
+      "[PDF] Generating PDF with stack-based options (Variant B):",
+      pdfOptions
+    );
+    let buffer = await page.pdf(pdfOptions);
+
     console.log(
       "[pdfGenerator] PDF generated, buffer size:",
       buffer.length || "unknown"
     );
+    console.log("[PDF] Generated successfully, size:", buffer.length, "bytes");
+    console.log("[PDF] Expected: > 100KB (indicates multi-page, all content)");
+    if (buffer.length < 100000) {
+      console.warn(
+        "[PDF] ⚠️ WARNING: PDF smaller than expected, may be incomplete"
+      );
+    }
+
     if (page && launched) await page.close();
     if (launched && browser) await browser.close();
 
