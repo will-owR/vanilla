@@ -1167,6 +1167,11 @@ const genieService = {
         if (!body) {
           throw new Error("No html found in persisted content");
         }
+
+        // SOLUTION PATH A: For resultId case, also store the pages/metadata for envelope
+        // Make them available outside the try block by not using let
+        packet.pages = outEnvelope.pages;
+        packet.metadata = outEnvelope.metadata;
       } catch (err) {
         console.error("[EXPORT-ORCH] Persistence lookup failed:", err.message);
         throw err;
@@ -1203,9 +1208,45 @@ const genieService = {
     console.log("[EXPORT-ORCH] Calling pdfGenerator with normalized content");
     try {
       const { generatePdfBuffer } = require("./pdfGenerator");
+
+      // SOLUTION PATH A: Build envelope for stack-based PDF rendering
+      // For eBook exports, pass envelope structure to trigger correct pdfGenerator routing
+      let envelope = null;
+      if (packet.pages && Array.isArray(packet.pages)) {
+        console.log(
+          "[EXPORT-ORCH] Building envelope for stack-based PDF rendering"
+        );
+
+        // Transform pages to have .blocks structure that pdfGenerator expects
+        // Pages from ebookService have {title, content}, need to convert to {title, blocks: [{type, content}]}
+        const transformedPages = packet.pages.map((page) => ({
+          title: page.title || "",
+          blocks:
+            page.content || page.blocks
+              ? [
+                  {
+                    type: "text",
+                    content: page.content || "",
+                  },
+                ]
+              : [],
+        }));
+
+        envelope = {
+          pages: transformedPages,
+          html: body,
+          metadata: packet.metadata || {},
+        };
+        console.log(
+          "[EXPORT-ORCH] Envelope built - pages:",
+          envelope.pages.length
+        );
+      }
+
       const result = await generatePdfBuffer({
         title,
         body,
+        envelope, // ← SOLUTION PATH A: Pass envelope for stack-based routing
         validate: true,
       });
 

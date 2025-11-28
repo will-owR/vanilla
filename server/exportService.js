@@ -63,8 +63,48 @@ const exportService = {
           "[exportService] Using pdfGenerator for mode:",
           mode || "unspecified"
         );
+
+        // Extract title and body from envelope for pdfGenerator
+        const title = envelope.metadata?.title || envelope.title || "Export";
+        const body = envelope.html || null;
+
+        console.log("[exportService] Extracted for pdfGenerator:");
+        console.log("  - title:", title);
+        console.log("  - html length:", body?.length || 0);
+
+        // SOLUTION PATH A: Transform pages to have .blocks structure for stack-based rendering
+        // Pages from ebookService have {title, content}, need to convert to {title, blocks: [{type, content}]}
+        let processedEnvelope = envelope;
+        if (envelope.pages && envelope.pages.length > 0) {
+          const firstPage = envelope.pages[0];
+          // Check if pages need transformation (have .content but not .blocks)
+          if (firstPage.content && !firstPage.blocks) {
+            console.log(
+              "[exportService] Transforming pages to stack-based format"
+            );
+            const transformedPages = envelope.pages.map((page) => ({
+              title: page.title || "",
+              blocks:
+                page.content || page.blocks
+                  ? [
+                      {
+                        type: "text",
+                        content: page.content || "",
+                      },
+                    ]
+                  : [],
+            }));
+            processedEnvelope = {
+              ...envelope,
+              pages: transformedPages,
+            };
+          }
+        }
+
         generated = await pdfGenerator.generatePdfBuffer({
-          envelope,
+          title,
+          body,
+          envelope: processedEnvelope, // Pass transformed envelope for stack-based routing
           validate: options.validate,
           browser: options.browser,
         });

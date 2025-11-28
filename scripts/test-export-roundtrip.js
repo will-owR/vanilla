@@ -231,6 +231,36 @@ async function runTests() {
       );
     }
 
+    // SOLUTION PATH A: Validate PDF size indicates content present (not just titles)
+    // Before fix: 33KB (titles only) → After fix: 80KB+ (full content)
+    console.log("\n   📊 SOLUTION PATH A: Content Quality Validation");
+
+    if (directExportBuffer.length < 80000) {
+      console.warn(
+        `   ⚠️  Direct export PDF smaller than expected for multi-page document`
+      );
+      console.warn(`       Expected: > 80KB (multi-page with content)`);
+      console.warn(`       Got: ${directExportBuffer.length} bytes`);
+      console.warn(`       Possible cause: Routing to wrong pdfGenerator path`);
+    } else {
+      console.log(
+        `   ✅ Direct export PDF size (${directExportBuffer.length} bytes) indicates multi-page content`
+      );
+    }
+
+    if (idExportBuffer.length < 80000) {
+      console.warn(
+        `   ⚠️  ID-based export PDF smaller than expected for multi-page document`
+      );
+      console.warn(`       Expected: > 80KB (multi-page with content)`);
+      console.warn(`       Got: ${idExportBuffer.length} bytes`);
+      console.warn(`       Possible cause: Routing to wrong pdfGenerator path`);
+    } else {
+      console.log(
+        `   ✅ ID-based export PDF size (${idExportBuffer.length} bytes) indicates multi-page content`
+      );
+    }
+
     // Check: Both PDFs are similar size (within 10% variance acceptable)
     const sizeDiff = Math.abs(
       directExportBuffer.length - idExportBuffer.length

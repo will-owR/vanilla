@@ -308,9 +308,11 @@ async function handle(payload, classification) {
 
     // Return structured envelope following README contract
     return {
+      title: structure.title, // FIX: Include title for compose() to use in cover page
       pages,
       html: null, // composition delegated to genieService.compose()
       metadata: {
+        title: structure.title, // Also include in metadata for export orchestrator
         model: "ebook-v1",
         pages_count: pageCount,
         source: "ebook",

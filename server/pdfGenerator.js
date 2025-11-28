@@ -97,12 +97,21 @@ async function generatePdfBuffer({
     }
 
     page = await browser.newPage();
-    // If a canonical envelope was provided, render one HTML page per envelope page
-    // WEEK 1 FIX 4.1-4.3: Stack-based architecture with Variant B (semi-transparent backgrounds)
+    // Rendering strategy (in priority order):
+    // 1. Full HTML body (composed eBook with styling) if available
+    // 2. Stack-based rendering from envelope.pages (legacy/fallback)
+    // 3. Simple wrapping of body
     let contentHtml;
-    if (envelope && Array.isArray(envelope.pages)) {
+    if (body && String(body).trim().toLowerCase().startsWith("<!doctype")) {
+      // If body already contains a full HTML document (e.g., composed eBook from genieService),
+      // use it as-is without wrapping - this preserves all styling and formatting
       console.log(
-        "[pdfGenerator] Routing: envelope provided (stack-based rendering - Variant B)"
+        "[pdfGenerator] Routing: body is full HTML (<!doctype detected - PRIORITY 1)"
+      );
+      contentHtml = body;
+    } else if (envelope && Array.isArray(envelope.pages)) {
+      console.log(
+        "[pdfGenerator] Routing: envelope provided (stack-based rendering - Variant B - PRIORITY 2)"
       );
 
       // Build stack-based pages with semi-transparent backgrounds
@@ -259,18 +268,8 @@ async function generatePdfBuffer({
         </body>
         </html>
       `;
-    } else if (
-      body &&
-      String(body).trim().toLowerCase().startsWith("<!doctype")
-    ) {
-      // If body already contains a full HTML document (e.g., from pdfStructureBuilder),
-      // use it as-is without wrapping
-      console.log(
-        "[pdfGenerator] Routing: body is full HTML (<!doctype detected)"
-      );
-      contentHtml = body;
     } else {
-      console.log("[pdfGenerator] Routing: wrapping body");
+      console.log("[pdfGenerator] Routing: wrapping body (PRIORITY 3)");
       contentHtml = `<!doctype html><html><body><h1>${title}</h1><div>${body}</div></body></html>`;
     }
 
