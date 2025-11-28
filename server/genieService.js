@@ -1098,6 +1098,140 @@ const genieService = {
 
     return finalHtml;
   },
+
+  /**
+   * Export orchestrator: handles any content format and generates PDF
+   * Accepts either resultId (for persistence lookup) or direct content
+   *
+   * @param {Object} packet - Either {resultId} or {pages, html, metadata, actions}
+   * @returns {Promise<Buffer>} PDF buffer ready for download
+   */
+  async exportContent(packet) {
+    if (!packet) {
+      throw new Error("exportContent requires a packet");
+    }
+
+    let title;
+    let body;
+
+    // CASE 1: resultId provided - retrieve from persistence
+    if (packet.resultId) {
+      console.log(
+        "[EXPORT-ORCH] Retrieving persisted content for resultId:",
+        packet.resultId
+      );
+      try {
+        const { getResultById } = require("./utils/resultDb");
+        const result = await getResultById(packet.resultId);
+
+        if (!result) {
+          throw new Error("Result not found");
+        }
+
+        console.log("[EXPORT-ORCH] Result retrieved from DB");
+        console.log(
+          "[EXPORT-ORCH] Result keys:",
+          Object.keys(result || {}).join(", ")
+        );
+        console.log(
+          "[EXPORT-ORCH] outEnvelope type:",
+          typeof result.outEnvelope
+        );
+
+        // Handle both object and stringified JSON
+        let outEnvelope = result.outEnvelope;
+        if (typeof outEnvelope === "string") {
+          console.log("[EXPORT-ORCH] Parsing stringified outEnvelope");
+          outEnvelope = JSON.parse(outEnvelope);
+        }
+
+        console.log(
+          "[EXPORT-ORCH] outEnvelope keys:",
+          Object.keys(outEnvelope || {}).join(", ")
+        );
+
+        if (!outEnvelope) {
+          throw new Error("No outEnvelope found in result");
+        }
+
+        // Extract from outEnvelope structure: {pages, html, metadata}
+        title = outEnvelope.metadata?.title || outEnvelope.title || "Export";
+        body = outEnvelope.html || null;
+
+        console.log("[EXPORT-ORCH] Retrieved persisted content:");
+        console.log("[EXPORT-ORCH] - title:", title);
+        console.log("[EXPORT-ORCH] - html length:", body?.length || 0);
+        console.log("[EXPORT-ORCH] - body type:", typeof body);
+        console.log("[EXPORT-ORCH] - body is null:", body === null);
+
+        if (!body) {
+          throw new Error("No html found in persisted content");
+        }
+      } catch (err) {
+        console.error("[EXPORT-ORCH] Persistence lookup failed:", err.message);
+        throw err;
+      }
+    }
+    // CASE 2: Direct content provided - extract from packet
+    else if (packet.html) {
+      console.log("[EXPORT-ORCH] Using direct content from packet");
+      title = packet.metadata?.title || packet.title || "Export";
+      body = packet.html;
+
+      console.log("[EXPORT-ORCH] Direct content:");
+      console.log("[EXPORT-ORCH] - title:", title);
+      console.log("[EXPORT-ORCH] - html length:", body?.length || 0);
+    }
+    // CASE 3: Legacy title+body format
+    else if (packet.title && packet.body) {
+      console.log("[EXPORT-ORCH] Using legacy title+body format");
+      title = packet.title;
+      body = packet.body;
+    }
+    // No valid format
+    else {
+      throw new Error(
+        "Invalid export packet. Provide either resultId, or html with metadata, or title+body"
+      );
+    }
+
+    // Now we have {title, body} normalized - call pdfGenerator
+    if (!title || !body) {
+      throw new Error("Export requires both title and content (html/body)");
+    }
+
+    console.log("[EXPORT-ORCH] Calling pdfGenerator with normalized content");
+    try {
+      const { generatePdfBuffer } = require("./pdfGenerator");
+      const result = await generatePdfBuffer({
+        title,
+        body,
+        validate: true,
+      });
+
+      // Handle both object return (when validate: true) and direct buffer return
+      let pdfBuffer = result;
+      if (result && typeof result === "object" && result.buffer) {
+        // When validate: true, returns { buffer, validation }
+        pdfBuffer = result.buffer;
+        if (result.validation) {
+          console.log(
+            "[EXPORT-ORCH] Validation result:",
+            result.validation.ok ? "OK" : "WARNINGS"
+          );
+        }
+      }
+
+      console.log(
+        "[EXPORT-ORCH] PDF generated successfully, size:",
+        pdfBuffer?.length || 0
+      );
+      return pdfBuffer;
+    } catch (err) {
+      console.error("[EXPORT-ORCH] PDF generation failed:", err.message);
+      throw err;
+    }
+  },
 };
 
 module.exports = genieService;

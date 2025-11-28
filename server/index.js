@@ -1033,6 +1033,52 @@ app.post("/override", (req, res) => {
 // --- PDF EXPORT ENDPOINT ---
 // Backwards-compatible export endpoint: accept GET with query or POST with JSON body
 app.post("/api/export", async (req, res) => {
+  try {
+    console.log(
+      "[EXPORT-EP] Received export request, delegating to orchestrator"
+    );
+    console.log("[EXPORT-EP] Request body keys:", Object.keys(req.body || {}));
+
+    // STEP 1: Delegate ALL content handling to genieService orchestrator
+    const pdfBuffer = await genieService.exportContent(req.body);
+
+    // Validate pdfBuffer was returned
+    if (!pdfBuffer || !(pdfBuffer instanceof Buffer)) {
+      console.error(
+        "[EXPORT-EP] ERROR: pdfBuffer is not a Buffer:",
+        typeof pdfBuffer
+      );
+      throw new Error("PDF generation failed: no buffer returned");
+    }
+
+    // STEP 2: Plumbing - just send the PDF
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
+    res.setHeader("Content-Length", pdfBuffer.length);
+    res.end(pdfBuffer);
+
+    console.log("[EXPORT-EP] PDF sent successfully, size:", pdfBuffer.length);
+  } catch (error) {
+    console.error("[EXPORT-EP] Export failed:", error.message);
+    console.error("[EXPORT-EP] Error stack:", error.stack);
+
+    // Determine appropriate HTTP status based on error type
+    let statusCode = 500;
+    if (
+      error.message.includes("not found") ||
+      error.message.includes("Result not found")
+    ) {
+      statusCode = 404;
+    } else if (error.message.includes("Invalid export packet")) {
+      statusCode = 400;
+    }
+
+    res.status(statusCode).json({ error: error.message });
+  }
+});
+
+// Legacy fallback: alternative export handler (backwards compatibility)
+app.post("/export-legacy", async (req, res) => {
   const fs = require("fs");
   const path = require("path");
   const {

@@ -2,9 +2,9 @@
 
 **Date**: November 26, 2025  
 **Branch**: `feat/B_Frontend_option2`  
-**Status**: 🔴 Critical Issue - FIVE Issues Identified During Manual Validation  
+**Status**: 🔴 Critical Issue - SIX Issues Identified During Manual Validation  
 **Severity**: Critical (Multiple issues blocking Phase B completion)  
-**Impact**: eBook generation producing wrong content, missing structure, incorrect PDF rendering  
+**Impact**: eBook generation producing wrong content, missing structure, incorrect PDF rendering, export broken  
 **Related Bug Fix**: `/docs/design/bug_report/BUG_FIX_phase_b_option2_week1.md`  
 **Close Status**: Will be closed when matching Bug Fix is also completed
 
@@ -12,7 +12,7 @@
 
 ## Summary
 
-Week 1 implementation of `compose()` integration has revealed **FOUR critical issues**:
+Week 1 implementation of `compose()` integration has revealed **SIX critical issues**:
 
 1. **Prompt-Content Mismatch (Test 1)**: Generated eBook title completely unrelated to user prompt
 
@@ -38,9 +38,16 @@ Week 1 implementation of `compose()` integration has revealed **FOUR critical is
    - Status: 🔴 **CRITICAL** - eBook unprofessional, incomplete
 
 5. **Chapter-Page Count Mismatch** (Test 2, NEW): Summary shows "Pages: 8" but "Chapters: 7", no 8th chapter/page
+
    - Expected: 8 chapters OR 8 pages (consistent)
    - Actual: 7 chapters but 8 pages requested
    - Status: 🟠 **HIGH** - Confusing UX, unclear what user gets
+
+6. **Export Content Gap** (NEW): Backend generates content but cannot export it
+   - Expected: eBook preview shows full content ✅ → PDF export contains same content ✅
+   - Actual: eBook preview shows full content ✅ → PDF export shows only titles ❌
+   - Root Cause: Export endpoint doesn't recognize eBook data format, uses wrong field
+   - Status: 🔴 **CRITICAL** - Core feature completely broken (cannot export generated content)
 
 ---
 
@@ -494,6 +501,172 @@ let buffer = await page.pdf({ format: "A4", printBackground: true });
 - Timeout (content may not finish rendering)
 - preferCSSPageSize (CSS dimensions not respected)
 - displayHeaderFooter (false by default - OK)
+
+---
+
+## Issue 6: Export Content Gap - Backend Cannot Export Generated Content (CRITICAL)
+
+### Description
+
+The backend successfully generates complete eBook content with `compose()` (33KB HTML), displays it correctly in frontend preview, but the PDF export shows only titles with no generated text content.
+
+**The Core Logic Gap**: Backend builds the final content it displays, but cannot export it.
+
+**Expected**: User generates eBook → preview shows full content ✅ → export PDF contains all that content ✅
+
+**Actual**: User generates eBook → preview shows full content ✅ → export PDF shows only titles ❌
+
+### Root Cause Analysis
+
+This is an **architectural data format mismatch** between content generation and export:
+
+**Step 1: Content Generation** (WORKING ✅)
+
+- `ebookService.handle()` generates chapters array with {title, content} objects
+- `genieService.compose()` converts to complete HTML string with DOCTYPE, styles, structure
+- Returns: `envelope.out_envelope.html = "<!DOCTYPE html>...(33KB)..."`
+- Stored in: Result persistence with resultId
+
+**Step 2: Frontend Display** (WORKING ✅)
+
+- Receives: `{pages: [], html: "<!DOCTYPE html>...", metadata, actions}`
+- Renders: `{@html ebookResult.html}` in Svelte
+- Shows: Full structure including cover, chapters with text, epilogue
+
+**Step 3: PDF Export** (BROKEN ❌)
+
+- Frontend sends: `{pages: [], html: "<!DOCTYPE html>...", metadata, actions}` to `/api/export`
+- Export endpoint expects: `{title, body}` OR `{resultId}`
+- Export endpoint doesn't recognize eBook format
+- Falls through to `pdfGenerator` without html field
+- `pdfGenerator` tries: `envelope.pages[].blocks[]` structure
+- Chapters have `.content` field not `.blocks[]`
+- Result: PDF renders with only metadata/titles, content missing
+
+### The Missing Link
+
+The system is designed for **ID-based export** (future pattern):
+
+1. Frontend should send: `{resultId}`
+2. Backend retrieves: Full persisted envelope with all content
+3. Backend exports: Using authoritative source (html field)
+
+**Current broken flow**:
+
+- Frontend sends full envelope to export endpoint
+- Export endpoint doesn't use it (expects different format)
+- `pdfGenerator` receives incomplete/mismatched data
+- PDF renders incomplete
+
+### Investigation Checkpoints
+
+**Checkpoint 1: Verify compose() generates complete HTML** ✅ DONE
+
+- [x] compose() returns 33KB HTML string
+- [x] HTML contains DOCTYPE, styles, all chapters with content
+- [x] Frontend displays all content correctly
+
+**Checkpoint 2: Verify Frontend sends correct data**
+
+- [ ] Log exportPayload in App.svelte export button handler
+- [ ] Verify {pages, html, metadata, actions} structure sent
+- [ ] Check http request body in browser network tab
+
+**Checkpoint 3: Verify export endpoint receives data**
+
+- [ ] Add logging to `/api/export` POST handler
+- [ ] Log request.body to see what frontend sends
+- [ ] Verify resultId is available if sent separately
+
+**Checkpoint 4: Verify PDF generation uses html field**
+
+- [ ] Check `/server/pdfGenerator.js` line 100-140
+- [ ] Verify `page.setContent(contentHtml)` receives full HTML
+- [ ] Log contentHtml parameter to confirm 33KB passes through
+
+**Checkpoint 5: Test Backend Round-Trip** (NEW TEST NEEDED)
+
+- [ ] Generate eBook via `/api/ebook/generate`
+- [ ] Retrieve result via resultId from persistence
+- [ ] Export PDF using resultId-based approach
+- [ ] Verify PDF contains all generated content
+- **This proves backend can export what it generates** (before involving frontend)
+
+### Files to Check
+
+| File                      | Location        | Purpose                                    |
+| ------------------------- | --------------- | ------------------------------------------ |
+| `/server/index.js`        | Lines 2822-2970 | POST /api/ebook/generate endpoint          |
+| `/server/genieService.js` | Lines 665-750   | compose() call and envelope building       |
+| `/server/index.js`        | Lines 3000-3100 | POST /api/export endpoint (approximate)    |
+| `/server/pdfGenerator.js` | Lines 100-140   | PDF generation with page.setContent()      |
+| `/client/src/App.svelte`  | Lines 173-180   | Export button handler and payload          |
+| `/client/src/lib/api.js`  | Lines 419-470   | exportToPdf() function sending to backend  |
+| `/server/db.js`           | All             | Result persistence (resultDb.saveResult()) |
+
+### Why This Matters
+
+1. **Backend Validation Gap**: No backend-only test proves round-trip works before frontend integration
+2. **Data Format Confusion**: Three different formats meeting at wrong points in pipeline
+3. **Future Features Blocked**: Edit/override features require ID-based export to work
+4. **User Experience**: Users can see their content in preview but cannot export it (broken trust)
+
+### Solution Path: Backend Orchestrator Pattern (BACKEND-ONLY FIX)
+
+**Key Principle**: Frontend sends packet as-is (no changes needed). Backend orchestrator handles everything.
+
+**Architecture**:
+
+```
+Frontend Export Request
+  ├─ Sends: {resultId} OR {pages, html, metadata, actions}
+  └─ No changes to frontend code
+       ↓
+POST /export Endpoint (Dumb Plumbing)
+  └─ Receives packet
+       ↓
+genieService.exportContent(packet) ← NEW METHOD (Smart Orchestrator)
+  ├─ IF resultId: Retrieve persisted envelope from database
+  ├─ IF direct content: Use provided {pages, html, metadata}
+  ├─ Extract title and html from either source
+  └─ Call pdfGenerator.generate({title, body: html})
+       ↓
+pdfGenerator (Content-Agnostic)
+  ├─ Receives: {title, body: html}
+  └─ Returns: pdfBuffer
+       ↓
+genieService returns pdfBuffer
+       ↓
+POST /export Endpoint (Dumb Plumbing)
+  ├─ Receives pdfBuffer from genieService
+  ├─ Sets headers: Content-Type: application/pdf
+  └─ Sends buffer to browser
+       ↓
+User Downloads PDF with Full Content ✅
+```
+
+**Implementation**:
+
+1. Add `genieService.exportContent(packet)` method:
+
+   - Accepts either `{resultId}` or `{pages, html, metadata, actions}`
+   - Handles content lookup/extraction intelligently
+   - Calls pdfGenerator with normalized `{title, body: html}`
+   - Returns pdfBuffer
+
+2. Modify POST /export endpoint:
+   - Receive packet from frontend (as-is, no parsing)
+   - Call `genieService.exportContent(packet)`
+   - Send pdfBuffer to user
+   - No content knowledge needed
+
+**Benefits**:
+
+- ✅ **Zero frontend changes**: Frontend keeps sending what it's already sending
+- ✅ **Clean separation**: Each layer has one responsibility
+- ✅ **Extensible**: New content types only require genieService updates
+- ✅ **Persistent caching**: Can leverage resultId for versioning later
+- ✅ **Solves current issue**: PDF exports with full generated content immediately
 
 ---
 
