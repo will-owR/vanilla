@@ -1,6 +1,7 @@
 # Phase B Frontend Integration: Complete Roadmap
 
 **Created**: November 22, 2025  
+**Updated**: November 26, 2025
 **Status**: 🎯 Documentation Complete  
 **Scope**: Full frontend integration strategy for Phase B (Options 2, 3, 5)  
 **Directory**: `/workspaces/vanilla/docs/design/phaseB/B_Frontend/`
@@ -193,7 +194,36 @@
 
 ---
 
-### **Session 3+: Option 3 Migration** (6-8 hours total, split across 2-3 sessions)
+### **Session 3: Architecture Fix Review** (2-3 hours, RECOMMENDED)
+
+**Goal**: Address architectural debt and design issues surfaced during Option 2 implementation
+
+**Context**:
+
+Every implementation reveals architectural patterns that worked, patterns that caused complexity, and patterns that indicate future maintenance issues. Option 2's implementation uncovered 7 core architectural issues across export paths, service contracts, data transformations, and testing practices.
+
+**Tasks**:
+
+- [ ] Review architectural debt documented in `ARCHITECTURE_FIX_ANALYSIS.md`
+- [ ] Prioritize fixes based on impact + effort
+- [ ] Implement high-impact, low-effort improvements immediately
+- [ ] Schedule medium/long-term refactoring for future sprints
+- [ ] Document architectural patterns for team standards
+
+**Deliverables**:
+
+- ✅ Comprehensive architectural analysis document
+- ✅ Prioritized fix roadmap
+- ✅ Selected fixes implemented
+- ✅ Team aligned on architectural standards
+
+**Success Criteria**: Architectural debt documented, highest-impact issues resolved, patterns established for future development
+
+**See**: `ARCHITECTURE_FIX_ANALYSIS.md` in this directory for detailed analysis
+
+---
+
+### **Session 4+: Option 3 Migration** (6-8 hours total, split across 2-3 sessions)
 
 **Goal**: Project management + multi-project workflow
 
@@ -250,23 +280,31 @@
 ### Option 2 Documentation
 
 ```
-docs/design/phaseB/B_Frontend/
+docs/design/phaseB/B_Frontend/to_Come/
+├── PHASE_B_OPTION2_DONE.md               (implementation complete)
 ├── PHASE_B_FRONTEND_ARCHITECTURE.md      (read this first)
 ├── PHASE_B_FRONTEND_MODULE_SPECS.md      (detailed specs)
 └── PHASE_B_FRONTEND_IMPLEMENTATION.md    (step-by-step)
 ```
 
+### Architecture Fix Documentation
+
+```
+docs/design/phaseB/B_Frontend/to_Come/
+└── ARCHITECTURE_FIX_ANALYSIS.md          (7 issues + solutions)
+```
+
 ### Option 3 Documentation
 
 ```
-docs/design/phaseB/B_Frontend/
+docs/design/phaseB/B_Frontend/to_Come/
 └── PHASE_B_OPTION3_MIGRATION_ROADMAP.md  (migration path)
 ```
 
 ### Option 5 Documentation
 
 ```
-docs/design/phaseB/B_Frontend/
+docs/design/phaseB/B_Frontend/to_Come/
 └── PHASE_B_OPTION5_BLUEPRINT.md          (schema-driven design)
 ```
 
@@ -367,15 +405,19 @@ docs/design/phaseB/B_Frontend/
 ### Immediate (This Session)
 
 ✅ **Complete**: Documentation for Options 2, 3, 5 created  
+✅ **Complete**: Option 2 fully implemented and tested (November 26, 2025)
 ✅ **Commit**: Push docs to repo with summary  
-📋 **Next**: Implement Option 2 (choose Session 1 or schedule)
+📋 **Next**: Conduct Architecture Fix review session (Option 2 → Architecture Fix → Option 3)
 
 ### Short-term (Next 1-2 weeks)
 
-- [ ] Implement Option 2 (4-5 hours)
-- [ ] Integration testing + bug fixes (2-3 hours)
+- [x] ✅ Implement Option 2 (4-5 hours) - COMPLETE
+- [ ] **Architecture Fix session** (2-3 hours)
+  - Review `ARCHITECTURE_FIX_ANALYSIS.md`
+  - Implement high-impact fixes
+  - Document patterns for team
+- [ ] Integration testing + bug fixes (1-2 hours)
 - [ ] Code review + documentation polish (1 hour)
-- [ ] Prepare Option 3 migration plan
 
 ### Medium-term (2-4 weeks out)
 
