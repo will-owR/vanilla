@@ -2926,6 +2926,11 @@ app.post("/api/ebook/generate", async (req, res) => {
     `[${new Date().toISOString()}] [${reqId}] POST /api/ebook/generate started`
   );
 
+  // Set a long timeout for large ebook generation (20 pages can take 5+ minutes with Gemini)
+  // Default is usually 2 minutes, but LLM generation is inherently slow
+  req.setTimeout(600000); // 10 minutes for ebook generation
+  res.setTimeout(600000); // 10 minutes
+
   const {
     prompt,
     theme = "dark",

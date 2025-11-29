@@ -7,7 +7,7 @@
 const CONFIG = {
   API_BASE_URL: "/api",
   TIMEOUTS: {
-    GENERATE: 180000, // 180s (3min) for generate - Gemini API responses can be slow (106+ seconds observed)
+    GENERATE: 600000, // 600s (10min) for generate - Large ebooks (20 pages) can take 5+ minutes with Gemini
     OVERRIDE: 10000, // 10s for override
     THEMES: 5000, // 5s for themes
   },
