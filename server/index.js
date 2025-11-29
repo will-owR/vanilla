@@ -1035,12 +1035,23 @@ app.post("/override", (req, res) => {
 app.post("/api/export", async (req, res) => {
   try {
     console.log(
-      "[EXPORT-EP] Received export request, delegating to orchestrator"
+      "[EXPORT-EP] /api/export: Received export request, delegating to pipeline"
     );
     console.log("[EXPORT-EP] Request body keys:", Object.keys(req.body || {}));
 
-    // STEP 1: Delegate ALL content handling to genieService orchestrator
-    const pdfBuffer = await genieService.exportContent(req.body);
+    // STEP 1: Use unified export pipeline
+    const { prompt, theme, pageCount } = req.body;
+
+    if (!prompt) {
+      throw new Error("Export requires prompt parameter");
+    }
+
+    const exportPipeline = require("./exportPipeline");
+    const pdfBuffer = await exportPipeline.exportEbook(prompt, {
+      theme,
+      pageCount: parseInt(pageCount) || undefined,
+      validate: !!req.body.validate,
+    });
 
     // Validate pdfBuffer was returned
     if (!pdfBuffer || !(pdfBuffer instanceof Buffer)) {
@@ -1057,18 +1068,22 @@ app.post("/api/export", async (req, res) => {
     res.setHeader("Content-Length", pdfBuffer.length);
     res.end(pdfBuffer);
 
-    console.log("[EXPORT-EP] PDF sent successfully, size:", pdfBuffer.length);
+    console.log(
+      "[EXPORT-EP] /api/export: PDF sent successfully, size:",
+      pdfBuffer.length
+    );
   } catch (error) {
-    console.error("[EXPORT-EP] Export failed:", error.message);
+    console.error("[EXPORT-EP] /api/export: Export failed:", error.message);
     console.error("[EXPORT-EP] Error stack:", error.stack);
 
     // Determine appropriate HTTP status based on error type
     let statusCode = 500;
     if (
       error.message.includes("not found") ||
-      error.message.includes("Result not found")
+      error.message.includes("Result not found") ||
+      error.message.includes("missing required")
     ) {
-      statusCode = 404;
+      statusCode = error.message.includes("missing required") ? 400 : 404;
     } else if (error.message.includes("Invalid export packet")) {
       statusCode = 400;
     }
@@ -1260,15 +1275,47 @@ app.post("/export", async (req, res) => {
     sendValidationError,
     sendProcessingError,
   } = require("./utils/errorHandler");
-  // Accept only canonical envelope format with pages array
+  // Accept both canonical envelope format AND direct prompt parameter
+  // For canonical envelope (old path): requires pages array
+  // For prompt parameter (new unified path): uses exportPipeline
   try {
     const envelope = req.body || {};
+
+    // NEW: Check if this is a prompt-based export (new unified path)
+    if (envelope.prompt && !envelope.pages) {
+      console.log(
+        "[EXPORT-EP] /export: Using unified pipeline for prompt-based export"
+      );
+      const exportPipeline = require("./exportPipeline");
+      const pdfBuffer = await exportPipeline.exportEbook(envelope.prompt, {
+        theme: envelope.theme,
+        pageCount: envelope.pageCount
+          ? parseInt(envelope.pageCount)
+          : undefined,
+        validate: !!envelope.validate,
+      });
+
+      if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer)) {
+        return sendProcessingError(res, "PDF Generation Failed: empty buffer", {
+          code: "PDF_GENERATION_ERROR",
+        });
+      }
+
+      res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.end(pdfBuffer);
+      return;
+    }
+
+    // OLD: Keep canonical envelope path for backwards compatibility
+    console.log("[EXPORT-EP] /export: Using canonical envelope path");
 
     // Validate canonical envelope structure
     if (!envelope || !Array.isArray(envelope.pages)) {
       return sendValidationError(
         res,
-        "Export requires canonical envelope with pages array"
+        "Export requires either: (1) prompt parameter with unified pipeline, or (2) canonical envelope with pages array"
       );
     }
 
