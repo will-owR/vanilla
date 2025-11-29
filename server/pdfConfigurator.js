@@ -24,7 +24,7 @@ function getDefaultOptions() {
     },
     displayHeaderFooter: false,
     printBackground: true,
-    timeout: 60000, // 60 seconds
+    timeout: 90000, // 90 seconds (increased for larger documents)
     preferCSSPageSize: true,
   };
 }
@@ -147,17 +147,17 @@ function getQualityOptions(quality = "medium") {
   const qualityProfiles = {
     low: {
       scale: 0.8,
-      timeout: 30000,
+      timeout: 45000, // Shorter for lower quality
       printBackground: false,
     },
     medium: {
       scale: 1.0,
-      timeout: 60000,
+      timeout: 90000, // Standard for medium quality
       printBackground: true,
     },
     high: {
       scale: 1.2,
-      timeout: 120000,
+      timeout: 120000, // Higher for better quality (increased from 120s)
       printBackground: true,
     },
   };

@@ -179,10 +179,15 @@ class PuppeteerBridge {
       // Create new page
       page = await this.browser.newPage();
 
-      // Set HTML content with network idle timeout
-      await page.setContent(html, { waitUntil: "networkidle0" });
+      // Set HTML content with DOM load (not full network idle for faster rendering)
+      // Use timeout from options, or default to 60s
+      const setContentTimeout = options.timeout || 60000;
+      await page.setContent(html, {
+        waitUntil: "load", // Wait for DOM load, not strict networkidle0
+        timeout: setContentTimeout,
+      });
 
-      // Wait for fonts to load
+      // Wait for fonts to load (with timeout)
       try {
         await page.evaluate(() => {
           return new Promise((resolve) => {
