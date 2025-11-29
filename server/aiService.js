@@ -106,6 +106,59 @@ class RealAIService {
       metadata,
     };
   }
+
+  /**
+   * Generate content with model rotation for quota distribution
+   * Structure calls (index=0) use gemini-1.5-pro (primary model)
+   * Chapter calls (index>0) use gemini-2.5-flash (secondary model)
+   * This distributes the 10 req/min free tier quota across two separate models
+   * @param {string} prompt - The prompt text
+   * @param {number} callIndex - Index of the call (0=structure, 1+=chapters)
+   * @returns {Promise<Object>} Generated content
+   */
+  async generateContentWithRotation(prompt, callIndex = 0) {
+    if (typeof prompt !== "string" || !prompt.trim()) {
+      throw new Error("Prompt must be a non-empty string");
+    }
+
+    // Check if alternate model URL is available for chapters
+    const hasCapsule2Model = !!process.env.GEMINI_API_URL_TEXT_CAPSULE2;
+    if (!hasCapsule2Model) {
+      // Fall back to standard generation if no alternate model
+      return this.generateContent(prompt);
+    }
+
+    // callIndex=0: Structure (gemini-1.5-pro, primary)
+    // callIndex>0: Chapters (gemini-2.5-flash, secondary/capsule2)
+    const useSecondaryModel = callIndex > 0;
+
+    if (useSecondaryModel) {
+      console.log(
+        `[QUOTA] Call ${callIndex}: Using gemini-2.5-flash (GEMINI_API_URL_TEXT_CAPSULE2)`
+      );
+      // Temporarily use secondary model URL
+      const primaryUrl =
+        process.env.GEMINI_API_URL_TEXT || process.env.GEMINI_API_URL;
+      process.env.GEMINI_API_URL_TEXT =
+        process.env.GEMINI_API_URL_TEXT_CAPSULE2;
+
+      try {
+        // Clear cached gemini client to force URL reload
+        this._gemini = null;
+        const result = await this.generateContent(prompt);
+        return result;
+      } finally {
+        // Restore primary model URL
+        process.env.GEMINI_API_URL_TEXT = primaryUrl;
+        this._gemini = null;
+      }
+    } else {
+      console.log(
+        `[QUOTA] Call ${callIndex}: Using gemini-1.5-pro (GEMINI_API_URL_TEXT) - PRIMARY MODEL`
+      );
+      return this.generateContent(prompt);
+    }
+  }
 }
 
 function createAIService() {

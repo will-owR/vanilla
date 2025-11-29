@@ -85,6 +85,19 @@ async function handle(payload, classification) {
     };
   }
 
+  // Strategy: To avoid Gemini free tier quota limits (10 requests/min per key),
+  // distribute calls across different modalities if available:
+  // - Structure call uses primary TEXT modality
+  // - Chapter calls can use secondary API key if configured (GEMINI_API_KEY_TEXT_ALT)
+  // This allows us to distribute quota load: 1 structure + 12 chapters = 13 calls
+  // If using 2 keys: 1+6.5 = 7.5 each (under 10 req/min limit)
+  const useSecondaryKey = !!process.env.GEMINI_API_KEY_TEXT_ALT;
+  console.log(
+    "[EBOOK] Secondary API key available:",
+    useSecondaryKey,
+    "- Will use for chapter generation"
+  );
+
   try {
     // Conversation 1: Request structure (try to get JSON from AI)
     console.log("[EBOOK] Starting ebookService.handle()");
@@ -100,7 +113,10 @@ async function handle(payload, classification) {
       prompt
     )}\"\n\nReturn JSON with keys: title, chapters (number), outline: [{ chapter, title, estimated_topics: [] }]`;
 
-    let structureResp = await aiSvc.generateContent(structurePrompt);
+    // Use call index 0 for structure (primary model: gemini-1.5-pro)
+    let structureResp = await (aiSvc.generateContentWithRotation
+      ? aiSvc.generateContentWithRotation(structurePrompt, 0)
+      : aiSvc.generateContent(structurePrompt));
     let structure = null;
 
     // Try to parse JSON from AI response body or title
@@ -209,7 +225,10 @@ async function handle(payload, classification) {
           }: Calling aiSvc.generateContent()`
         );
         const chapterStartTime = Date.now();
-        chapterResp = await aiSvc.generateContent(contentPrompt);
+        // Use call index (i+1) for chapters, enabling quota rotation
+        chapterResp = aiSvc.generateContentWithRotation
+          ? await aiSvc.generateContentWithRotation(contentPrompt, i + 1)
+          : await aiSvc.generateContent(contentPrompt);
         const chapterEndTime = Date.now();
         console.log(
           `[EBOOK] Chapter ${i + 1}/${
