@@ -86,16 +86,13 @@ async function handle(payload, classification) {
   }
 
   // Strategy: To avoid Gemini free tier quota limits (10 requests/min per key),
-  // distribute calls across different modalities if available:
-  // - Structure call uses primary TEXT modality
-  // - Chapter calls can use secondary API key if configured (GEMINI_API_KEY_TEXT_ALT)
-  // This allows us to distribute quota load: 1 structure + 12 chapters = 13 calls
-  // If using 2 keys: 1+6.5 = 7.5 each (under 10 req/min limit)
-  const useSecondaryKey = !!process.env.GEMINI_API_KEY_TEXT_ALT;
+  // distribute calls across different models:
+  // - Structure call uses Gemini 2.5 Pro (primary, callIndex=0)
+  // - Chapter calls use Gemini 2.5 Flash (secondary, callIndex=1+)
+  // Single API key accesses both models, distributing quota:
+  // 1 structure + N chapters = quota spread across two model quotas
   console.log(
-    "[EBOOK] Secondary API key available:",
-    useSecondaryKey,
-    "- Will use for chapter generation"
+    "[EBOOK] Using model rotation: Pro for structure, Flash for chapters"
   );
 
   try {
@@ -113,7 +110,7 @@ async function handle(payload, classification) {
       prompt
     )}\"\n\nReturn JSON with keys: title, chapters (number), outline: [{ chapter, title, estimated_topics: [] }]`;
 
-    // Use call index 0 for structure (primary model: gemini-1.5-pro)
+    // Use call index 0 for structure (primary model: Gemini 2.5 Pro)
     let structureResp = await (aiSvc.generateContentWithRotation
       ? aiSvc.generateContentWithRotation(structurePrompt, 0)
       : aiSvc.generateContent(structurePrompt));
@@ -222,10 +219,12 @@ async function handle(payload, classification) {
         console.log(
           `[EBOOK] Chapter ${i + 1}/${
             structure.outline.length
-          }: Calling aiSvc.generateContent()`
+          }: Calling aiSvc.generateContentWithRotation() with callIndex=${
+            i + 1
+          }`
         );
         const chapterStartTime = Date.now();
-        // Use call index (i+1) for chapters, enabling quota rotation
+        // Use call index (i+1) for chapters, enabling quota rotation to Gemini 2.5 Flash
         chapterResp = aiSvc.generateContentWithRotation
           ? await aiSvc.generateContentWithRotation(contentPrompt, i + 1)
           : await aiSvc.generateContent(contentPrompt);

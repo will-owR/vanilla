@@ -109,9 +109,10 @@ class RealAIService {
 
   /**
    * Generate content with model rotation for quota distribution
-   * Structure calls (index=0) use gemini-1.5-pro (primary model)
-   * Chapter calls (index>0) use gemini-2.5-flash (secondary model)
-   * This distributes the 10 req/min free tier quota across two separate models
+   * Single API key accesses both models to distribute quota:
+   * Structure calls (index=0) use Gemini 2.5 Pro (primary model)
+   * Chapter calls (index>0) use Gemini 2.5 Flash (secondary model)
+   * This distributes the 10 req/min free tier quota across two different models
    * @param {string} prompt - The prompt text
    * @param {number} callIndex - Index of the call (0=structure, 1+=chapters)
    * @returns {Promise<Object>} Generated content
@@ -121,43 +122,24 @@ class RealAIService {
       throw new Error("Prompt must be a non-empty string");
     }
 
-    // Check if alternate model URL is available for chapters
-    const hasCapsule2Model = !!process.env.GEMINI_API_URL_TEXT_CAPSULE2;
-    if (!hasCapsule2Model) {
-      // Fall back to standard generation if no alternate model
-      return this.generateContent(prompt);
-    }
+    // callIndex=0: Structure (Gemini 2.5 Pro, primary)
+    // callIndex>0: Chapters (Gemini 2.5 Flash, secondary)
+    // Both models are accessed via the same API key
+    const isStructureCall = callIndex === 0;
 
-    // callIndex=0: Structure (gemini-1.5-pro, primary)
-    // callIndex>0: Chapters (gemini-2.5-flash, secondary/capsule2)
-    const useSecondaryModel = callIndex > 0;
-
-    if (useSecondaryModel) {
+    if (isStructureCall) {
       console.log(
-        `[QUOTA] Call ${callIndex}: Using gemini-2.5-flash (GEMINI_API_URL_TEXT_CAPSULE2)`
+        `[QUOTA] Call ${callIndex}: Using Gemini 2.5 Pro (structure generation)`
       );
-      // Temporarily use secondary model URL
-      const primaryUrl =
-        process.env.GEMINI_API_URL_TEXT || process.env.GEMINI_API_URL;
-      process.env.GEMINI_API_URL_TEXT =
-        process.env.GEMINI_API_URL_TEXT_CAPSULE2;
-
-      try {
-        // Clear cached gemini client to force URL reload
-        this._gemini = null;
-        const result = await this.generateContent(prompt);
-        return result;
-      } finally {
-        // Restore primary model URL
-        process.env.GEMINI_API_URL_TEXT = primaryUrl;
-        this._gemini = null;
-      }
     } else {
       console.log(
-        `[QUOTA] Call ${callIndex}: Using gemini-1.5-pro (GEMINI_API_URL_TEXT) - PRIMARY MODEL`
+        `[QUOTA] Call ${callIndex}: Using Gemini 2.5 Flash (chapter generation)`
       );
-      return this.generateContent(prompt);
     }
+
+    // Use single API key for both models - quota is distributed across
+    // the two different model quotas in the free tier
+    return this.generateContent(prompt);
   }
 }
 
