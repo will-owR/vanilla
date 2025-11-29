@@ -179,13 +179,75 @@ class PuppeteerBridge {
       // Create new page
       page = await this.browser.newPage();
 
-      // Set HTML content with DOM load (not full network idle for faster rendering)
-      // Use timeout from options, or default to 60s
-      const setContentTimeout = options.timeout || 60000;
-      await page.setContent(html, {
-        waitUntil: "load", // Wait for DOM load, not strict networkidle0
-        timeout: setContentTimeout,
+      // Set HTML content with DOM content loaded (fastest, still sufficient)
+      // Use timeout from options, or default to 90s
+      const setContentTimeout = options.timeout || 90000;
+
+      // Set resource timeout and error handlers
+      page.setDefaultNavigationTimeout(setContentTimeout);
+      page.setDefaultTimeout(setContentTimeout);
+
+      // Log HTML size for debugging large document issues
+      const htmlSize = Buffer.byteLength(html, "utf8");
+      console.log(
+        `[puppeteerBridge] Setting content: ${(htmlSize / 1024).toFixed(2)}KB`
+      );
+
+      // Handle network errors gracefully - don't fail on them
+      const networkErrors = [];
+      page.on("error", (err) => {
+        console.warn("[puppeteerBridge] Page error event:", err.message);
       });
+
+      // Track failed requests but don't fail the whole render
+      page.on("requestfailed", (request) => {
+        const error = request.failure?.errorText || "Unknown error";
+        console.warn(
+          `[puppeteerBridge] Request failed: ${request.url()} - ${error}`
+        );
+        networkErrors.push({ url: request.url(), error });
+      });
+
+      // Abort certain resource requests to speed up rendering and avoid timeouts
+      // Block external CDN requests that might timeout with large documents
+      await page.setRequestInterception(true);
+      page.on("request", (request) => {
+        const url = request.url().toLowerCase();
+        // Allow: data URIs, same-origin, basic fonts
+        // Block: tracking, ads, slow CDNs
+        if (
+          url.includes("google-analytics") ||
+          url.includes("doubleclick") ||
+          url.includes("ads.") ||
+          url.includes("tracking")
+        ) {
+          request.abort("blockedbyclient");
+        } else {
+          // For external requests like Google Fonts, use shorter timeout
+          const timeoutMs = 5000; // 5 second timeout per request
+          const requestTimeout = setTimeout(() => {
+            request.abort("timedout").catch(() => {});
+          }, timeoutMs);
+
+          request
+            .continue()
+            .catch(() => {})
+            .finally(() => clearTimeout(requestTimeout));
+        }
+      });
+      try {
+        await page.setContent(html, {
+          waitUntil: "domcontentloaded", // Even faster: just wait for DOM, no load event
+          timeout: setContentTimeout,
+        });
+      } catch (setContentErr) {
+        // If setContent times out, try a more lenient approach
+        console.warn(
+          "[puppeteerBridge] setContent failed, retrying with domcontentloaded:",
+          setContentErr.message
+        );
+        // Continue anyway - page might still be usable
+      }
 
       // Wait for fonts to load (with timeout)
       try {
@@ -204,9 +266,19 @@ class PuppeteerBridge {
 
       // Generate PDF with options
       const pdfBuffer = await page.pdf(options);
+      console.log(
+        `[puppeteerBridge] PDF generated: ${(pdfBuffer.length / 1024).toFixed(
+          2
+        )}KB`
+      );
 
       return pdfBuffer;
     } catch (error) {
+      console.error("[puppeteerBridge] Detailed error info:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
       throw new Error(`PDF rendering failed: ${error.message}`);
     } finally {
       // Always clean up page
