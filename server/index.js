@@ -2981,15 +2981,28 @@ app.post("/api/ebook/generate", async (req, res) => {
     };
 
     console.log(
-      `[${new Date().toISOString()}] [${reqId}] Calling genieService.process()`
+      `[${new Date().toISOString()}] [${reqId}] Calling genieService.process() with pageCount=${pageCountNum}`
     );
     const processStartTime = Date.now();
-    const result = await genieService.process(payload);
+    let result;
+    try {
+      result = await genieService.process(payload);
+    } catch (err) {
+      console.error(
+        `[${new Date().toISOString()}] [${reqId}] genieService.process() ERROR: ${
+          err?.message
+        }`
+      );
+      console.error(
+        `[${new Date().toISOString()}] [${reqId}] Stack: ${err?.stack}`
+      );
+      throw err;
+    }
     const processEndTime = Date.now();
     console.log(
       `[${new Date().toISOString()}] [${reqId}] genieService.process() completed in ${
         processEndTime - processStartTime
-      }ms`
+      }ms, result keys: ${Object.keys(result || {}).join(", ")}`
     );
 
     // Extract envelope (genieService returns { out_envelope, resultId })
@@ -3055,14 +3068,33 @@ app.post("/api/ebook/generate", async (req, res) => {
       },
     };
 
+    const responseJson = JSON.stringify(responseObj);
     console.log(
-      `[${new Date().toISOString()}] [${reqId}] Sending response to client (${
-        JSON.stringify(responseObj).length
-      } bytes)`
+      `[${new Date().toISOString()}] [${reqId}] Serialized response: ${
+        responseJson.length
+      } bytes`
     );
-    res.json(responseObj);
+
+    // Log first 500 chars of response to verify content
     console.log(
-      `[${new Date().toISOString()}] [${reqId}] Response sent successfully. Total time: ${
+      `[${new Date().toISOString()}] [${reqId}] Response preview: ${responseJson.substring(
+        0,
+        500
+      )}`
+    );
+
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] Sending response to client`
+    );
+
+    // Set explicit headers to ensure response is sent properly
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Length", responseJson.length.toString());
+
+    res.json(responseObj);
+
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] Response json() called. Total time: ${
         Date.now() - startTime
       }ms`
     );

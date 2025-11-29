@@ -793,6 +793,11 @@ const genieService = {
       throw new Error("compose: requires structured data with pages array");
     }
 
+    console.log(
+      "[COMPOSE] Starting compose with",
+      structuredData.pages.length,
+      "pages"
+    );
     const { pages, metadata = {} } = structuredData;
     const {
       theme = "dark",
@@ -800,6 +805,15 @@ const genieService = {
       fontSizeScale = 1.0,
       density = "medium",
     } = metadata;
+
+    console.log(
+      "[COMPOSE] theme:",
+      theme,
+      "colorPalette:",
+      colorPalette,
+      "density:",
+      density
+    );
 
     // Theme color system
     const themeColors = {
@@ -1096,6 +1110,10 @@ const genieService = {
 </html>
 `;
 
+    console.log(
+      "[COMPOSE] HTML generation complete, length:",
+      finalHtml.length
+    );
     return finalHtml;
   },
 

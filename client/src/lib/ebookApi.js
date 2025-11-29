@@ -25,10 +25,27 @@ async function fetchWithTimeout(url, options, timeoutMs) {
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    console.log(
+      `[API] Starting fetch to ${url.replace(CONFIG.API_BASE_URL, "")}`
+    );
     const response = await fetch(url, {
       ...options,
       signal: controller.signal,
     });
+
+    console.log(
+      `[API] Response received - Status: ${
+        response.status
+      }, Content-Type: ${response.headers.get("content-type")}`
+    );
+    const contentLength = response.headers.get("content-length");
+    if (contentLength) {
+      console.log(
+        `[API] Content-Length header: ${(
+          parseInt(contentLength) / 1024
+        ).toFixed(2)}KB`
+      );
+    }
 
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
@@ -37,14 +54,47 @@ async function fetchWithTimeout(url, options, timeoutMs) {
       );
     }
 
-    return await response.json();
+    // Parse response with detailed error handling
+    try {
+      console.log(`[API] Attempting to parse JSON response...`);
+      const text = await response.text();
+      console.log(`[API] Raw response text length: ${text.length} bytes`);
+      console.log(`[API] First 200 chars: ${text.substring(0, 200)}`);
+      console.log(`[API] Last 100 chars: ${text.substring(text.length - 100)}`);
+
+      const data = JSON.parse(text);
+      console.log(
+        `[API] JSON parsed successfully. Result keys: ${Object.keys(data).join(
+          ", "
+        )}`
+      );
+      if (data.html) {
+        console.log(
+          `[API] HTML content length: ${(data.html.length / 1024).toFixed(2)}KB`
+        );
+      }
+      if (data.chapters && Array.isArray(data.chapters)) {
+        console.log(`[API] Chapters count: ${data.chapters.length}`);
+      }
+      return data;
+    } catch (parseErr) {
+      console.error(`[API] JSON parse error:`, parseErr);
+      console.error(`[API] Parse error details:`, {
+        name: parseErr.name,
+        message: parseErr.message,
+        stack: parseErr.stack,
+      });
+      throw parseErr;
+    }
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
       throw new Error(`Request timeout after ${timeoutMs}ms`);
     }
     if (err instanceof TypeError) {
+      console.error(`[API] TypeError caught:`, err.message);
       throw new Error(`Network error: ${err.message}`);
     }
+    console.error(`[API] Error:`, err);
     throw err;
   } finally {
     clearTimeout(timeoutId);

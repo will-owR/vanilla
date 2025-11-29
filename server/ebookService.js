@@ -87,6 +87,9 @@ async function handle(payload, classification) {
 
   try {
     // Conversation 1: Request structure (try to get JSON from AI)
+    console.log("[EBOOK] Starting ebookService.handle()");
+    console.log("[EBOOK] pageCount:", pageCount);
+    console.log("[EBOOK] theme:", theme);
     console.log("[GEMINI] Conversation 1 - Requesting structure");
     console.log(
       "[GEMINI] Prompt topic:",
@@ -165,15 +168,28 @@ async function handle(payload, classification) {
         chapters: outline.length,
         outline,
       };
+      console.log(
+        "[EBOOK] Using fallback structure with",
+        outline.length,
+        "chapters"
+      );
     }
 
     // Conversation 2+: Sequential per-chapter generation
     const chapters = [];
+    console.log(
+      "[EBOOK] Starting chapter generation loop, outline length:",
+      structure.outline.length
+    );
     for (let i = 0; i < structure.outline.length; i++) {
       const ch = structure.outline[i];
       const prevSummary = i > 0 ? chapters[i - 1].summary || "" : "";
 
-      console.log("[GEMINI] Conversation 2 - Generating chapter:", ch.title);
+      console.log(
+        `[EBOOK] Chapter ${i + 1}/${
+          structure.outline.length
+        }: Starting generation for "${ch.title}"`
+      );
 
       const contentPrompt = `You are writing Chapter ${ch.chapter}: \"${
         ch.title
@@ -187,9 +203,27 @@ async function handle(payload, classification) {
 
       let chapterResp = null;
       try {
+        console.log(
+          `[EBOOK] Chapter ${i + 1}/${
+            structure.outline.length
+          }: Calling aiSvc.generateContent()`
+        );
+        const chapterStartTime = Date.now();
         chapterResp = await aiSvc.generateContent(contentPrompt);
+        const chapterEndTime = Date.now();
+        console.log(
+          `[EBOOK] Chapter ${i + 1}/${
+            structure.outline.length
+          }: AI response received in ${chapterEndTime - chapterStartTime}ms`
+        );
       } catch (err) {
         // Non-fatal: fall back to simple generated content
+        console.error(
+          `[EBOOK] Chapter ${i + 1}/${
+            structure.outline.length
+          }: AI generation failed, using fallback`
+        );
+        console.error(`[EBOOK] Error: ${err?.message}`);
         chapterResp = {
           content: {
             title: ch.title,
@@ -305,6 +339,12 @@ async function handle(payload, classification) {
       content: c.content,
       image: c.image,
     }));
+
+    console.log(
+      "[EBOOK] Chapter generation complete, total chapters:",
+      chapters.length
+    );
+    console.log("[EBOOK] Returning structured envelope");
 
     // Return structured envelope following README contract
     return {
