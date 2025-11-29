@@ -22,33 +22,66 @@ try {
   }
 }
 
-const serviceState = require("./index").serviceState || {};
-
 /**
  * PuppeteerBridge - Singleton browser manager
+ *
+ * Uses the global browserInstance from index.js if available.
+ * Falls back to launching its own browser if needed.
  */
 class PuppeteerBridge {
   constructor() {
     this.browser = null;
     this.isConnected = false;
+    this._globalBrowserAttempted = false;
+  }
+
+  /**
+   * Try to use the global browser instance from index.js
+   */
+  _tryUseGlobalBrowser() {
+    if (this._globalBrowserAttempted) {
+      return; // Already tried
+    }
+    this._globalBrowserAttempted = true;
+
+    try {
+      const indexModule = require("./index");
+      if (indexModule.browser) {
+        this.browser = indexModule.browser;
+        this.isConnected = true;
+        console.log(
+          "[puppeteerBridge] Using global browser instance from index.js"
+        );
+      }
+    } catch (e) {
+      // index.js not available or browser not initialized yet
+      // Will attempt local initialization below
+    }
   }
 
   /**
    * Initialize browser instance
    *
-   * Starts Puppeteer browser with appropriate configuration.
-   * Should be called once on server startup.
+   * Uses global browser from index.js if available.
+   * Falls back to launching its own browser if needed.
    *
-   * @returns {Promise<Browser>} Browser instance
+   * @returns {Promise<any>} Browser instance
    * @throws {Error} If startup fails
    */
   async initBrowser() {
-    if (this.browser) {
+    if (this.browser && this.isConnected) {
       console.log("[puppeteerBridge] Browser already initialized");
       return this.browser;
     }
 
     try {
+      // Try to use global browser from index.js first
+      this._tryUseGlobalBrowser();
+      if (this.browser && this.isConnected) {
+        return this.browser;
+      }
+
+      // Fall back to launching our own browser
       if (!puppeteer) {
         throw new Error("Puppeteer not available");
       }
@@ -76,7 +109,7 @@ class PuppeteerBridge {
           this.browser = await puppeteer.launch(launchOptions);
           this.isConnected = true;
           console.log(
-            `[puppeteerBridge] ✓ Browser initialized (attempt ${attempt})`
+            `[puppeteerBridge] ✓ Browser initialized locally (attempt ${attempt})`
           );
           return this.browser;
         } catch (err) {

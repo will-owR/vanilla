@@ -1031,7 +1031,7 @@ app.post("/override", (req, res) => {
 });
 
 // --- PDF EXPORT ENDPOINT ---
-// Backwards-compatible export endpoint: accept GET with query or POST with JSON body
+// Unified export endpoint: prompt-based LLM generation only
 app.post("/api/export", async (req, res) => {
   try {
     console.log(
@@ -1039,8 +1039,8 @@ app.post("/api/export", async (req, res) => {
     );
     console.log("[EXPORT-EP] Request body keys:", Object.keys(req.body || {}));
 
-    // STEP 1: Use unified export pipeline
-    const { prompt, theme, pageCount } = req.body;
+    // STEP 1: Use unified export pipeline (prompt-based only)
+    const { prompt, theme, pageCount, quality, validate } = req.body;
 
     if (!prompt) {
       throw new Error("Export requires prompt parameter");
@@ -1050,7 +1050,8 @@ app.post("/api/export", async (req, res) => {
     const pdfBuffer = await exportPipeline.exportEbook(prompt, {
       theme,
       pageCount: parseInt(pageCount) || undefined,
-      validate: !!req.body.validate,
+      quality,
+      validate: !!validate,
     });
 
     // Validate pdfBuffer was returned
@@ -1081,9 +1082,16 @@ app.post("/api/export", async (req, res) => {
     if (
       error.message.includes("not found") ||
       error.message.includes("Result not found") ||
-      error.message.includes("missing required")
+      error.message.includes("missing required") ||
+      error.message.includes("Export requires") ||
+      error.message.includes("Invalid ebook")
     ) {
-      statusCode = error.message.includes("missing required") ? 400 : 404;
+      statusCode =
+        error.message.includes("missing required") ||
+        error.message.includes("Export requires") ||
+        error.message.includes("Invalid ebook")
+          ? 400
+          : 404;
     } else if (error.message.includes("Invalid export packet")) {
       statusCode = 400;
     }

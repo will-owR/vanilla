@@ -38,6 +38,11 @@ async function renderFullHTML(html, options = {}) {
       );
     }
 
+    // Ensure browser is initialized
+    if (!puppeteerBridge.isConnected) {
+      await puppeteerBridge.initBrowser();
+    }
+
     // Merge with defaults
     const config = {
       ...pdfConfigurator.getDefaultOptions(),
@@ -198,6 +203,11 @@ async function renderStackBased(envelope, options = {}) {
       </html>
     `;
 
+    // Ensure browser is initialized
+    if (!puppeteerBridge.isConnected) {
+      await puppeteerBridge.initBrowser();
+    }
+
     // Merge with defaults
     const config = {
       ...pdfConfigurator.getDefaultOptions(),
@@ -234,6 +244,11 @@ async function renderWrapped(body, title, options = {}) {
     // Validate body
     if (!body || typeof body !== "string") {
       throw new Error("renderWrapped: body must be non-empty string");
+    }
+
+    // Ensure browser is initialized
+    if (!puppeteerBridge.isConnected) {
+      await puppeteerBridge.initBrowser();
     }
 
     // Wrap in basic HTML structure
