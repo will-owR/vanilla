@@ -4,13 +4,13 @@
  * Tests for batchBuilder.js, batchRequestor.js, batchResponseParser.js
  * Covers: Happy path, error paths, edge cases, integration flow
  *
- * Run: npm test -- __tests__/batchChapterProcessing.test.js
+ * Run: npm test -- __tests__/batchChapterProcessing.test.mjs
  */
 
-const { describe, it, expect, beforeEach, afterEach, vi } = require("vitest");
-const batchBuilder = require("../../server/batchChapterProcessing/batchBuilder");
-const batchRequestor = require("../../server/batchChapterProcessing/batchRequestor");
-const batchResponseParser = require("../../server/batchChapterProcessing/batchResponseParser");
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import batchBuilder from "../batchChapterProcessing/batchBuilder.js";
+import batchRequestor from "../batchChapterProcessing/batchRequestor.js";
+import batchResponseParser from "../batchChapterProcessing/batchResponseParser.js";
 
 // ============================================================================
 // BATCH BUILDER TESTS

@@ -8,8 +8,8 @@
  * Phase 2: Error Recovery
  */
 
-const aiService = require("../../aiService");
-const batchResponseParser = require("../batchResponseParser");
+import aiService from "../../aiService.js";
+import batchResponseParser from "../batchResponseParser.js";
 
 /**
  * Recover from batch failure by requesting chapters individually
@@ -248,7 +248,7 @@ function _formatNarrativeContext(context) {
 // EXPORTS
 // ============================================================================
 
-module.exports = {
+export default {
   recoverWithIndividualRequests,
   sleep,
 };

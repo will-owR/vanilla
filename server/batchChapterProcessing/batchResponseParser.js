@@ -414,7 +414,7 @@ function _buildContinuityNotes(chapters, previousContext) {
 // EXPORTS
 // ============================================================================
 
-module.exports = {
+export default {
   parseBatchResponse,
   validateChapterObject,
   mergeWithPreviousContext,

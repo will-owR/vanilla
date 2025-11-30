@@ -219,7 +219,7 @@ function sleep(milliseconds) {
 // EXPORTS
 // ============================================================================
 
-module.exports = {
+export default {
   handleRateLimit,
   calculateBackoffTime,
   retryWithBackoff,

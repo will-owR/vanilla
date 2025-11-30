@@ -268,6 +268,6 @@ function _conceptFromTopics(topics) {
 // EXPORTS
 // ============================================================================
 
-module.exports = {
+export default {
   createFallbackChapter,
 };

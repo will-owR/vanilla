@@ -4,14 +4,14 @@
  * Tests for throttledFallback, rateLimitBackoff, fallbackChapterGenerator
  * and integrated batchProcessingWithRecovery
  *
- * Run: npm test -- __tests__/batchChapterProcessing-phase2.test.js
+ * Run: npm test -- __tests__/batchChapterProcessing-phase2.test.mjs
  */
 
-const { describe, it, expect, beforeEach, vi } = require("vitest");
-const throttledFallback = require("../../server/batchChapterProcessing/errorRecovery/throttledFallback");
-const rateLimitBackoff = require("../../server/batchChapterProcessing/errorRecovery/rateLimitBackoff");
-const fallbackChapterGenerator = require("../../server/batchChapterProcessing/errorRecovery/fallbackChapterGenerator");
-const batchRecovery = require("../../server/batchChapterProcessing/batchProcessingWithRecovery");
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import throttledFallback from "../batchChapterProcessing/errorRecovery/throttledFallback.js";
+import rateLimitBackoff from "../batchChapterProcessing/errorRecovery/rateLimitBackoff.js";
+import fallbackChapterGenerator from "../batchChapterProcessing/errorRecovery/fallbackChapterGenerator.js";
+import batchRecovery from "../batchChapterProcessing/batchProcessingWithRecovery.js";
 
 // ============================================================================
 // THROTTLED FALLBACK TESTS

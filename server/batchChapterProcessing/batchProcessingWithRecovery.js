@@ -12,12 +12,12 @@
  * Phase 1 + Phase 2: Complete Resilience Pipeline
  */
 
-const batchBuilder = require("./batchBuilder");
-const batchRequestor = require("./batchRequestor");
-const batchResponseParser = require("./batchResponseParser");
-const throttledFallback = require("./errorRecovery/throttledFallback");
-const rateLimitBackoff = require("./errorRecovery/rateLimitBackoff");
-const fallbackChapterGenerator = require("./errorRecovery/fallbackChapterGenerator");
+import batchBuilder from "./batchBuilder.js";
+import batchRequestor from "./batchRequestor.js";
+import batchResponseParser from "./batchResponseParser.js";
+import throttledFallback from "./errorRecovery/throttledFallback.js";
+import rateLimitBackoff from "./errorRecovery/rateLimitBackoff.js";
+import fallbackChapterGenerator from "./errorRecovery/fallbackChapterGenerator.js";
 
 /**
  * Process batch with automatic error recovery
@@ -297,7 +297,7 @@ async function processBatchWithRecovery(
 // EXPORTS
 // ============================================================================
 
-module.exports = {
+export default {
   processBatchWithRecovery,
 
   // Direct access to sub-modules for fine-grained control
