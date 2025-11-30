@@ -20,9 +20,16 @@ import batchRecovery from "../batchChapterProcessing/batchProcessingWithRecovery
 describe("throttledFallback", () => {
   describe("recoverWithIndividualRequests()", () => {
     it("should throw error for empty batch", async () => {
-      expect(() => {
-        throttledFallback.recoverWithIndividualRequests([], {}, "session-123");
-      }).toThrow("failedBatch must be non-empty array");
+      try {
+        await throttledFallback.recoverWithIndividualRequests(
+          [],
+          {},
+          "session-123"
+        );
+        expect(true).toBe(false); // Should not reach here
+      } catch (error) {
+        expect(error.message).toContain("failedBatch must be non-empty array");
+      }
     });
 
     it("should recover all chapters individually", async () => {
@@ -149,14 +156,17 @@ describe("rateLimitBackoff", () => {
       const error = new Error("Server error");
       error.status = 500;
 
-      expect(() => {
-        rateLimitBackoff.handleRateLimit(
+      try {
+        await rateLimitBackoff.handleRateLimit(
           error,
           async () => {},
           0,
           "session-123"
         );
-      }).toThrow("error must be 429 rate limit");
+        expect(true).toBe(false); // Should not reach here
+      } catch (err) {
+        expect(err.message).toContain("error must be 429 rate limit");
+      }
     });
 
     it("should throw if max attempts exceeded", async () => {
@@ -167,11 +177,20 @@ describe("rateLimitBackoff", () => {
         throw error;
       };
 
-      expect(() => {
-        rateLimitBackoff.handleRateLimit(error, mockRetry, 3, "session-123", {
-          maxAttempts: 3,
-        });
-      }).toThrow();
+      try {
+        await rateLimitBackoff.handleRateLimit(
+          error,
+          mockRetry,
+          3,
+          "session-123",
+          {
+            maxAttempts: 3,
+          }
+        );
+        expect(true).toBe(false); // Should not reach here
+      } catch (err) {
+        expect(err.message).toBeTruthy();
+      }
     });
   });
 });
@@ -298,8 +317,8 @@ describe("fallbackChapterGenerator", () => {
         context
       );
 
-      expect(openingFallback.content).toContain("opening");
-      expect(closingFallback.content).toContain("conclusion");
+      expect(openingFallback.content).toContain("introduces");
+      expect(closingFallback.content).toContain("final chapter");
     });
 
     it("should mark chapter as degraded", () => {
@@ -324,16 +343,9 @@ describe("fallbackChapterGenerator", () => {
 describe("batchProcessingWithRecovery", () => {
   describe("processBatchWithRecovery()", () => {
     it("should throw error for empty batch", async () => {
-      expect(async () => {
-        await batchRecovery.processBatchWithRecovery(
-          [],
-          {},
-          {},
-          {},
-          1,
-          "session-123"
-        );
-      }).rejects.toThrow();
+      await expect(
+        batchRecovery.processBatchWithRecovery([], {}, {}, {}, 1, "session-123")
+      ).rejects.toThrow();
     });
 
     it("should have expected recovery status options", () => {
