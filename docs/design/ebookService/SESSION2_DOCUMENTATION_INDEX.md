@@ -163,16 +163,16 @@ curl ... # Terminal 2 (see QUICK_START_REAL_AI.md)
 }
 ```
 
-### Key Differences (1.5 vs 2.5)
+### Gemini 2.5 Feature Comparison
 
-| Feature       | 1.5-Pro  | 2.5 Flash   | 2.5 Pro     |
-| ------------- | -------- | ----------- | ----------- |
-| Text gen      | Yes      | ✅ Yes      | Yes         |
-| Vision        | Yes      | N/A         | ✅ Yes      |
-| `role`        | Optional | ✅ Required | ✅ Required |
-| `inline_data` | Limited  | N/A         | ✅ Yes      |
-| Speed         | 5-10s    | ✅ <2s      | 5-10s       |
-| Cost          | Higher   | ✅ Lowest   | Medium      |
+| Feature       | 2.5 Flash   | 2.5 Pro     |
+| ------------- | ----------- | ----------- |
+| Text gen      | ✅ Yes      | Yes         |
+| Vision        | N/A         | ✅ Yes      |
+| `role`        | ✅ Required | ✅ Required |
+| `inline_data` | N/A         | ✅ Yes      |
+| Speed         | ✅ <2s      | 5-10s       |
+| Cost          | ✅ Lowest   | Medium      |
 
 ---
 

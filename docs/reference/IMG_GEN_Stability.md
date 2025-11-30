@@ -2,12 +2,12 @@ Of course. Here is a complete, runnable code sample that implements the "Orchest
 
 ### Clarification on Model Roles
 
-First, a quick and important clarification on the models. The quote from our previous conversation mentioned `gemini-pro-vision`.
+For this workflow:
 
-- **`gemini-pro-vision`** is for when you want the AI to _look at and understand an image_ you provide.
-- **`gemini-1.5-pro-latest`** is for when you want the AI to _understand and process text_ (like a poem).
+- **`gemini-2.5-flash`** is recommended for text processing and creative tasks like poem generation.
+- **`gemini-2.5-pro`** can be used for more complex reasoning and visual understanding.
 
-For your goal of creating an image _from_ a poem, you need the text model (`gemini-1.5-pro-latest`) to perform the creative "thinking" and translation steps. The code below uses the correct model for the job.
+For your goal of creating an image _from_ a poem, you need a text-capable model to process and understand the poem, then generate a visual prompt. The Gemini 2.5 models handle this workflow efficiently. The code below uses the appropriate model for the job.
 
 ---
 

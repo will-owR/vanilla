@@ -66,7 +66,7 @@ inline_data: {
 
 - Added Codespaces as "Option 1 - Already Configured ✅"
 - Added comprehensive Gemini 2.5 payload format examples
-- Added comparison table: 1.5-Pro vs 2.5 Flash vs 2.5 Pro
+- Added comparison table: 2.5 Flash vs 2.5 Pro
 - Kept local dev and Docker options for those not using Codespaces
 
 #### QUICK_START_REAL_AI.md

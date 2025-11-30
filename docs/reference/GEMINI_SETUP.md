@@ -182,7 +182,6 @@ The configuration uses Gemini 2.5 Flash by default:
 
 - `gemini-2.5-flash`: Fastest, best for real-time, 1M tokens context
 - `gemini-2.5-pro`: More capable, slower, higher cost, 2M tokens context
-- `gemini-1.5-pro`: Previous generation, use if 2.5 unavailable
 
 To switch models, update the URL in your environment variables:
 
@@ -264,17 +263,17 @@ Use this for image understanding and complex reasoning tasks:
 - Higher accuracy for visual reasoning
 - Supports JPEG, PNG, WebP, GIF
 
-### Key Differences from Gemini 1.5
+### Gemini 2.5 Feature Comparison
 
-| Feature       | 1.5-Pro   | 2.5 Flash   | 2.5 Pro     |
-| ------------- | --------- | ----------- | ----------- |
-| Multimodal    | Yes       | Yes         | Yes         |
-| Mixed parts   | Limited   | ✅ Full     | ✅ Full     |
-| Speed         | Slower    | ✅ Fast     | Medium      |
-| Cost          | Higher    | ✅ Lower    | Medium      |
-| Context       | 1M tokens | 1M tokens   | 2M tokens   |
-| `role` field  | Optional  | ✅ Required | ✅ Required |
-| `inline_data` | Different | ✅ Standard | ✅ Standard |
+| Feature       | 2.5 Flash   | 2.5 Pro     |
+| ------------- | ----------- | ----------- |
+| Multimodal    | Yes         | Yes         |
+| Mixed parts   | ✅ Full     | ✅ Full     |
+| Speed         | ✅ Fast     | Medium      |
+| Cost          | ✅ Lower    | Medium      |
+| Context       | 1M tokens   | 2M tokens   |
+| `role` field  | ✅ Required | ✅ Required |
+| `inline_data` | ✅ Standard | ✅ Standard |
 
 ## Cost Considerations
 

@@ -196,15 +196,15 @@ curl -X POST http://localhost:3000/api/ebook/generate \
 }
 ```
 
-### Key Differences from 1.5
+### Gemini 2.5 Feature Comparison
 
-| Feature      | 1.5-Pro  | 2.5 Flash   | 2.5 Pro       |
-| ------------ | -------- | ----------- | ------------- |
-| `role` field | Optional | ✅ Required | ✅ Required   |
-| Image format | `image`  | N/A         | `inline_data` |
-| Mixed parts  | Limited  | N/A         | ✅ Full       |
-| Speed        | Slower   | ✅ <2s      | Medium        |
-| Cost         | Higher   | ✅ Lowest   | Medium        |
+| Feature      | 2.5 Flash   | 2.5 Pro       |
+| ------------ | ----------- | ------------- |
+| `role` field | ✅ Required | ✅ Required   |
+| Image format | N/A         | `inline_data` |
+| Mixed parts  | N/A         | ✅ Full       |
+| Speed        | ✅ <2s      | Medium        |
+| Cost         | ✅ Lowest   | Medium        |
 
 ---
 
