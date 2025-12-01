@@ -311,7 +311,7 @@ function _extractUnfinishedPlots(chapters, previousContext) {
 // EXPORTS
 // ============================================================================
 
-export default {
+module.exports = {
   buildBatchPrompt,
   extractContextFromBatch,
 };

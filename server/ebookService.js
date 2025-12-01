@@ -237,194 +237,209 @@ async function handle(payload, classification) {
     }
 
     // Conversation 2+: Sequential per-chapter generation
-    const chapters = [];
-    console.log(
-      "[EBOOK] Starting chapter generation loop, outline length:",
-      structure.outline.length
-    );
-    for (let i = 0; i < structure.outline.length; i++) {
-      const ch = structure.outline[i];
-      const prevSummary = i > 0 ? chapters[i - 1].summary || "" : "";
+    // Phase 5: Module 5.1 Integration
+    // Use batch processing orchestrator instead of sequential generation
+    let chapters = [];
+
+    try {
+      const batchOrchestrator = require("./batchChapterProcessing/batchProcessingOrchestrator");
 
       console.log(
-        `[EBOOK] Chapter ${i + 1}/${
-          structure.outline.length
-        }: Starting generation for "${ch.title}"`
+        "[EBOOK] Using batch processing orchestrator for chapter generation"
       );
 
-      const contentPrompt = `You are writing Chapter ${ch.chapter}: \"${
-        ch.title
-      }\"\n\nContext: Total eBook: ${pageCount} pages. This chapter ${
-        ch.chapter
-      } of ${structure.outline.length}. Key topics: ${(
-        ch.estimated_topics || []
-      ).join(
-        ", "
-      )}. Previous summary: ${prevSummary}\n\nReturn JSON: { chapter: number, title: string, content: string, summary: string, image: { concept: string, suggested_style: string, tone: string } }`;
-
-      let chapterResp = null;
-      try {
-        console.log(
-          `[EBOOK] Chapter ${i + 1}/${
-            structure.outline.length
-          }: Calling aiSvc.generateContentWithRotation() with callIndex=${
-            i + 1
-          }`
-        );
-        const chapterStartTime = Date.now();
-        // Use call index (i+1) for chapters, enabling quota rotation to Gemini 2.5 Flash
-        chapterResp = aiSvc.generateContentWithRotation
-          ? await aiSvc.generateContentWithRotation(contentPrompt, i + 1)
-          : await aiSvc.generateContent(contentPrompt);
-        const chapterEndTime = Date.now();
-        console.log(
-          `[EBOOK] Chapter ${i + 1}/${
-            structure.outline.length
-          }: AI response received in ${chapterEndTime - chapterStartTime}ms`
-        );
-        // Record per-chapter metrics (best-effort)
-        try {
-          if (
-            METRICS &&
-            _sessionId &&
-            typeof METRICS.recordIndividualChapter === "function"
-          ) {
-            METRICS.recordIndividualChapter(_sessionId, {
-              chapter: i + 1,
-              duration: chapterEndTime - chapterStartTime,
-              status: "success",
-            });
-          }
-        } catch (me) {
-          console.warn(
-            "Metrics.recordIndividualChapter failed:",
-            me && me.message
-          );
-        }
-      } catch (err) {
-        // Non-fatal: fall back to simple generated content
-        console.error(
-          `[EBOOK] Chapter ${i + 1}/${
-            structure.outline.length
-          }: AI generation failed, using fallback`
-        );
-        console.error(`[EBOOK] Error: ${err?.message}`);
-        chapterResp = {
-          content: {
-            title: ch.title,
-            body: `Content for ${ch.title}\n\n${String(prompt).slice(0, 200)}`,
+      // Generate chapters using batch pipeline with metrics
+      const batchedChapters =
+        await batchOrchestrator.generateChaptersWithBatching(
+          aiSvc,
+          structure.outline,
+          {
+            pageCount,
+            title: String(prompt).slice(0, 100),
+            theme,
           },
-        };
-        // Record failure in metrics (best-effort)
-        try {
-          const failEnd = Date.now();
-          if (
-            METRICS &&
-            _sessionId &&
-            typeof METRICS.recordIndividualChapter === "function"
-          ) {
-            METRICS.recordIndividualChapter(_sessionId, {
-              chapter: i + 1,
-              duration:
-                failEnd -
-                (typeof chapterStartTime === "number" ? chapterStartTime : 0),
-              status: "failure",
-            });
-          }
-        } catch (me) {
-          /* ignore */
-        }
-      }
-
-      const chapterText =
-        (chapterResp &&
-          (chapterResp.content?.body ||
-            chapterResp.content?.title ||
-            chapterResp.rawText)) ||
-        "";
-      let chapterData = tryParse(chapterText);
-
-      if (!chapterData) {
-        // heuristics to build chapterData
-        const body =
-          chapterText && chapterText.length > 0
-            ? chapterText
-            : `Placeholder content for ${ch.title}.`;
-
-        // Try to extract image fields from plain text (e.g. JSON-like snippets)
-        let extractedConcept = null;
-        let extractedStyle = null;
-        let extractedTone = null;
-        try {
-          const mConcept = String(chapterText).match(
-            /"concept"\s*:\s*"([^"]+)"/i
-          );
-          if (mConcept) extractedConcept = mConcept[1];
-          const mStyle = String(chapterText).match(
-            /"suggested_style"\s*:\s*"([^"]+)"/i
-          );
-          if (mStyle) extractedStyle = mStyle[1];
-          const mTone = String(chapterText).match(/"tone"\s*:\s*"([^"]+)"/i);
-          if (mTone) extractedTone = mTone[1];
-        } catch (e) {
-          // ignore extraction errors
-        }
-
-        // If the active AI service is the built-in MockAIService used in tests,
-        // prefer a deterministic concept so unit tests can assert reliably.
-        const isBuiltinMock = !!(
-          aiSvc &&
-          aiSvc.constructor &&
-          aiSvc.constructor.name === "MockAIService"
+          structure,
+          _sessionId
         );
 
-        chapterData = {
-          chapter: ch.chapter || i + 1,
-          title: ch.title || `Chapter ${i + 1}`,
-          content: body,
-          summary: (body || "").split("\n").slice(0, 1).join(" ").slice(0, 200),
-          image: {
-            concept:
-              extractedConcept ||
-              (isBuiltinMock
-                ? `Concept ${ch.chapter || i + 1}`
-                : `Illustration for ${ch.title}`),
-            suggested_style: extractedStyle || null,
-            tone: extractedTone || "neutral",
-          },
-        };
-      }
-
-      // Determine image style (theme default + optional AI suggestion)
-      const themeDefaults = {
-        dark: "gothic",
-        light: "bright",
-        corporate: "professional",
-        bold: "vibrant",
-      };
-      const aiSuggested =
-        chapterData.image && chapterData.image.suggested_style;
-      const style =
-        aiSuggested && typeof aiSuggested === "string"
-          ? aiSuggested
-          : themeDefaults[theme] || "gothic";
-
-      chapters.push({
-        id: `ch_${i + 1}`,
-        chapter: chapterData.chapter || i + 1,
-        title: chapterData.title || ch.title || `Chapter ${i + 1}`,
-        content: chapterData.content || "",
-        summary: chapterData.summary || "",
+      chapters = batchedChapters.map((ch, idx) => ({
+        id: ch.id || `ch_${idx + 1}`,
+        chapter: ch.chapter,
+        title: ch.title,
+        content: ch.content,
+        summary: ch.summary,
         image: {
-          concept:
-            (chapterData.image && chapterData.image.concept) ||
-            `A scene representing ${ch.title}`,
-          style,
-          tone: (chapterData.image && chapterData.image.tone) || "neutral",
+          concept: ch.image?.concept || `A scene representing ${ch.title}`,
+          style:
+            ch.image?.style ||
+            {
+              dark: "gothic",
+              light: "bright",
+              corporate: "professional",
+              bold: "vibrant",
+            }[theme] ||
+            "gothic",
+          tone: ch.image?.tone || "neutral",
           palette_hint: colorPalette,
           size_hint: "full-width",
         },
-      });
+        degraded: ch.degraded || false,
+        degradation_reason: ch.degradation_reason || null,
+      }));
+
+      console.log(
+        "[EBOOK] Batch processing complete, chapters:",
+        chapters.length
+      );
+    } catch (batchErr) {
+      // Fallback: if batch orchestrator fails, fall back to sequential generation
+      console.warn(
+        "[EBOOK] Batch orchestrator failed:",
+        batchErr && batchErr.message
+      );
+      console.log("[EBOOK] Falling back to sequential chapter generation");
+
+      for (let i = 0; i < structure.outline.length; i++) {
+        const ch = structure.outline[i];
+        const prevSummary = i > 0 ? chapters[i - 1].summary || "" : "";
+
+        console.log(
+          `[EBOOK] Chapter ${i + 1}/${
+            structure.outline.length
+          }: Fallback generation for "${ch.title}"`
+        );
+
+        const contentPrompt = `You are writing Chapter ${ch.chapter}: \"${
+          ch.title
+        }\"\n\nContext: Total eBook: ${pageCount} pages. This chapter ${
+          ch.chapter
+        } of ${structure.outline.length}. Key topics: ${(
+          ch.estimated_topics || []
+        ).join(
+          ", "
+        )}. Previous summary: ${prevSummary}\n\nReturn JSON: { chapter: number, title: string, content: string, summary: string, image: { concept: string, suggested_style: string, tone: string } }`;
+
+        let chapterResp = null;
+        try {
+          const chapterStartTime = Date.now();
+          chapterResp = aiSvc.generateContentWithRotation
+            ? await aiSvc.generateContentWithRotation(contentPrompt, i + 1)
+            : await aiSvc.generateContent(contentPrompt);
+          const chapterEndTime = Date.now();
+
+          try {
+            if (
+              METRICS &&
+              _sessionId &&
+              typeof METRICS.recordIndividualChapter === "function"
+            ) {
+              METRICS.recordIndividualChapter(_sessionId, {
+                chapter: i + 1,
+                duration: chapterEndTime - chapterStartTime,
+                status: "success",
+                reason: "fallback_sequential",
+              });
+            }
+          } catch (me) {
+            console.warn(
+              "Metrics.recordIndividualChapter failed:",
+              me && me.message
+            );
+          }
+        } catch (err) {
+          console.error(
+            `[EBOOK] Fallback generation failed for Chapter ${i + 1}: ${
+              err?.message
+            }`
+          );
+          chapterResp = {
+            content: {
+              title: ch.title,
+              body: `Content for ${ch.title}\n\n${String(prompt).slice(
+                0,
+                200
+              )}`,
+            },
+          };
+
+          try {
+            if (
+              METRICS &&
+              _sessionId &&
+              typeof METRICS.recordFallback === "function"
+            ) {
+              METRICS.recordFallback(
+                _sessionId,
+                i + 1,
+                "fallback_sequential_failed"
+              );
+            }
+          } catch (me) {
+            /* ignore */
+          }
+        }
+
+        const chapterText =
+          (chapterResp &&
+            (chapterResp.content?.body ||
+              chapterResp.content?.title ||
+              chapterResp.rawText)) ||
+          "";
+        let chapterData = tryParse(chapterText);
+
+        if (!chapterData) {
+          const body =
+            chapterText && chapterText.length > 0
+              ? chapterText
+              : `Placeholder content for ${ch.title}.`;
+
+          chapterData = {
+            chapter: ch.chapter || i + 1,
+            title: ch.title || `Chapter ${i + 1}`,
+            content: body,
+            summary: (body || "")
+              .split("\n")
+              .slice(0, 1)
+              .join(" ")
+              .slice(0, 200),
+            image: {
+              concept: `Illustration for ${ch.title}`,
+              suggested_style: null,
+              tone: "neutral",
+            },
+          };
+        }
+
+        const themeDefaults = {
+          dark: "gothic",
+          light: "bright",
+          corporate: "professional",
+          bold: "vibrant",
+        };
+        const aiSuggested =
+          chapterData.image && chapterData.image.suggested_style;
+        const style =
+          aiSuggested && typeof aiSuggested === "string"
+            ? aiSuggested
+            : themeDefaults[theme] || "gothic";
+
+        chapters.push({
+          id: `ch_${i + 1}`,
+          chapter: chapterData.chapter || i + 1,
+          title: chapterData.title || ch.title || `Chapter ${i + 1}`,
+          content: chapterData.content || "",
+          summary: chapterData.summary || "",
+          image: {
+            concept:
+              (chapterData.image && chapterData.image.concept) ||
+              `A scene representing ${ch.title}`,
+            style,
+            tone: (chapterData.image && chapterData.image.tone) || "neutral",
+            palette_hint: colorPalette,
+            size_hint: "full-width",
+          },
+        });
+      }
     }
 
     const density =

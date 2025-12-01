@@ -7,7 +7,7 @@
  * Phase 1: Batch Infrastructure
  */
 
-import aiService from "../aiService.js";
+const { createAIService } = require("../aiService");
 
 /**
  * Send a batch request to Gemini API with performance tracking
@@ -274,7 +274,7 @@ function _createError(type, message, context) {
 // EXPORTS
 // ============================================================================
 
-export default {
+module.exports = {
   sendBatchRequest,
   parseBatchResponse,
 };
