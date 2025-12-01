@@ -10,6 +10,13 @@
 const batchBuilder = require("./batchBuilder");
 const batchRequestor = require("./batchRequestor");
 const batchResponseParser = require("./batchResponseParser");
+// Metrics (optional) - record batch success/failure when sessionId provided
+let METRICS;
+try {
+  METRICS = require("../metrics/GenerationMetrics");
+} catch (e) {
+  METRICS = null;
+}
 
 /**
  * Execute complete batch processing pipeline
@@ -66,6 +73,23 @@ async function processBatch(
     );
 
     const duration = Date.now() - startTime;
+    // Record metrics if sessionId provided
+    try {
+      if (METRICS && sessionId) {
+        METRICS.recordBatchSuccess(sessionId, {
+          batchNumber: null,
+          chapters: batch.map((b) => b.chapter),
+          status: "success",
+          duration,
+          timestamp: new Date(),
+          attempts: 1,
+          tokensUsed: requestResult.metadata.tokensUsed,
+        });
+      }
+    } catch (e) {
+      // Non-fatal: metrics failure should not break pipeline
+      console.warn("Metrics.recordBatchSuccess failed:", e && e.message);
+    }
 
     return {
       success: parseResult.success,
@@ -82,6 +106,21 @@ async function processBatch(
     };
   } catch (error) {
     const duration = Date.now() - startTime;
+    // Record failure to metrics if possible
+    try {
+      if (METRICS && sessionId) {
+        METRICS.recordBatchFailure(sessionId, {
+          batchNumber: null,
+          chapters: batch.map((b) => b.chapter),
+          status: "failed",
+          duration,
+          timestamp: new Date(),
+          attempts: 1,
+        });
+      }
+    } catch (e) {
+      console.warn("Metrics.recordBatchFailure failed:", e && e.message);
+    }
 
     console.error(
       `[BATCH PROCESSOR] Batch processing failed: ${error.message}`

@@ -98,3 +98,31 @@ model Calendar {
   name      String
   createdAt DateTime @default(now())
 }
+
+// Metrics models for observability (Phase 4)
+model MetricsSession {
+  id           Int      @id @default(autoincrement())
+  sessionId    String   @unique
+  startTime    DateTime
+  endTime      DateTime?
+  ebookMetadata Json
+  summary      Json?
+  createdAt    DateTime @default(now())
+  events       MetricsEvent[]
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model MetricsEvent {
+  id        Int      @id @default(autoincrement())
+  sessionId String
+  type      String   @db.VarChar(100)
+  payload   Json
+  timestamp DateTime @default(now())
+
+  session   MetricsSession @relation(fields: [sessionId], references: [sessionId])
+
+  @@index([sessionId])
+  @@index([timestamp])
+}

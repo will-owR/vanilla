@@ -10,6 +10,14 @@
 
 import aiService from "../../aiService.js";
 import batchResponseParser from "../batchResponseParser.js";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+let METRICS;
+try {
+  METRICS = require("../../metrics/GenerationMetrics");
+} catch (e) {
+  METRICS = null;
+}
 
 /**
  * Recover from batch failure by requesting chapters individually
@@ -90,6 +98,21 @@ async function recoverWithIndividualRequests(
       if (parseResult.success && parseResult.chapters.length > 0) {
         recovered.push(parseResult.chapters[0]);
         succeededAttempts++;
+
+        // Record individual chapter success in metrics
+        try {
+          if (METRICS && sessionId) {
+            METRICS.recordIndividualChapter(sessionId, {
+              chapter: chapterSpec.chapter,
+              status: "success",
+              duration: null,
+              timestamp: new Date(),
+              reason: "recovery_individual",
+            });
+          }
+        } catch (e) {
+          // Non-fatal
+        }
 
         if (global.__DEBUG_BATCH__) {
           console.log(

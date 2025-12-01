@@ -98,6 +98,32 @@ async function handle(payload, classification) {
   try {
     // Conversation 1: Request structure (try to get JSON from AI)
     console.log("[EBOOK] Starting ebookService.handle()");
+    // Optional metrics integration: if caller supplied a sessionId in
+    // payload.metadata.sessionId, record structure and per-chapter events.
+    let METRICS = null;
+    let _sessionId = null;
+    try {
+      METRICS = require("./metrics/GenerationMetrics");
+      _sessionId = payload && payload.metadata && payload.metadata.sessionId;
+      if (METRICS && _sessionId && typeof METRICS.getSession === "function") {
+        // Ensure session exists (startSession should have been called by exporter)
+        const s = METRICS.getSession(_sessionId);
+        if (!s) {
+          // If session wasn't created upstream, attempt a non-fatal start
+          try {
+            METRICS.startSession(_sessionId, {
+              pageCount,
+              title: String(prompt).slice(0, 100),
+            });
+          } catch (e) {
+            // ignore - best-effort
+          }
+        }
+      }
+    } catch (e) {
+      METRICS = null;
+      _sessionId = null;
+    }
     console.log("[EBOOK] pageCount:", pageCount);
     console.log("[EBOOK] theme:", theme);
     console.log("[GEMINI] Conversation 1 - Requesting structure");
@@ -111,9 +137,31 @@ async function handle(payload, classification) {
     )}\"\n\nReturn JSON with keys: title, chapters (number), outline: [{ chapter, title, estimated_topics: [] }]`;
 
     // Use call index 0 for structure (primary model: Gemini 2.5 Pro)
-    let structureResp = await (aiSvc.generateContentWithRotation
+    // Measure structure generation duration for metrics if enabled
+    let structureResp;
+    const structStart = Date.now();
+    structureResp = await (aiSvc.generateContentWithRotation
       ? aiSvc.generateContentWithRotation(structurePrompt, 0)
       : aiSvc.generateContent(structurePrompt));
+    const structEnd = Date.now();
+    try {
+      if (
+        METRICS &&
+        _sessionId &&
+        typeof METRICS.recordStructureGeneration === "function"
+      ) {
+        METRICS.recordStructureGeneration(_sessionId, {
+          duration: structEnd - structStart,
+          model: "structure",
+          raw:
+            structureResp && structureResp.rawText
+              ? structureResp.rawText
+              : undefined,
+        });
+      }
+    } catch (e) {
+      console.warn("Metrics.recordStructureGeneration failed:", e && e.message);
+    }
     let structure = null;
 
     // Try to parse JSON from AI response body or title
@@ -234,6 +282,25 @@ async function handle(payload, classification) {
             structure.outline.length
           }: AI response received in ${chapterEndTime - chapterStartTime}ms`
         );
+        // Record per-chapter metrics (best-effort)
+        try {
+          if (
+            METRICS &&
+            _sessionId &&
+            typeof METRICS.recordIndividualChapter === "function"
+          ) {
+            METRICS.recordIndividualChapter(_sessionId, {
+              chapter: i + 1,
+              duration: chapterEndTime - chapterStartTime,
+              status: "success",
+            });
+          }
+        } catch (me) {
+          console.warn(
+            "Metrics.recordIndividualChapter failed:",
+            me && me.message
+          );
+        }
       } catch (err) {
         // Non-fatal: fall back to simple generated content
         console.error(
@@ -248,6 +315,25 @@ async function handle(payload, classification) {
             body: `Content for ${ch.title}\n\n${String(prompt).slice(0, 200)}`,
           },
         };
+        // Record failure in metrics (best-effort)
+        try {
+          const failEnd = Date.now();
+          if (
+            METRICS &&
+            _sessionId &&
+            typeof METRICS.recordIndividualChapter === "function"
+          ) {
+            METRICS.recordIndividualChapter(_sessionId, {
+              chapter: i + 1,
+              duration:
+                failEnd -
+                (typeof chapterStartTime === "number" ? chapterStartTime : 0),
+              status: "failure",
+            });
+          }
+        } catch (me) {
+          /* ignore */
+        }
       }
 
       const chapterText =

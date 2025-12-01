@@ -1067,6 +1067,14 @@ app.post("/api/export", async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
     res.setHeader("Content-Length", pdfBuffer.length);
+    // Expose generation session id to clients so they can query metrics
+    try {
+      if (exportPipeline && exportPipeline._lastSessionId) {
+        res.setHeader("X-Generation-Session", exportPipeline._lastSessionId);
+      }
+    } catch (e) {
+      // ignore
+    }
     res.end(pdfBuffer);
 
     console.log(
@@ -3261,6 +3269,59 @@ app.post("/api/cache/clear", async (req, res) => {
 });
 
 // Centralized error handler (placed at end to capture errors from all routes)
+// --- METRICS ENDPOINTS (Phase 4: Observability) ---
+try {
+  const METRICS = require("./metrics/GenerationMetrics");
+  const reportingService = require("./metrics/reportingService");
+
+  // JSON report for a single session
+  app.get("/metrics/report/:sessionId", (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      if (!sessionId)
+        return res.status(400).json({ error: "sessionId required" });
+      try {
+        const report = reportingService.generateJsonReport(sessionId);
+        if (report && report.error)
+          return res.status(404).json({ error: report.error });
+        return res.status(200).json(report);
+      } catch (e) {
+        return res.status(500).json({ error: e.message });
+      }
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // CSV trending export - optional ?days parameter (ignored by in-memory store)
+  app.get("/metrics/trending", (req, res) => {
+    try {
+      const days = parseInt(req.query.days) || undefined;
+      const csv = reportingService.generateCsvReport(days);
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      return res.status(200).send(csv);
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Aggregated stats: e.g. /metrics/stats?pageCount=8
+  app.get("/metrics/stats", (req, res) => {
+    try {
+      const pageCount = req.query.pageCount
+        ? parseInt(req.query.pageCount)
+        : undefined;
+      const stats = reportingService.generateSummaryStats({ pageCount });
+      return res.status(200).json(stats);
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+} catch (e) {
+  // If metrics module fails to load, log and continue. Endpoints won't be available.
+  console.warn("Metrics endpoints disabled: ", e && e.message);
+}
+
 app.use((err, req, res, _next) => {
   const timestamp = new Date().toISOString();
   // Mark `_next` as used to satisfy linters while keeping the signature

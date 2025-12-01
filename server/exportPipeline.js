@@ -18,6 +18,14 @@ const { EbookContract, PDFEnvelopeContract } = require("./contracts");
 const { transformPages } = require("./dataTransforms");
 const pdfGenerator = require("./pdfGenerator");
 const exportService = require("./exportService");
+const { v4: uuidv4 } = require("uuid");
+let METRICS = null;
+try {
+  METRICS = require("./metrics/GenerationMetrics");
+} catch (e) {
+  // metrics optional — don't block exports if metrics module unavailable
+  METRICS = null;
+}
 
 /**
  * Unified export pipeline
@@ -46,6 +54,22 @@ const exportService = require("./exportService");
  */
 async function exportEbook(prompt, options = {}) {
   try {
+    // Start a metrics session for this export so downstream services
+    // can record events against the same sessionId.
+    const sessionId = uuidv4();
+    const pageCount = options.pageCount || 8;
+    try {
+      if (METRICS && typeof METRICS.startSession === "function") {
+        METRICS.startSession(sessionId, {
+          pageCount,
+          title: String(prompt).slice(0, 100),
+        });
+      }
+    } catch (e) {
+      console.warn("Metrics.startSession failed:", e && e.message);
+    }
+    // Expose the last session id for diagnostics and testability
+    module.exports._lastSessionId = sessionId;
     // Step 1: Generate ebook content
     console.log("[exportPipeline] Step 1: Generating ebook content");
     const payload = {
@@ -56,6 +80,11 @@ async function exportEbook(prompt, options = {}) {
         pageCount: options.pageCount || 8,
       },
     };
+
+    // Propagate sessionId so ebookService and other pipeline modules can
+    // attach metrics to this session.
+    payload.metadata = payload.metadata || {};
+    payload.metadata.sessionId = sessionId;
 
     const ebook = await ebookService.handle(payload);
     console.log("[exportPipeline] Step 1: ✓ Ebook generated");
@@ -91,6 +120,19 @@ async function exportEbook(prompt, options = {}) {
     }
 
     console.log(`[exportPipeline] ✓ Export complete: ${buffer.length} bytes`);
+
+    // Finalize metrics session now that export completed
+    try {
+      if (METRICS && typeof METRICS.finalizeSession === "function") {
+        METRICS.finalizeSession(sessionId);
+        console.log("Metrics: finalized session", sessionId);
+      }
+    } catch (e) {
+      console.warn("Metrics.finalizeSession failed:", e && e.message);
+    }
+    // Keep lastSessionId available after finalization
+    module.exports._lastSessionId = sessionId;
+
     return buffer;
   } catch (error) {
     console.error("[exportPipeline] Export failed:", error.message);

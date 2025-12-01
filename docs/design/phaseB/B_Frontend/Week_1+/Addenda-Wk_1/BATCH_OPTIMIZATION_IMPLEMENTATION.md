@@ -1004,5 +1004,32 @@ try {
 
 ---
 
-**Status**: Phase 1, 2, 3 COMPLETE & TESTED (all tests green)
-**Next Step**: Begin Phase 4 (Observability)
+**Status Update (Dec 1, 2025):**
+
+- **Phase 1, 2, 3:** COMPLETE & TESTED (all tests green)
+  - Batch infrastructure, error recovery, and mocking/testing modules are implemented and validated.
+- **Phase 4 (Observability):** PARTIALLY COMPLETE
+  - Metrics session lifecycle, in-memory and optional Prisma persistence, and metrics endpoints are implemented.
+  - End-to-end export→metrics test is passing.
+  - Prisma models for metrics are added; DB migration is pending due to baseline error (see current task).
+  - All server tests pass with in-memory metrics; DB persistence is best-effort and non-fatal.
+- **Phase 5 (Integration & Validation):** NOT STARTED
+  - Integration into `ebookService.js` and full validation tests remain.
+
+**Current Task (To Do Starting Point):**
+
+- Resolve Prisma migration baseline error so metrics DB persistence can be enabled in production/test environments.
+  - See error: `P3005: The database schema is not empty.`
+  - Next step: Baseline the existing database using `prisma migrate resolve --applied <migration_name>` for all migrations matching the current DB schema, then re-run `prisma migrate deploy`.
+
+**What Remains:**
+
+- Complete DB migration for metrics persistence (current task)
+- Integrate all modules into `ebookService.js` (Phase 5)
+- Run full end-to-end and performance validation tests
+- Prepare deployment checklist and documentation
+
+**References:**
+
+- [Prisma baseline docs](https://pris.ly/d/migrate-baseline)
+- See implementation summary above for completed and pending work.

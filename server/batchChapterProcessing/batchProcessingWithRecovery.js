@@ -19,6 +19,16 @@ import throttledFallback from "./errorRecovery/throttledFallback.js";
 import rateLimitBackoff from "./errorRecovery/rateLimitBackoff.js";
 import fallbackChapterGenerator from "./errorRecovery/fallbackChapterGenerator.js";
 
+// Import CJS metrics in ESM context
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+let METRICS;
+try {
+  METRICS = require("../metrics/GenerationMetrics");
+} catch (e) {
+  METRICS = null;
+}
+
 /**
  * Process batch with automatic error recovery
  *
@@ -108,6 +118,21 @@ async function processBatchWithRecovery(
       }
 
       const duration = Date.now() - startTime;
+      // Record batch success
+      try {
+        if (METRICS && sessionId) {
+          METRICS.recordBatchSuccess(sessionId, {
+            batchNumber: null,
+            chapters: batch.map((b) => b.chapter),
+            status: "success",
+            duration,
+            timestamp: new Date(),
+            attempts: 1,
+          });
+        }
+      } catch (e) {
+        console.warn("Metrics.recordBatchSuccess failed:", e && e.message);
+      }
       return {
         success: true,
         chapters: parseResult.chapters,
@@ -161,6 +186,26 @@ async function processBatchWithRecovery(
       (ch) => !recoveredChapters.find((rc) => rc.chapter === ch.chapter)
     );
 
+    // Record individual successes to metrics
+    try {
+      if (METRICS && sessionId && Array.isArray(individualResult.chapters)) {
+        individualResult.chapters.forEach((ch) => {
+          try {
+            METRICS.recordIndividualChapter(sessionId, {
+              chapter: ch.chapter,
+              status: "success",
+              duration: ch.duration || null,
+              timestamp: new Date(),
+              reason: "recovery_fallback",
+            });
+          } catch (e) {
+            // ignore per-chunk metric failures
+          }
+        });
+      }
+    } catch (e) {
+      console.warn("Metrics.recordIndividualChapter failed:", e && e.message);
+    }
     if (recoveredChapters.length > 0) {
       recoveryStatus = "individual_recovered";
       if (global.__DEBUG_BATCH__) {
@@ -252,6 +297,18 @@ async function processBatchWithRecovery(
         contextFromPrevious,
         "batch_and_individual_exhausted"
       );
+      // Record fallback usage in metrics
+      try {
+        if (METRICS && sessionId) {
+          METRICS.recordFallback(
+            sessionId,
+            chapterSpec.chapter,
+            "batch_and_individual_exhausted"
+          );
+        }
+      } catch (e) {
+        console.warn("Metrics.recordFallback failed:", e && e.message);
+      }
       degradedChapters.push(chapterSpec.chapter);
       return fallback;
     });
