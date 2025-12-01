@@ -3317,6 +3317,22 @@ try {
       return res.status(500).json({ error: e.message });
     }
   });
+
+  // Manual cleanup endpoint (Phase 4 optional)
+  // Removes sessions older than 7 days (or custom TTL if provided)
+  app.post("/metrics/cleanup", (req, res) => {
+    try {
+      const ttlMs =
+        req.body && req.body.ttlMs ? parseInt(req.body.ttlMs) : undefined;
+      const cleaned = METRICS.cleanupExpiredSessions(ttlMs);
+      return res.status(200).json({
+        message: `Cleaned up ${cleaned} expired sessions`,
+        sessionsRemoved: cleaned,
+      });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
 } catch (e) {
   // If metrics module fails to load, log and continue. Endpoints won't be available.
   console.warn("Metrics endpoints disabled: ", e && e.message);
