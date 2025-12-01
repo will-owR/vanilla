@@ -2,18 +2,209 @@
 // Behavior:
 // - If process.env.SIMULATE_AI_FAILURE is set ("1" or "true"), generateContent throws.
 // - Otherwise it returns a deterministic mock response matching tests' expectations.
+// - Phase 3: Enhanced with batch detection and chaos testing
 class MockAIService {
+  constructor(options = {}) {
+    this.options = options;
+    this.requestCount = 0;
+
+    // Chaos testing configuration (via environment variables)
+    this.batchFailureRate = parseFloat(
+      process.env.MOCK_BATCH_FAILURE_RATE || "0.0"
+    );
+    this.rateLimitRate = parseFloat(process.env.MOCK_RATE_LIMIT_RATE || "0.0");
+    this.timeoutRate = parseFloat(process.env.MOCK_TIMEOUT_RATE || "0.0");
+    this.chaosEnabled =
+      process.env.MOCK_CHAOS_ENABLED === "true" ||
+      process.env.MOCK_CHAOS_ENABLED === "1";
+
+    if (
+      this.chaosEnabled &&
+      (this.batchFailureRate > 0 ||
+        this.rateLimitRate > 0 ||
+        this.timeoutRate > 0)
+    ) {
+      console.log(
+        `[MOCK] Chaos testing enabled: batch_failure=${this.batchFailureRate}, ` +
+          `rate_limit=${this.rateLimitRate}, timeout=${this.timeoutRate}`
+      );
+    }
+  }
+
+  /**
+   * Detect if prompt is a batch request by checking structure
+   * @private
+   */
+  _isBatchRequest(prompt) {
+    if (!prompt || typeof prompt !== "string") return false;
+    // Extract the "Chapters to Generate" section specifically
+    const match = prompt.match(
+      /\*\*Chapters to Generate[^*]*\*\*(.+?)(?:\*\*|\n\n|$)/s
+    );
+    const chapterSection = match ? match[1] : prompt;
+    // Count different chapter patterns in the chapters section
+    const chapterMatches1 = (chapterSection.match(/Chapter \d+:/g) || [])
+      .length;
+    // JSON-like patterns: "chapter": 2
+    const chapterMatches2 = (chapterSection.match(/"chapter"\s*:\s*\d+/g) || [])
+      .length;
+    // Array/object indicator such as "chapters": [ ... ]
+    const chapterMatches3 = (chapterSection.match(/"chapters"\s*:\s*/g) || [])
+      .length;
+
+    const totalChapterMatches =
+      chapterMatches1 + chapterMatches2 + chapterMatches3;
+
+    return totalChapterMatches > 1 || prompt.includes("batch_request");
+  }
+
+  /**
+   * Apply chaos testing - simulate failures for testing recovery
+   * @private
+   */
+  _applyChaos() {
+    if (!this.chaosEnabled) return null;
+
+    const roll = Math.random();
+
+    if (roll < this.rateLimitRate) {
+      const error = new Error("Rate limit exceeded");
+      error.status = 429;
+      return error;
+    }
+
+    if (roll < this.rateLimitRate + this.timeoutRate) {
+      return new Error("Request timeout");
+    }
+
+    // Batch-specific failures
+    if (roll < this.rateLimitRate + this.timeoutRate + this.batchFailureRate) {
+      return new Error("Batch processing failed");
+    }
+
+    return null;
+  }
+
+  /**
+   * Generate mock batch response with multiple chapters
+   * @private
+   */
+  _generateBatchResponse(prompt, chapterCount) {
+    const chapters = [];
+
+    // Extract chapter specs from prompt if possible
+    const chapterPattern1 = /Chapter (\d+)[:\s]+([^,\n]+)/g;
+    const chapterPattern2 = /"chapter"\s*:\s*(\d+)/g;
+    let match;
+    const extractedChapters = [];
+    // First, try to extract "Chapter N: Title" patterns
+    while ((match = chapterPattern1.exec(prompt)) !== null) {
+      extractedChapters.push({
+        number: parseInt(match[1]),
+        title: match[2].trim(),
+      });
+    }
+    // If not enough, also extract JSON-like "chapter": N patterns
+    let match2;
+    while ((match2 = chapterPattern2.exec(prompt)) !== null) {
+      extractedChapters.push({
+        number: parseInt(match2[1]),
+        title: `Chapter ${match2[1]}: Mock Content`,
+      });
+    }
+
+    // Remove duplicates by chapter number
+    const seen = new Set();
+    const uniqueChapters = extractedChapters.filter((ch) => {
+      if (seen.has(ch.number)) return false;
+      seen.add(ch.number);
+      return true;
+    });
+
+    // Determine chapter count: use extracted, else fallback to argument
+    const finalChapterCount = Math.max(chapterCount, uniqueChapters.length);
+
+    for (let i = 0; i < finalChapterCount; i++) {
+      const extracted = uniqueChapters[i] || {};
+      const chapterNum = extracted.number || i + 1;
+      const title = extracted.title || `Chapter ${chapterNum}: Mock Content`;
+
+      chapters.push({
+        chapter: chapterNum,
+        title: title,
+        summary: `Summary of ${title}`,
+        content:
+          `This is mock content for ${title}. ` +
+          `It contains substantive narrative material with sufficient detail and length ` +
+          `to pass validation requirements. The content demonstrates the progression ` +
+          `of the narrative and character development throughout this chapter with ` +
+          `realistic descriptive passages and dialogue.`,
+        image: {
+          concept: "Scene",
+          style: "narrative",
+          tone: "engaging",
+        },
+      });
+    }
+
+    return {
+      chapters: chapters,
+      metadata: {
+        batchSize: finalChapterCount,
+        generatedAt: new Date().toISOString(),
+      },
+    };
+  }
+
   async generateContent(prompt) {
+    this.requestCount++;
+
     const fail = String(process.env.SIMULATE_AI_FAILURE || "").toLowerCase();
     if (fail === "1" || fail === "true") {
       throw new Error("simulated-ai-failure");
     }
 
+    // Apply chaos testing
+    const chaosError = this._applyChaos();
+    if (chaosError) {
+      console.log(
+        `[MOCK] Chaos: Simulating ${chaosError.message} (request #${this.requestCount})`
+      );
+      throw chaosError;
+    }
+
+    // Detect batch requests
+    const isBatch = this._isBatchRequest(prompt);
+    if (isBatch) {
+      // Extract chapter count from the "Chapters to Generate" section
+      const match = prompt.match(
+        /\*\*Chapters to Generate[^*]*\*\*(.+?)(?:\*\*|\n\n|$)/s
+      );
+      const chapterSection = match ? match[1] : prompt;
+      const chapterMatches = chapterSection.match(/Chapter \d+:/g) || [];
+      const chapterCount = Math.max(1, chapterMatches.length);
+
+      if (global.__DEBUG_BATCH__) {
+        console.log(
+          `[MOCK] Detected batch request with ${chapterCount} chapters`
+        );
+      }
+
+      return {
+        chapters: this._generateBatchResponse(prompt, chapterCount).chapters,
+      };
+    }
+
+    // Individual chapter request
     const title =
       typeof prompt === "string" && prompt.length > 0
         ? `Mock: ${prompt.split(" ").slice(0, 5).join(" ")}`
         : "Mock Title";
-    const body = `This is a mock response for prompt: ${String(prompt)}.`;
+    const body =
+      `This is a mock response for prompt. ` +
+      `The content contains substantive narrative material with sufficient detail and length ` +
+      `to pass validation requirements. Mock chapters demonstrate proper structure with ` +
+      `title, summary, content, and image information as expected by the batch processing pipeline.`;
     const layout = "poem-single-column";
     const metadata = {
       model: "mock-1",
