@@ -7,7 +7,7 @@
  * Phase 1: Batch Infrastructure
  */
 
-const { createAIService } = require("../aiService");
+const aiService = require("../aiService");
 
 /**
  * Send a batch request to Gemini API with performance tracking
