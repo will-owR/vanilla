@@ -3,6 +3,8 @@
 **Status**: ✅ Complete (November 30, 2025)  
 **Branch**: `feat/B_Frontend_option2`  
 **Commit**: (see git log)
+**Reference**: BATCH_OPTIMIZATION_ARCHITECTURE, BATCH_OPTIMIZATION_IMPLEMENTATION, and 
+BATCH_OPTIMIZATION_MODULE_SPECS.
 
 ## Overview
 
