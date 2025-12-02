@@ -1,8 +1,20 @@
-# Batch Optimization Reconfiguration
+# Batch Optimization Reconfiguration [REFERENCE ONLY - ARCHIVED]
+
+⚠️ **STATUS**: This document is **ARCHIVED AND FOR REFERENCE ONLY**.
+
+**Reason for Archive**: This document was created before the core optimization problem was fully clarified. It assumes arbitrary book sizes (up to 100+ pages) and proposes parallelization strategies that don't align with the actual constraints (3-20 page range, 10 req/min API rate limit).
+
+**Current Working Document**: See `BATCH-OPT_RECONFIG.md` for the active reconfiguration strategy based on the corrected problem statement.
+
+**Reference Use**: This document is kept for historical context and to understand the progression of design thinking. **Do not implement recommendations from this document.**
+
+---
+
+**Original Metadata** (for archive reference):
 
 **Date**: December 2, 2025  
-**Status**: 🟢 Decision Made / Implementation Roadmap Ready  
-**Scope**: Problem analysis + solution scenarios at architectural level  
+**Status**: 🟡 ARCHIVED / Superseded by BATCH-OPT_RECONFIG.md  
+**Scope**: Problem analysis + solution scenarios at architectural level (outdated scope)  
 **Audience**: Architects, Technical Leadership  
 **Branch**: `feat/B_Frontend_option2`
 
