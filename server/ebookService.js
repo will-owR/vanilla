@@ -242,55 +242,79 @@ async function handle(payload, classification) {
     let chapters = [];
 
     try {
-      const batchOrchestrator = require("./batchChapterProcessing/batchProcessingOrchestrator");
-
-      console.log(
-        "[EBOOK] Using batch processing orchestrator for chapter generation"
+      // Stage 1: Try batch optimization for page-level generation (3-20 pages)
+      const {
+        tryBatchOptimization,
+      } = require("./batchOptimization/ebookServiceAdapter");
+      const optimizedChapters = await tryBatchOptimization(
+        aiSvc,
+        {
+          title: String(prompt).slice(0, 100),
+          topic: theme,
+          targetAudience: "General",
+          tone: theme,
+        },
+        structure,
+        _sessionId
       );
 
-      // Generate chapters using batch pipeline with metrics
-      const batchedChapters =
-        await batchOrchestrator.generateChaptersWithBatching(
-          aiSvc,
-          structure.outline,
-          {
-            pageCount,
-            title: String(prompt).slice(0, 100),
-            theme,
-          },
-          structure,
-          _sessionId
+      if (optimizedChapters) {
+        chapters = optimizedChapters;
+        console.log(
+          "[EBOOK] Chapter generation completed via batch optimization"
+        );
+      } else {
+        // Fall back to chapter-level orchestrator
+        const batchOrchestrator = require("./batchChapterProcessing/batchProcessingOrchestrator");
+
+        console.log(
+          "[EBOOK] Using batch processing orchestrator for chapter generation"
         );
 
-      chapters = batchedChapters.map((ch, idx) => ({
-        id: ch.id || `ch_${idx + 1}`,
-        chapter: ch.chapter,
-        title: ch.title,
-        content: ch.content,
-        summary: ch.summary,
-        image: {
-          concept: ch.image?.concept || `A scene representing ${ch.title}`,
-          style:
-            ch.image?.style ||
+        // Generate chapters using batch pipeline with metrics
+        const batchedChapters =
+          await batchOrchestrator.generateChaptersWithBatching(
+            aiSvc,
+            structure.outline,
             {
-              dark: "gothic",
-              light: "bright",
-              corporate: "professional",
-              bold: "vibrant",
-            }[theme] ||
-            "gothic",
-          tone: ch.image?.tone || "neutral",
-          palette_hint: colorPalette,
-          size_hint: "full-width",
-        },
-        degraded: ch.degraded || false,
-        degradation_reason: ch.degradation_reason || null,
-      }));
+              pageCount,
+              title: String(prompt).slice(0, 100),
+              theme,
+            },
+            structure,
+            _sessionId
+          );
 
-      console.log(
-        "[EBOOK] Batch processing complete, chapters:",
-        chapters.length
-      );
+        chapters = batchedChapters.map((ch, idx) => ({
+          id: ch.id || `ch_${idx + 1}`,
+          chapter: ch.chapter,
+          title: ch.title,
+          content: ch.content,
+          summary: ch.summary,
+          image: {
+            concept: ch.image?.concept || `A scene representing ${ch.title}`,
+            style:
+              ch.image?.style ||
+              {
+                dark: "gothic",
+                light: "bright",
+                corporate: "professional",
+                bold: "vibrant",
+              }[theme] ||
+              "gothic",
+            tone: ch.image?.tone || "neutral",
+            palette_hint: colorPalette,
+            size_hint: "full-width",
+          },
+          degraded: ch.degraded || false,
+          degradation_reason: ch.degradation_reason || null,
+        }));
+
+        console.log(
+          "[EBOOK] Batch processing complete, chapters:",
+          chapters.length
+        );
+      }
     } catch (batchErr) {
       // Fallback: if batch orchestrator fails, fall back to sequential generation
       console.warn(
