@@ -10,6 +10,29 @@
 
 ---
 
+## Table of Contents
+
+1. [Overview](#overview) — What this document contains
+2. [Architecture Summary](#architecture-summary) — High-level flow and problem context
+3. [Module Architecture](#module-architecture) — File structure and organization
+4. [Core Module: BatchOptimizationService](#core-module-batchoptimizationservice) — Main service class and orchestration
+5. [Module: RateLimiter](#module-ratelimiter) — Queue management and rate limit enforcement
+6. [Module: GenerationMetrics](#module-generationmetrics) — Metrics collection and reporting
+7. [Module: ContentExtractors](#module-contentextractors) — Extract voice, tone, themes from content
+8. [Module: PromptTemplates](#module-prompttemplates) — Generate optimized prompts for each stage
+9. [Integration with Existing Services](#integration-with-existing-services) — How to integrate with ebookService
+10. [Error Handling & Recovery Strategy](#error-handling--recovery-strategy) — Decision trees and fallback logic
+11. [Testing Strategy](#testing-strategy) — Unit, integration, and performance testing
+12. [Observability & Monitoring](#observability--monitoring) — Metrics to track and alert on
+13. [Development Checklist](#development-checklist) — Phase-by-phase implementation tasks
+14. [Configuration](#configuration) — Environment variables and runtime options
+15. [Related Documents](#related-documents) — References to companion docs
+16. [FAQ](#faq) — Common questions and answers
+17. [Success Criteria (Stage 1)](#success-criteria-stage-1) — Completion metrics
+18. [Timeline Estimate](#timeline-estimate) — 2-week development roadmap
+
+---
+
 ## Overview
 
 This document provides a **complete, implementable blueprint** for Stage 1 of batch optimization. It includes:
