@@ -3,6 +3,8 @@
 **Date**: December 2, 2025  
 **Status**: ✅ Complete - Ready for testing
 
+**Reference**: See `BATCH-OPT_RECONFIG.md` for problem analysis + solution strategy.
+
 ## What Was Completed
 
 ### 1. Module Verification & Fixes
