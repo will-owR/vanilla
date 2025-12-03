@@ -32,6 +32,48 @@ function parseBatchResponse(response, expectedChapters = []) {
     throw new Error("parseBatchResponse: no chapters found in response");
   }
 
+  // =========================================================================
+  // DEBUG: Log batch response structure and chapter details
+  // =========================================================================
+  if (global.__DEBUG_BATCH__) {
+    console.log("[DEBUG] === BATCH RESPONSE ANALYSIS ===");
+    console.log(`[DEBUG] Total chapters in response: ${chaptersData.length}`);
+
+    console.log("[DEBUG] Chapter numbers received:");
+    chaptersData.forEach((ch, idx) => {
+      const contentPreview = ch.content
+        ? ch.content.substring(0, 50).replace(/\n/g, " ")
+        : "(empty)";
+      console.log(
+        `  [${idx}] Ch${ch.chapter}: "${ch.title}" (${
+          ch.content?.length || 0
+        } chars) - "${contentPreview}..."`
+      );
+    });
+
+    console.log(
+      `[DEBUG] Expected chapters: [${expectedChapters
+        .map((e) => e.chapter)
+        .join(", ")}]`
+    );
+    console.log(
+      `[DEBUG] Received chapters:  [${chaptersData
+        .map((c) => c.chapter)
+        .join(", ")}]`
+    );
+
+    // Check for chapter order mismatch
+    const receivedNumbers = chaptersData.map((c) => c.chapter);
+    const expectedNumbers = expectedChapters.map((e) => e.chapter);
+    const ordered = receivedNumbers.every(
+      (n, i) => i === 0 || n > receivedNumbers[i - 1]
+    );
+    console.log(
+      `[DEBUG] Chapter order: ${ordered ? "✓ ORDERED" : "❌ OUT OF ORDER"}`
+    );
+  }
+  // =========================================================================
+
   // Validate each chapter
   const validatedChapters = [];
   const validationIssues = [];
@@ -69,6 +111,11 @@ function parseBatchResponse(response, expectedChapters = []) {
       `[RESPONSE PARSER] Parsed ${validatedChapters.length}/${expectedChapters.length} chapters, ` +
         `missing=${missingChapters.length}, issues=${validationIssues.length}`
     );
+    if (missingChapters.length > 0) {
+      console.warn(
+        `[RESPONSE PARSER] ❌ Missing chapters: [${missingChapters.join(", ")}]`
+      );
+    }
   }
 
   return {
