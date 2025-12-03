@@ -180,6 +180,16 @@ async function handle(payload, classification) {
         // fall through to extraction
       }
 
+      // Strip markdown code blocks (e.g., ```json\n{...}\n```)
+      const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+      if (codeBlockMatch) {
+        try {
+          return JSON.parse(codeBlockMatch[1]);
+        } catch (e) {
+          // fall through to regex extraction
+        }
+      }
+
       // attempt to find a JSON block inside text
       const jsonMatch = text.match(/\{[\s\S]*\}/m);
       if (jsonMatch) {
