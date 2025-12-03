@@ -102,12 +102,129 @@ async function fetchWithTimeout(url, options, timeoutMs) {
 }
 
 /**
- * POST /api/ebook/generate
- * Generate eBook with Phase B pipeline
- * @param {Object} payload - { prompt, theme, pageCount, options }
- * @returns {Promise<Object>} Generated eBook result
+ * Initiate eBook generation with polling model
+ * Returns immediately with jobId
+ * @param {Object} payload - { prompt, theme, pageCount, colorPalette, fontSizeScale }
+ * @returns {Promise<Object>} { jobId, statusUrl, resultUrl }
+ */
+export async function initiateEbookGeneration(payload) {
+  const response = await fetchWithTimeout(
+    `${CONFIG.API_BASE_URL}/ebook/generate`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    10000 // Quick timeout for initiation request
+  );
+
+  console.log(`[API] Ebook generation initiated with jobId: ${response.jobId}`);
+  return response;
+}
+
+/**
+ * Check the status of an ebook generation job
+ * @param {string} jobId - Job ID from initiateEbookGeneration
+ * @returns {Promise<Object>} { jobId, status, progress, message, estimatedTimeRemainingSeconds }
+ */
+export async function checkEbookStatus(jobId) {
+  return fetchWithTimeout(
+    `${CONFIG.API_BASE_URL}/ebook/generate/${jobId}/status`,
+    { method: "GET" },
+    10000 // Quick timeout for status checks
+  );
+}
+
+/**
+ * Retrieve the result of an ebook generation job
+ * @param {string} jobId - Job ID from initiateEbookGeneration
+ * @returns {Promise<Object>} Complete ebook object if ready
+ */
+export async function fetchEbookResult(jobId) {
+  return fetchWithTimeout(
+    `${CONFIG.API_BASE_URL}/ebook/${jobId}`,
+    { method: "GET" },
+    30000 // Longer timeout for final result fetch
+  );
+}
+
+/**
+ * Poll for ebook generation completion
+ * Automatically checks status every 2 seconds until complete
+ * @param {string} jobId - Job ID from initiateEbookGeneration
+ * @param {Function} onProgress - Callback (progress, message) called on each update
+ * @param {number} maxWaitTime - Maximum wait time in ms (default 5 minutes)
+ * @returns {Promise<Object>} Complete ebook result
+ */
+export async function pollEbookCompletion(
+  jobId,
+  onProgress,
+  maxWaitTime = 300000
+) {
+  const pollInterval = 2000; // 2 seconds
+  const startTime = Date.now();
+
+  console.log(`[API] Starting poll for job ${jobId}`);
+
+  while (true) {
+    // Check timeout
+    if (Date.now() - startTime > maxWaitTime) {
+      throw new Error(
+        `Ebook generation timeout (exceeded ${maxWaitTime / 1000}s wait time)`
+      );
+    }
+
+    try {
+      // Poll status
+      const status = await checkEbookStatus(jobId);
+
+      console.log(
+        `[API] Job ${jobId} status: ${status.status}, progress: ${status.progress}%`
+      );
+
+      // Notify caller of progress
+      if (onProgress) {
+        onProgress(status.progress, status.message);
+      }
+
+      if (status.status === "complete") {
+        console.log(`[API] Job ${jobId} complete, fetching result...`);
+        // Fetch final result
+        const result = await fetchEbookResult(jobId);
+        console.log(`[API] Job ${jobId} result fetched successfully`);
+        return result;
+      } else if (status.status === "error") {
+        throw new Error(`Ebook generation failed: ${status.error}`);
+      }
+
+      // Wait before next poll
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    } catch (err) {
+      // If it's a timeout or network error, retry; otherwise throw
+      if (
+        err.message.includes("timeout") ||
+        err.message.includes("Network error")
+      ) {
+        console.warn(
+          `[API] Transient error during polling, will retry: ${err.message}`
+        );
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
+/**
+ * POST /api/ebook/generate (legacy synchronous - DO NOT USE for production)
+ * Kept for reference; use initiateEbookGeneration + pollEbookCompletion instead
+ * @deprecated Use initiateEbookGeneration + pollEbookCompletion instead
  */
 export async function generateEbook(payload) {
+  console.warn(
+    "[API] generateEbook() is deprecated. Use initiateEbookGeneration() + pollEbookCompletion() instead."
+  );
   return fetchWithTimeout(
     `${CONFIG.API_BASE_URL}/ebook/generate`,
     {

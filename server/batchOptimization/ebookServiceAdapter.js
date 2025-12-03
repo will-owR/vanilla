@@ -9,9 +9,7 @@
  * - Converts results back to chapter format expected by ebookService
  */
 
-const {
-  BatchOptimizationService,
-} = require("./batchOptimization/BatchOptimizationService");
+const { BatchOptimizationService } = require("./BatchOptimizationService");
 
 /**
  * Check if ebook qualifies for batch optimization
