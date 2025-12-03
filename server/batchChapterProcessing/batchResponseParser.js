@@ -214,6 +214,27 @@ function mergeWithPreviousContext(validatedChapters, previousContext = {}) {
  * @private
  */
 function _extractChaptersArray(response) {
+  // Handle aiService response format: { content: { body: "..." }, metadata: {...} }
+  if (response.content && response.content.body) {
+    const rawText = response.content.body;
+
+    // Strip markdown code blocks if present (e.g., ```json\n{...}\n```)
+    const codeBlockMatch = rawText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    const jsonText = codeBlockMatch ? codeBlockMatch[1] : rawText;
+
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (Array.isArray(parsed.chapters)) {
+        return parsed.chapters;
+      } else if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch (e) {
+      // Fall through to other extraction methods
+    }
+  }
+
+  // Handle direct array properties
   if (Array.isArray(response.chapters)) return response.chapters;
   if (Array.isArray(response.batch_response)) return response.batch_response;
   if (Array.isArray(response.chapters_batch)) return response.chapters_batch;

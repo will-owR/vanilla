@@ -139,22 +139,49 @@ function parseBatchResponse(response, expectedChapters = []) {
       );
     }
 
+    // Extract the raw text content from aiService response format
+    let rawText = null;
+    if (response.content && response.content.body) {
+      // aiService response format: { content: { body: "..." }, metadata: {...} }
+      rawText = response.content.body;
+    } else if (typeof response === "string") {
+      rawText = response;
+    } else if (response.rawText) {
+      rawText = response.rawText;
+    }
+
     // Extract chapters array (might be nested under various keys)
     let chaptersArray = null;
 
+    // First, try direct array properties
     if (Array.isArray(response.chapters)) {
       chaptersArray = response.chapters;
     } else if (Array.isArray(response.batch_response)) {
       chaptersArray = response.batch_response;
     } else if (Array.isArray(response)) {
       chaptersArray = response;
-    } else if (typeof response === "string") {
-      // Try parsing as JSON string
-      const parsed = JSON.parse(response);
-      if (Array.isArray(parsed.chapters)) {
-        chaptersArray = parsed.chapters;
-      } else if (Array.isArray(parsed)) {
-        chaptersArray = parsed;
+    } else if (rawText) {
+      // Second, extract and parse JSON from raw text
+      let jsonText = rawText;
+
+      // Strip markdown code blocks if present (e.g., ```json\n{...}\n```)
+      const codeBlockMatch = rawText.match(
+        /```(?:json)?\s*\n?([\s\S]*?)\n?```/
+      );
+      if (codeBlockMatch) {
+        jsonText = codeBlockMatch[1];
+      }
+
+      // Try parsing as JSON
+      try {
+        const parsed = JSON.parse(jsonText);
+        if (Array.isArray(parsed.chapters)) {
+          chaptersArray = parsed.chapters;
+        } else if (Array.isArray(parsed)) {
+          chaptersArray = parsed;
+        }
+      } catch (parseErr) {
+        // JSON parsing failed, will be handled below
       }
     }
 
