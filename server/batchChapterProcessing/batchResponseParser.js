@@ -118,9 +118,51 @@ function parseBatchResponse(response, expectedChapters = []) {
     }
   }
 
+  // =========================================================================
+  // SOLUTION B: Reorder chapters to match expected chapter order
+  // Ensures that even if batch response returns chapters out of order,
+  // they will be in correct sequence for composition
+  // =========================================================================
+  const sortedChapters = [];
+  const foundChapterNumbers = new Set();
+
+  for (const expected of expectedChapters) {
+    const found = validatedChapters.find(
+      (ch) =>
+        ch.chapter === expected.chapter ||
+        parseInt(ch.chapter) === expected.chapter
+    );
+
+    if (found) {
+      sortedChapters.push(found);
+      foundChapterNumbers.add(expected.chapter);
+    }
+  }
+
+  // Log reordering activity
+  if (global.__DEBUG_BATCH__) {
+    const beforeOrder = validatedChapters.map((ch) => ch.chapter).join(",");
+    const afterOrder = sortedChapters.map((ch) => ch.chapter).join(",");
+    console.log(
+      `[RESPONSE PARSER] Chapter reordering: [${beforeOrder}] → [${afterOrder}]`
+    );
+  }
+
+  // =========================================================================
+  // SOLUTION D: Sanitize all chapters to ensure no undefined fields
+  // Prevents "undefinedundefined" garbage text in HTML output
+  // =========================================================================
+  const sanitizedChapters = sortedChapters.map((ch) => sanitizeChapter(ch));
+
+  if (global.__DEBUG_BATCH__) {
+    console.log(
+      `[RESPONSE PARSER] Sanitized ${sanitizedChapters.length} chapters (undefined fields removed)`
+    );
+  }
+
   return {
     success,
-    chapters: validatedChapters,
+    chapters: sanitizedChapters,
     missingChapters,
     validationIssues,
     canContinue,
@@ -189,6 +231,64 @@ function validateChapterObject(chapter) {
   return {
     valid: errors.length === 0,
     errors,
+  };
+}
+
+/**
+ * SOLUTION D: Sanitize chapter object to remove undefined fields
+ * Prevents "undefinedundefined" text from appearing in HTML composition
+ *
+ * @param {Object} chapter - Chapter object potentially with undefined fields
+ * @returns {Object} Sanitized chapter object with safe defaults
+ */
+function sanitizeChapter(chapter) {
+  if (!chapter || typeof chapter !== "object") {
+    // Return minimal valid chapter
+    return {
+      chapter: 0,
+      title: "Untitled",
+      content: "",
+      summary: "",
+      image: {
+        concept: "Placeholder",
+        style: "neutral",
+        tone: "neutral",
+      },
+    };
+  }
+
+  return {
+    // Ensure chapter number is always present and valid
+    chapter: chapter.chapter !== undefined ? chapter.chapter : 0,
+    // Ensure title is always a string
+    title:
+      chapter.title && typeof chapter.title === "string"
+        ? chapter.title
+        : "Untitled",
+    // Ensure content is always a string (never undefined)
+    content:
+      chapter.content && typeof chapter.content === "string"
+        ? chapter.content
+        : "",
+    // Ensure summary is always a string
+    summary:
+      chapter.summary && typeof chapter.summary === "string"
+        ? chapter.summary
+        : "",
+    // Ensure image object has all fields
+    image: {
+      concept:
+        chapter.image && chapter.image.concept
+          ? chapter.image.concept
+          : "Scene concept",
+      style:
+        chapter.image && chapter.image.style ? chapter.image.style : "neutral",
+      tone:
+        chapter.image && chapter.image.tone ? chapter.image.tone : "neutral",
+    },
+    // Pass through any additional fields safely
+    ...(chapter.id && { id: chapter.id }),
+    ...(chapter.pageCount && { pageCount: chapter.pageCount }),
   };
 }
 

@@ -371,6 +371,26 @@ async function generateChaptersWithBatching(
     `[BATCH ORCHESTRATOR] Chapter generation complete (${chapters.length} chapters total)`
   );
 
+  // =========================================================================
+  // SOLUTION A: Defensive sort to ensure chapters in correct order
+  // Ensures that even if batch processing or assembly introduces misalignment,
+  // final output will be in sequential order by chapter number
+  // =========================================================================
+  chapters.sort((a, b) => {
+    const aNum =
+      typeof a.chapter === "string" ? parseInt(a.chapter) : a.chapter;
+    const bNum =
+      typeof b.chapter === "string" ? parseInt(b.chapter) : b.chapter;
+    return aNum - bNum;
+  });
+
+  if (global.__DEBUG_BATCH__) {
+    const chapterOrder = chapters.map((ch) => ch.chapter).join(",");
+    console.log(
+      `[BATCH ORCHESTRATOR] Final chapter order (sorted): [${chapterOrder}]`
+    );
+  }
+
   return chapters;
 }
 

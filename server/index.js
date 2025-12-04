@@ -22,6 +22,17 @@ if (DEV_MINIMAL) {
     "DEV_MINIMAL=true - running in minimal developer mode: rate-limiting, puppeteer readiness and related checks will be relaxed"
   );
 }
+
+// =========================================================================
+// DEBUG FLAGS - For troubleshooting specific issues
+// =========================================================================
+// Enable batch optimization debugging (logs chapter ordering, reordering, sanitization)
+global.__DEBUG_BATCH__ =
+  process.env.DEBUG_BATCH === "1" || process.env.DEBUG_BATCH === "true";
+if (global.__DEBUG_BATCH__) {
+  console.log("[DEBUG] Batch optimization debugging ENABLED");
+}
+
 const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
@@ -3139,12 +3150,10 @@ app.post("/api/ebook/generate", async (req, res) => {
       `[${new Date().toISOString()}] [${reqId}] Error initiating ebook generation:`,
       error
     );
-    res
-      .status(500)
-      .json({
-        error: "Failed to initiate e-book generation",
-        details: error.message,
-      });
+    res.status(500).json({
+      error: "Failed to initiate e-book generation",
+      details: error.message,
+    });
   }
 });
 

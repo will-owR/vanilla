@@ -172,14 +172,15 @@
                     // Transform backend response to export format
                     const exportPayload = {
                       pages: ebookResult.chapters || [],
-                      html: ebookResult.html || null,
                       metadata: ebookResult.metadata || {},
                       actions: ebookResult.actions || {},
                     };
+                    console.log('[EXPORT] Sending payload:', { pagesCount: exportPayload.pages.length, hasMetadata: !!exportPayload.metadata });
                     // Use the export function from api
                     const { exportToPdf } = await import('./lib/api.js');
                     await exportToPdf(exportPayload);
                   } catch (err) {
+                    console.error('[EXPORT] Export failed:', err);
                     ebookStore.update(s => ({...s, error: err.message}));
                   }
                 }}

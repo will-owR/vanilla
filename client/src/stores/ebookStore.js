@@ -53,6 +53,8 @@ function createEbookStore() {
 
   return {
     subscribe,
+    update,
+    set,
 
     /**
      * Set selected theme

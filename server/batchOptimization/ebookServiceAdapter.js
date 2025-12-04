@@ -12,6 +12,36 @@
 const { BatchOptimizationService } = require("./BatchOptimizationService");
 
 /**
+ * Sanitize chapter object to remove undefined fields
+ * Solution D: Ensure all fields have valid values before serialization
+ * Prevents "undefinedundefined" text in HTML output
+ *
+ * @param {Object} chapter - Raw chapter object
+ * @returns {Object} Sanitized chapter with valid defaults
+ */
+function sanitizeChapter(chapter) {
+  return {
+    id: chapter.id || `ch_${chapter.chapter}`,
+    chapter: chapter.chapter,
+    title: chapter.title || "Untitled",
+    content: chapter.content || "",
+    summary:
+      chapter.summary && typeof chapter.summary === "string"
+        ? chapter.summary
+        : "",
+    image: {
+      concept: (chapter.image && chapter.image.concept) || "Illustration",
+      style: (chapter.image && chapter.image.style) || "varied",
+    },
+    metadata: {
+      voice: (chapter.metadata && chapter.metadata.voice) || "",
+      tone: (chapter.metadata && chapter.metadata.tone) || "",
+      themes: (chapter.metadata && chapter.metadata.themes) || [],
+    },
+  };
+}
+
+/**
  * Check if ebook qualifies for batch optimization
  * @param {Object} structure - Ebook structure with outline
  * @returns {boolean}
@@ -86,11 +116,32 @@ async function tryBatchOptimization(
       });
     }
 
+    // Solution D: Sanitize all chapters to remove undefined fields
+    const sanitizedChapters = chapters.map((ch) => sanitizeChapter(ch));
+
+    // Solution A: Defensive sort by chapter number to ensure correct order
+    sanitizedChapters.sort((a, b) => {
+      const aNum =
+        typeof a.chapter === "string" ? parseInt(a.chapter) : a.chapter;
+      const bNum =
+        typeof b.chapter === "string" ? parseInt(b.chapter) : b.chapter;
+      return aNum - bNum;
+    });
+
+    // Debug logging
+    if (global.__DEBUG_BATCH__) {
+      console.log(
+        `[BatchOptimization] Final chapters (sanitized & sorted): ${sanitizedChapters
+          .map((ch) => ch.chapter)
+          .join(",")}`
+      );
+    }
+
     console.log(
-      `[BatchOptimization] Generated ${chapters.length} chapters with ${result.metrics.totalLatency}ms total latency`
+      `[BatchOptimization] Generated ${sanitizedChapters.length} chapters with ${result.metrics.totalLatency}ms total latency`
     );
 
-    return chapters;
+    return sanitizedChapters;
   } catch (error) {
     console.error(
       `[BatchOptimization] Optimization failed: ${error.message}. Falling back to standard orchestrator.`
