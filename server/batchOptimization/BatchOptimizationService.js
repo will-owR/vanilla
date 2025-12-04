@@ -432,9 +432,24 @@ class BatchOptimizationService {
   _parseBatchResponse(response, pageNumbers) {
     const pages = {};
 
-    // Try to split by page markers
+    // Log the actual response structure for debugging
+    if (global.__DEBUG_BATCH__) {
+      this.logger.log(
+        `[BatchOptimization] Parsing batch response for pages: ${pageNumbers.join(
+          ", "
+        )}`
+      );
+      this.logger.log(
+        `[BatchOptimization] Response length: ${response?.length || 0} chars`
+      );
+      if (response && response.length < 500) {
+        this.logger.log(`[BatchOptimization] Response preview: ${response}`);
+      }
+    }
+
+    // Try to split by page markers (--- PAGE N ---, Page N:, Chapter N:, etc)
     const pagePattern =
-      /(?:---\s*PAGE\s*(\d+)\s*---|Page\s+(\d+):|Chapter\s+(\d+):)/i;
+      /(?:---\s*PAGE\s*(\d+)\s*---|Page\s+(\d+):|Chapter\s+(\d+):|\*\*Chapter\s+(\d+)\*\*:?)/i;
     const splits = response.split(pagePattern);
 
     let currentPageNum = null;
@@ -463,32 +478,103 @@ class BatchOptimizationService {
       pages[currentPageNum] = currentContent.trim();
     }
 
-    // Handle case where batch response doesn't have clear page breaks
-    // Fallback: Split content approximately equally
-    if (Object.keys(pages).length === 0) {
-      const wordsPerPage = response.split(/\s+/).length / pageNumbers.length;
-      const wordThreshold = Math.ceil(wordsPerPage);
-      const words = response.split(/\s+/);
+    if (global.__DEBUG_BATCH__) {
+      this.logger.log(
+        `[BatchOptimization] Parsed ${
+          Object.keys(pages).length
+        } pages from markers`
+      );
+    }
 
-      let pageIndex = 0;
+    // Handle case where batch response doesn't have clear page breaks
+    // Fallback: Try JSON parsing or chapter extraction
+    if (Object.keys(pages).length === 0) {
+      // Try to extract JSON structure (Gemini sometimes returns JSON)
+      try {
+        const jsonMatch = response.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed)) {
+            // Array of chapters/pages
+            parsed.forEach((item, idx) => {
+              if (idx < pageNumbers.length) {
+                const pageNum = pageNumbers[idx];
+                const content =
+                  item.content ||
+                  item.text ||
+                  item.chapter ||
+                  JSON.stringify(item);
+                pages[pageNum] = String(content);
+              }
+            });
+          } else if (parsed.chapters && Array.isArray(parsed.chapters)) {
+            parsed.chapters.forEach((item, idx) => {
+              if (idx < pageNumbers.length) {
+                const pageNum = pageNumbers[idx];
+                const content =
+                  item.content || item.text || JSON.stringify(item);
+                pages[pageNum] = String(content);
+              }
+            });
+          } else if (parsed.content && typeof parsed.content === "string") {
+            // Single content block - split evenly
+            const contentPerPage = Math.ceil(
+              parsed.content.length / pageNumbers.length
+            );
+            pageNumbers.forEach((pageNum, idx) => {
+              const start = idx * contentPerPage;
+              const end = (idx + 1) * contentPerPage;
+              pages[pageNum] = parsed.content.substring(start, end).trim();
+            });
+          }
+        }
+      } catch (e) {
+        // JSON parsing failed, continue to word-split fallback
+      }
+    }
+
+    // Last resort: Split content by word count (only if we still have no pages)
+    if (Object.keys(pages).length === 0) {
+      const wordsPerPage = Math.max(
+        50,
+        Math.ceil(response.split(/\s+/).length / pageNumbers.length)
+      );
+      const words = response.split(/\s+/);
+      let currentPageIndex = 0;
       let pageContent = [];
 
       for (let i = 0; i < words.length; i++) {
         pageContent.push(words[i]);
 
         if (
-          pageContent.length >= wordThreshold ||
-          pageIndex === pageNumbers.length - 1
+          pageContent.length >= wordsPerPage ||
+          i === words.length - 1 ||
+          currentPageIndex === pageNumbers.length - 1
         ) {
-          pages[pageNumbers[pageIndex]] = pageContent.join(" ");
+          if (currentPageIndex < pageNumbers.length) {
+            pages[pageNumbers[currentPageIndex]] = pageContent.join(" ");
+          }
           pageContent = [];
-          pageIndex++;
+          currentPageIndex++;
         }
       }
 
-      // Add remaining content to last page
-      if (pageContent.length > 0 && pageIndex > 0) {
-        pages[pageNumbers[pageIndex - 1]] += " " + pageContent.join(" ");
+      if (global.__DEBUG_BATCH__) {
+        this.logger.log(
+          `[BatchOptimization] Used word-split fallback: ${wordsPerPage} words per page`
+        );
+      }
+    }
+
+    // Ensure all requested pages have content (prevent empty pages)
+    for (const pageNum of pageNumbers) {
+      if (!pages[pageNum] || pages[pageNum].trim() === "") {
+        pages[
+          pageNum
+        ] = `[Content for page ${pageNum} was not extracted. This may indicate a parsing error.]`;
+        this.logger.warn(
+          `[BatchOptimization] Warning: Page ${pageNum} has no content after parsing`
+        );
       }
     }
 
