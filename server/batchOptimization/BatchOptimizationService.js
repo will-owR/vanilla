@@ -44,10 +44,17 @@ class BatchOptimizationService {
     try {
       const totalPages = structure?.chapters?.length || 0;
 
+      if (global.__DEBUG_BATCH__) {
+        this.logger.log(
+          `[BatchOptimization] Input structure: chapters=${structure?.chapters?.length}, outline=${structure?.outline?.length}`
+        );
+      }
+
       // Validate page count for Stage 1
-      if (totalPages < 3 || totalPages > 20) {
+      // Extended from 20 to 25 to handle structure-generated metadata chapters
+      if (totalPages < 3 || totalPages > 25) {
         throw new Error(
-          `Stage 1 only supports 3-20 pages. Got ${totalPages} pages.`
+          `Stage 1 supports 3-25 pages. Got ${totalPages} pages.`
         );
       }
 
@@ -119,8 +126,9 @@ class BatchOptimizationService {
       this.metrics.finalizeSession(sessionId, pages);
 
       const sessionMetrics = this.metrics.getSessionMetrics(sessionId);
+      const apiCallsCount = this.metrics.calculateApiCalls(sessionId);
       this.logger.log(
-        `[BatchOptimization] Generation complete. API calls: ${sessionMetrics.apiCallsCount}`
+        `[BatchOptimization] Generation complete. API calls: ${apiCallsCount}`
       );
 
       return {

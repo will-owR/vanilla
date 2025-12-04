@@ -43,12 +43,16 @@ function sanitizeChapter(chapter) {
 
 /**
  * Check if ebook qualifies for batch optimization
+ * Extended range: 3-25 pages to handle structure-generated metadata chapters
+ * (user requests 20, structure generates 22-23 with cover/epilogue)
+ *
  * @param {Object} structure - Ebook structure with outline
  * @returns {boolean}
  */
 function qualifiesForBatchOptimization(structure) {
   const pageCount = structure?.outline?.length || 0;
-  return pageCount >= 3 && pageCount <= 20;
+  // Extended from 20 to 25 to handle additional metadata chapters
+  return pageCount >= 3 && pageCount <= 25;
 }
 
 /**
@@ -70,8 +74,9 @@ async function tryBatchOptimization(
     return null; // Fall back to standard orchestrator
   }
 
+  const chapterCount = structure.outline.length;
   console.log(
-    `[BatchOptimization] Eligible ebook (${structure.outline.length} chapters). Using Stage 1 optimization.`
+    `[BatchOptimization] Eligible ebook (${chapterCount} chapters). Using Stage 1 optimization.`
   );
 
   const batchService = new BatchOptimizationService(aiService);
@@ -80,8 +85,15 @@ async function tryBatchOptimization(
     // Convert structure outline to page-based structure
     const pageStructure = {
       chapters: structure.outline,
-      totalPages: structure.outline.length,
+      totalPages: chapterCount,
     };
+
+    // Debug: Log the structure being passed
+    if (global.__DEBUG_BATCH__) {
+      console.log(
+        `[BatchOptimization] Input structure has ${pageStructure.chapters.length} chapters`
+      );
+    }
 
     // Generate optimized content
     const result = await batchService.generateWithBatching(
@@ -143,8 +155,12 @@ async function tryBatchOptimization(
 
     return sanitizedChapters;
   } catch (error) {
+    console.error(`[BatchOptimization] Optimization failed: ${error.message}`);
+    if (global.__DEBUG_BATCH__) {
+      console.error("[BatchOptimization] Full error:", error);
+    }
     console.error(
-      `[BatchOptimization] Optimization failed: ${error.message}. Falling back to standard orchestrator.`
+      `[BatchOptimization] Falling back to legacy batch orchestrator.`
     );
     return null;
   }

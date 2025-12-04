@@ -367,4 +367,14 @@ function createAIService() {
   return new MockAIService();
 }
 
-module.exports = { MockAIService, RealAIService, createAIService };
+// Create singleton instance for legacy batch processing compatibility
+const defaultInstance = createAIService();
+
+module.exports = {
+  MockAIService,
+  RealAIService,
+  createAIService,
+  generateContent: defaultInstance.generateContent.bind(defaultInstance),
+  generateContentWithRotation:
+    defaultInstance.generateContentWithRotation.bind(defaultInstance),
+};
