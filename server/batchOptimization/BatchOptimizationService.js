@@ -381,6 +381,39 @@ class BatchOptimizationService {
     const latencyMs = Date.now() - startTime;
     const batchContent = this._parseBatchResponse(batchResponse, pageNumbers);
 
+    // DIAGNOSTIC: Log batch response parsing results
+    if (global.__DEBUG_BATCH__) {
+      this.logger.log(
+        `[BatchOptimization-DIAG] Batch response parsing for pages ${pageNumbers.join(
+          ", "
+        )}:`
+      );
+      this.logger.log(
+        `[BatchOptimization-DIAG] Response length: ${
+          batchResponse?.length || 0
+        } chars`
+      );
+      this.logger.log(
+        `[BatchOptimization-DIAG] Parsed content keys: ${Object.keys(
+          batchContent
+        ).join(", ")}`
+      );
+      pageNumbers.forEach((pageNum) => {
+        const content = batchContent[pageNum];
+        if (content) {
+          this.logger.log(
+            `[BatchOptimization-DIAG] Page ${pageNum}: ${content
+              .substring(0, 150)
+              .replace(/\n/g, " ")}...`
+          );
+        } else {
+          this.logger.log(
+            `[BatchOptimization-DIAG] Page ${pageNum}: MISSING/EMPTY`
+          );
+        }
+      });
+    }
+
     this.metrics.recordBatch(sessionId, pageNumbers, latencyMs);
 
     // Record each page from batch

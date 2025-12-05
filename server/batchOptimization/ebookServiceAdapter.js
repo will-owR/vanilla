@@ -105,10 +105,30 @@ async function tryBatchOptimization(
     const chapters = [];
     const { pages, metadata } = result.content;
 
+    // Debug: Log metadata structure before processing
+    if (global.__DEBUG_BATCH__) {
+      console.log(`[BatchOptimization-Adapter] Metadata received:`, {
+        isDefined: metadata !== undefined,
+        type: typeof metadata,
+        voice: metadata?.voice,
+        tone: metadata?.tone,
+        themes: metadata?.themes,
+      });
+    }
+
     for (let i = 0; i < structure.outline.length; i++) {
       const chapterSpec = structure.outline[i];
       const pageNum = i + 1;
       const pageContent = pages[pageNum] || "";
+
+      // Debug: Log page content extraction
+      if (global.__DEBUG_BATCH__ && pageContent) {
+        console.log(
+          `[BatchOptimization-Adapter] Ch${pageNum} content: ${pageContent
+            .substring(0, 100)
+            .replace(/\n/g, " ")}...`
+        );
+      }
 
       chapters.push({
         id: `ch_${pageNum}`,
@@ -121,15 +141,29 @@ async function tryBatchOptimization(
           style: "varied",
         },
         metadata: {
-          voice: metadata.voice,
-          tone: metadata.tone,
-          themes: metadata.themes,
+          voice: metadata?.voice,
+          tone: metadata?.tone,
+          themes: metadata?.themes,
         },
       });
     }
 
     // Solution D: Sanitize all chapters to remove undefined fields
-    const sanitizedChapters = chapters.map((ch) => sanitizeChapter(ch));
+    const sanitizedChapters = chapters.map((ch) => {
+      const sanitized = sanitizeChapter(ch);
+      // Debug: Log sanitization results
+      if (global.__DEBUG_BATCH__) {
+        console.log(`[BatchOptimization-Adapter] Ch${ch.chapter} sanitized:`, {
+          title: sanitized.title,
+          contentLength: sanitized.content.length,
+          summaryLength: sanitized.summary.length,
+          voiceDefined: sanitized.metadata.voice !== "",
+          toneDefined: sanitized.metadata.tone !== "",
+          themesDefined: sanitized.metadata.themes.length > 0,
+        });
+      }
+      return sanitized;
+    });
 
     // Solution A: Defensive sort by chapter number to ensure correct order
     sanitizedChapters.sort((a, b) => {
