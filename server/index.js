@@ -2913,9 +2913,8 @@ module.exports.gracefulShutdown = gracefulShutdown;
 
 // ==================== PHASE B: E-BOOK GENERATION ====================
 // ==================== POLLING MODEL SETUP ====================
-// Import job queue manager for background processing
-const JobQueueManager = require("./jobQueueManager");
-const jobQueueManager = new JobQueueManager();
+// Import job queue manager singleton for background processing
+const jobQueueManager = require("./jobQueueManager");
 
 /**
  * Helper function to generate ebook in background
@@ -3142,12 +3141,10 @@ app.post("/api/ebook/generate", async (req, res) => {
       `[${new Date().toISOString()}] [${reqId}] Error initiating ebook generation:`,
       error
     );
-    res
-      .status(500)
-      .json({
-        error: "Failed to initiate e-book generation",
-        details: error.message,
-      });
+    res.status(500).json({
+      error: "Failed to initiate e-book generation",
+      details: error.message,
+    });
   }
 });
 
