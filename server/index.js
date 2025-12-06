@@ -2912,18 +2912,290 @@ module.exports.closeServices = closeServices;
 module.exports.gracefulShutdown = gracefulShutdown;
 
 // ==================== PHASE B: E-BOOK GENERATION ====================
+// ==================== POLLING MODEL SETUP ====================
+// Import job queue manager for background processing
+const JobQueueManager = require("./jobQueueManager");
+const jobQueueManager = new JobQueueManager();
+
+/**
+ * Helper function to generate ebook in background
+ * Runs asynchronously without blocking the response
+ */
+async function generateEbookInBackground(
+  jobId,
+  reqId,
+  payload,
+  theme,
+  pageCountNum,
+  colorPalette,
+  fontScaleNum,
+  prompt
+) {
+  try {
+    jobQueueManager.updateProgress(jobId, 5, "Starting ebook generation...");
+
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] [Job ${jobId}] Calling genieService.process() with pageCount=${pageCountNum}`
+    );
+    const processStartTime = Date.now();
+    let result;
+    try {
+      result = await genieService.process(payload);
+    } catch (err) {
+      console.error(
+        `[${new Date().toISOString()}] [${reqId}] [Job ${jobId}] genieService.process() ERROR: ${
+          err?.message
+        }`
+      );
+      throw err;
+    }
+    const processEndTime = Date.now();
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] [Job ${jobId}] genieService.process() completed in ${
+        processEndTime - processStartTime
+      }ms`
+    );
+
+    jobQueueManager.updateProgress(jobId, 50, "Composing HTML...");
+
+    // Extract envelope (genieService returns { out_envelope, resultId })
+    const envelope = result.out_envelope || result;
+    if (!envelope || !envelope.pages || !Array.isArray(envelope.pages)) {
+      throw new Error("Invalid response structure from genieService");
+    }
+
+    // Extract content from orchestrator result
+    const ebookId = `ebook_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+
+    // Compute density classification
+    const density =
+      pageCountNum <= 5
+        ? "sparse"
+        : pageCountNum <= 10
+        ? "standard"
+        : pageCountNum <= 15
+        ? "dense"
+        : "very-dense";
+
+    // WEEK 1: Extract actual title from first chapter instead of placeholder
+    const actualTitle =
+      envelope.pages?.[0]?.title ||
+      envelope.metadata?.title ||
+      "Generated E-book";
+
+    jobQueueManager.updateProgress(jobId, 95, "Finalizing response...");
+
+    const responseObj = {
+      id: ebookId,
+      resultId: result.resultId,
+      chapters: envelope.pages,
+      html: envelope.html || null,
+      title: actualTitle,
+      metadata: {
+        title: actualTitle,
+        author: "Aether AI",
+        theme,
+        pageCount: pageCountNum,
+        wordCount: (prompt || "").split(/\s+/).length,
+        colorPalette,
+        fontSizeScale,
+        density,
+        ...(envelope.metadata || {}),
+      },
+      actions: envelope.actions || {
+        persist_prompt: true,
+        generate_pdf: true,
+        can_export: true,
+        can_preview: true,
+        can_override: true,
+      },
+    };
+
+    jobQueueManager.completeJob(jobId, responseObj);
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] [Job ${jobId}] Background generation complete`
+    );
+  } catch (error) {
+    console.error(
+      `[${new Date().toISOString()}] [${reqId}] [Job ${jobId}] Background generation error:`,
+      error
+    );
+    jobQueueManager.failJob(jobId, error.message);
+  }
+}
 
 /**
  * POST /api/ebook/generate
- * Generate a themed e-book from a prompt
+ * Initiate a themed e-book generation (polling model)
  * Body: { prompt, theme, pageCount, colorPalette, fontSizeScale }
- * Returns: { id, content, html, metadata, pages, can_export, can_override }
+ * Returns: 202 Accepted with { jobId, statusUrl, resultUrl }
  */
 app.post("/api/ebook/generate", async (req, res) => {
   const startTime = Date.now();
   const reqId = req.id || "unknown";
   console.log(
     `[${new Date().toISOString()}] [${reqId}] POST /api/ebook/generate started`
+  );
+
+  // Set a long timeout for large ebook generation (20 pages can take 5+ minutes with Gemini)
+  // Default is usually 2 minutes, but LLM generation is inherently slow
+  req.setTimeout(600000); // 10 minutes for ebook generation
+  res.setTimeout(600000); // 10 minutes
+
+  const {
+    prompt,
+    theme = "dark",
+    pageCount = 10,
+    colorPalette = "default",
+    fontSizeScale = 1.0,
+  } = req.body;
+
+  if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+    return res
+      .status(400)
+      .json({ error: "Prompt is required and must be a non-empty string" });
+  }
+
+  const validThemes = ["dark", "light", "corporate", "bold"];
+  if (!validThemes.includes(theme)) {
+    return res.status(400).json({
+      error: `Invalid theme. Must be one of: ${validThemes.join(", ")}`,
+    });
+  }
+
+  const pageCountNum = parseInt(pageCount, 10);
+  if (isNaN(pageCountNum) || pageCountNum < 3 || pageCountNum > 20) {
+    return res
+      .status(400)
+      .json({ error: "Page count must be between 3 and 20" });
+  }
+
+  const fontScaleNum = parseFloat(fontSizeScale);
+  if (isNaN(fontScaleNum) || fontScaleNum < 0.8 || fontScaleNum > 1.2) {
+    return res
+      .status(400)
+      .json({ error: "Font size scale must be between 0.8 and 1.2" });
+  }
+
+  try {
+    // Create job immediately
+    const jobInfo = jobQueueManager.createJob({
+      prompt,
+      theme,
+      pageCount: pageCountNum,
+      colorPalette,
+      fontSizeScale,
+    });
+    const { jobId, statusUrl, resultUrl } = jobInfo;
+
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] Created job ${jobId}, returning 202 Accepted`
+    );
+
+    // Return immediately with job ID (HTTP 202 Accepted)
+    res.status(202).json({
+      jobId,
+      status: "processing",
+      message: "Ebook generation started",
+      statusUrl,
+      resultUrl,
+    });
+
+    console.log(
+      `[${new Date().toISOString()}] [${reqId}] Response sent in ${
+        Date.now() - startTime
+      }ms`
+    );
+
+    // Start background generation (don't await, don't block response)
+    const payload = {
+      mode: "ebook",
+      prompt,
+      metadata: {
+        theme,
+        pageCount: pageCountNum,
+        colorPalette,
+        fontSizeScale,
+      },
+    };
+
+    generateEbookInBackground(
+      jobId,
+      reqId,
+      payload,
+      theme,
+      pageCountNum,
+      colorPalette,
+      fontScaleNum,
+      prompt
+    ).catch((err) => {
+      console.error(
+        `[${new Date().toISOString()}] [${reqId}] [Job ${jobId}] Uncaught error in background generation:`,
+        err
+      );
+      jobQueueManager.failJob(jobId, err.message);
+    });
+  } catch (error) {
+    console.error(
+      `[${new Date().toISOString()}] [${reqId}] Error initiating ebook generation:`,
+      error
+    );
+    res
+      .status(500)
+      .json({
+        error: "Failed to initiate e-book generation",
+        details: error.message,
+      });
+  }
+});
+
+/**
+ * GET /api/ebook/generate/:jobId/status
+ * Check the status of an ebook generation job
+ * Returns: { jobId, status, progress, message, estimatedTimeRemainingSeconds }
+ */
+app.get("/api/ebook/generate/:jobId/status", (req, res) => {
+  const { jobId } = req.params;
+  const status = jobQueueManager.getStatus(jobId);
+
+  if (status.error) {
+    return res.status(404).json(status);
+  }
+
+  res.json(status);
+});
+
+/**
+ * GET /api/ebook/:jobId
+ * Retrieve the result of an ebook generation job
+ * Returns: Complete ebook object if ready
+ */
+app.get("/api/ebook/:jobId", (req, res) => {
+  const { jobId } = req.params;
+  const result = jobQueueManager.getResult(jobId);
+
+  if (result.error) {
+    return res.status(404).json(result);
+  }
+
+  if (result.status === "processing" || result.status === "error") {
+    return res.status(202).json(result);
+  }
+
+  // Status is "complete"
+  res.json(result.result);
+});
+
+// ==================== LEGACY ENDPOINT (DEPRECATED) ====================
+// Kept for backward compatibility if needed
+// This is the old synchronous endpoint - should use polling model instead
+app.post("/api/ebook/generate-legacy", async (req, res) => {
+  const startTime = Date.now();
+  const reqId = req.id || "unknown";
+  console.log(
+    `[${new Date().toISOString()}] [${reqId}] POST /api/ebook/generate-legacy started`
   );
 
   // Set a long timeout for large ebook generation (20 pages can take 5+ minutes with Gemini)

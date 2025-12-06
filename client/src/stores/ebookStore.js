@@ -43,6 +43,8 @@ function createEbookStore() {
     loading: false,
     error: null,
     status: "idle", // 'idle' | 'generating' | 'success' | 'error'
+    progress: 0, // 0-100 for generation progress
+    progressMessage: "", // Human-readable progress message
     history: {
       configs: [],
       currentIndex: -1,
@@ -120,18 +122,38 @@ function createEbookStore() {
         loading: true,
         error: null,
         status: "generating",
+        progress: 0,
+        progressMessage: "Initializing...",
       }));
 
       try {
         const currentStore = get({ subscribe });
 
-        const response = await ebookApi.generateEbook({
+        // Step 1: Initiate generation (returns immediately with jobId)
+        console.log("[EBOOK] Initiating generation request...");
+        const initResponse = await ebookApi.initiateEbookGeneration({
           prompt,
           theme: currentStore.config.theme,
           pageCount: currentStore.config.pageCount,
           colorPalette: currentStore.config.colorPalette,
           fontSizeScale: currentStore.config.fontSizeScale,
         });
+
+        const { jobId } = initResponse;
+        console.log(`[EBOOK] Generation initiated with jobId: ${jobId}`);
+
+        // Step 2: Poll for completion with progress updates
+        const response = await ebookApi.pollEbookCompletion(
+          jobId,
+          (progress, message) => {
+            console.log(`[EBOOK] Progress: ${progress}% - ${message}`);
+            update((store) => ({
+              ...store,
+              progress,
+              progressMessage: message,
+            }));
+          }
+        );
 
         // FIX 1.3: Add FRONTEND logging
         console.log("[FRONTEND] Response received:");
@@ -149,14 +171,19 @@ function createEbookStore() {
           loading: false,
           status: "success",
           error: null,
+          progress: 100,
+          progressMessage: "Complete",
           history: addToHistory(store.history, store.config),
         }));
       } catch (err) {
+        console.error("[EBOOK] Generation error:", err);
         update((store) => ({
           ...store,
           error: err.message,
           loading: false,
           status: "error",
+          progress: 0,
+          progressMessage: "",
         }));
         throw err;
       }
