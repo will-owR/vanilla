@@ -128,11 +128,23 @@ export async function initiateEbookGeneration(payload) {
  * @returns {Promise<Object>} { jobId, status, progress, message, estimatedTimeRemainingSeconds }
  */
 export async function checkEbookStatus(jobId) {
-  return fetchWithTimeout(
+  const status = await fetchWithTimeout(
     `${CONFIG.API_BASE_URL}/ebook/generate/${jobId}/status`,
     { method: "GET" },
     10000 // Quick timeout for status checks
   );
+
+  // Also fetch and log quota status for monitoring
+  const quotaStatus = await getQuotaStatus();
+  if (quotaStatus?.quota) {
+    console.log(
+      `[API] Quota: ${quotaStatus.quota.percentUsed}% used (${quotaStatus.quota.callCount}/${quotaStatus.quota.limit})`
+    );
+    // Add quota info to status for frontend display
+    status.quotaInfo = quotaStatus.quota;
+  }
+
+  return status;
 }
 
 /**
@@ -182,9 +194,10 @@ export async function pollEbookCompletion(
         `[API] Job ${jobId} status: ${status.status}, progress: ${status.progress}%`
       );
 
-      // Notify caller of progress
+      // Notify caller of progress (including quota info if available)
       if (onProgress) {
-        onProgress(status.progress, status.message);
+        const quotaInfo = status.quotaInfo || null;
+        onProgress(status.progress, status.message, quotaInfo);
       }
 
       if (status.status === "complete") {
@@ -267,4 +280,25 @@ export async function fetchThemes() {
     { method: "GET" },
     CONFIG.TIMEOUTS.THEMES
   );
+}
+
+/**
+ * GET /api/quota-status
+ * Fetch current Gemini API quota status and job queue metrics
+ * @returns {Promise<Object>} { quota, queue, timestamp }
+ */
+export async function getQuotaStatus() {
+  try {
+    console.log("[API] Fetching quota status...");
+    const response = await fetchWithTimeout(
+      `${CONFIG.API_BASE_URL}/quota-status`,
+      { method: "GET" },
+      5000
+    );
+    console.log("[API] Quota status:", response.quota);
+    return response;
+  } catch (error) {
+    console.warn("[API] Failed to fetch quota status:", error.message);
+    return null;
+  }
 }

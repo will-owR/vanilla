@@ -3,47 +3,93 @@
  *
  * Manages background ebook generation jobs using polling model
  * - Accepts generation requests and returns immediately with jobId
- * - Tracks job progress and status
+ * - Tracks job progress and status (processing, deferred, complete, error)
  * - Stores completed results for retrieval
  * - Implements cleanup for old jobs
+ * - Integrates with quota tracker to defer jobs during API quota limits
  */
 
 const { v4: uuidv4 } = require("uuid");
+const { quotaTracker } = require("./geminiClient");
 
 class JobQueueManager {
   constructor() {
     this.jobs = new Map(); // jobId → job state
+    this.deferredQueue = []; // jobIds waiting to be resumed after quota cooldown
     this.cleanupInterval = 60000; // Clean up old jobs every 60 seconds
     this.maxJobAge = 3600000; // Keep jobs for 1 hour after completion
+    this.maxQueueSize = 50; // Prevent unbounded queue growth
+    this.deferralCheckInterval = 5000; // Check deferred jobs every 5 seconds
     this.startCleanupScheduler();
+    this.startDeferralProcessor();
   }
 
   /**
    * Create a new job for ebook generation
+   * Checks quota status and defers job if needed
    * @param {Object} params - Generation parameters {prompt, pageCount, theme, colorPalette, fontSizeScale}
-   * @returns {Object} - {jobId, statusUrl, resultUrl}
+   * @returns {Object} - {jobId, statusUrl, resultUrl, deferred?, deferredUntil?, message?}
    */
   createJob(params) {
     const jobId = uuidv4();
+
+    // Check if we should defer this job due to quota
+    const quotaStatus = quotaTracker.getStatus();
+    const shouldDefer = quotaStatus.percentUsed >= 90 || quotaStatus.isPaused;
+
+    let status = "processing";
+    let deferredUntil = null;
+    let deferralReason = null;
+    let deferralMessage = null;
+
+    if (shouldDefer) {
+      // Check queue size to prevent unbounded growth
+      if (this.deferredQueue.length >= this.maxQueueSize) {
+        return {
+          jobId: null,
+          error: `Queue is full (${this.maxQueueSize} jobs waiting). Try again in a few minutes.`,
+          statusCode: 503,
+        };
+      }
+
+      status = "deferred";
+      deferredUntil = quotaStatus.pauseUntil || Date.now() + 65000;
+      deferralReason = "quota_cooldown";
+      deferralMessage =
+        `Quota limit reached (${quotaStatus.callCount}/${quotaStatus.limit}). ` +
+        `Your request will start in ~${quotaStatus.secondsUntilReset}s.`;
+
+      this.deferredQueue.push(jobId);
+      console.log(`[JobQueue] Job ${jobId} deferred: ${deferralMessage}`);
+    }
+
     const job = {
       jobId,
-      status: "processing", // 'processing', 'complete', 'error'
+      status,
       progress: 0,
       startTime: Date.now(),
       completedAt: null,
       result: null,
       error: null,
-      message: "Initializing ebook generation...",
+      message:
+        status === "deferred"
+          ? deferralMessage
+          : "Initializing ebook generation...",
+      deferredUntil,
+      deferralReason,
       params,
     };
 
     this.jobs.set(jobId, job);
-    console.log(`[JobQueue] Created job ${jobId}`);
+    console.log(`[JobQueue] Created job ${jobId}, status: ${status}`);
 
     return {
       jobId,
       statusUrl: `/api/ebook/generate/${jobId}/status`,
       resultUrl: `/api/ebook/${jobId}`,
+      deferred: shouldDefer,
+      deferredUntil,
+      message: deferralMessage,
     };
   }
 
@@ -239,6 +285,7 @@ class JobQueueManager {
       processing: 0,
       complete: 0,
       error: 0,
+      deferred: 0,
     };
 
     for (const job of this.jobs.values()) {
@@ -246,6 +293,73 @@ class JobQueueManager {
     }
 
     return stats;
+  }
+
+  /**
+   * Start periodic processor to resume deferred jobs when quota available
+   */
+  startDeferralProcessor() {
+    this.deferralTimer = setInterval(() => {
+      this.processDeferredQueue();
+    }, this.deferralCheckInterval);
+
+    console.log(
+      `[JobQueue] Started deferral processor (check every ${this.deferralCheckInterval}ms)`
+    );
+  }
+
+  /**
+   * Check if any deferred jobs can be resumed
+   * Resume jobs whose deferralUntil time has passed and quota is available
+   */
+  processDeferredQueue() {
+    if (this.deferredQueue.length === 0) return;
+
+    const quotaStatus = quotaTracker.getStatus();
+    const now = Date.now();
+    const toResume = [];
+
+    for (const jobId of this.deferredQueue) {
+      const job = this.jobs.get(jobId);
+      if (!job) continue;
+
+      const canResume =
+        !quotaStatus.isPaused && job.deferredUntil && now >= job.deferredUntil;
+
+      if (canResume) {
+        toResume.push(jobId);
+        job.status = "processing";
+        job.deferredUntil = null;
+        job.message =
+          "Starting ebook generation (resumed from quota cooldown)...";
+        console.log(`[JobQueue] Job ${jobId} resumed from deferral`);
+      }
+    }
+
+    // Remove resumed jobs from deferred queue
+    for (const jobId of toResume) {
+      const idx = this.deferredQueue.indexOf(jobId);
+      if (idx !== -1) {
+        this.deferredQueue.splice(idx, 1);
+      }
+    }
+
+    if (toResume.length > 0) {
+      console.log(
+        `[JobQueue] Resumed ${toResume.length} deferred jobs. ` +
+          `${this.deferredQueue.length} jobs still deferred.`
+      );
+    }
+  }
+
+  /**
+   * Stop the deferral processor
+   */
+  stopDeferralProcessor() {
+    if (this.deferralTimer) {
+      clearInterval(this.deferralTimer);
+      console.log("[JobQueue] Stopped deferral processor");
+    }
   }
 }
 

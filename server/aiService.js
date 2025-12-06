@@ -52,32 +52,57 @@ class RealAIService {
       throw new Error("Prompt must be a non-empty string");
     }
 
-    const callGemini = this._ensureGemini().callGemini;
+    const geminiModule = this._ensureGemini();
+    const callGemini = geminiModule.callGemini;
+    const quotaTracker = geminiModule.quotaTracker;
+
+    // Check quota before making API call
+    const quotaCheck = quotaTracker.recordCall();
+    if (!quotaCheck.success) {
+      const e = new Error(`Gemini quota limit: ${quotaCheck.message}`);
+      Object.defineProperty(e, "isQuotaError", {
+        value: true,
+        enumerable: true,
+      });
+      throw e;
+    }
+
     // Default to TEXT modality. generationConfig can be passed via env or options.
     const generationConfig = this.options.generationConfig || {};
 
-    const resp = await callGemini({
-      prompt: String(prompt),
-      modality: "TEXT",
-      generationConfig,
-    });
+    try {
+      const resp = await callGemini({
+        prompt: String(prompt),
+        modality: "TEXT",
+        generationConfig,
+      });
 
-    if (!resp || resp.ok === false) {
-      const errMsg = resp && resp.error ? resp.error : "Unknown Gemini error";
-      const status = resp && resp.status ? resp.status : 0;
-      const e = new Error(`Gemini call failed: ${errMsg}`);
-      try {
-        Object.defineProperty(e, "status", {
-          value: status,
-          enumerable: true,
-          configurable: true,
-          writable: true,
-        });
-      } catch (err) {
-        // ignore if unable to define property
+      if (!resp || resp.ok === false) {
+        const errMsg = resp && resp.error ? resp.error : "Unknown Gemini error";
+        const status = resp && resp.status ? resp.status : 0;
+        const e = new Error(`Gemini call failed: ${errMsg}`);
+
+        // Detect quota exhaustion errors from API
+        if (errMsg.includes("quota") || errMsg.includes("429") || status === 429) {
+          Object.defineProperty(e, "isQuotaError", {
+            value: true,
+            enumerable: true,
+          });
+          quotaTracker.handleQuotaError(e);
+        }
+
+        try {
+          Object.defineProperty(e, "status", {
+            value: status,
+            enumerable: true,
+            configurable: true,
+            writable: true,
+          });
+        } catch (err) {
+          // ignore if unable to define property
+        }
+        throw e;
       }
-      throw e;
-    }
 
     // Prefer parsed text candidate, fall back to rawText or JSON.stringify
     let text =

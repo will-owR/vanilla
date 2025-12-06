@@ -145,12 +145,16 @@ function createEbookStore() {
         // Step 2: Poll for completion with progress updates
         const response = await ebookApi.pollEbookCompletion(
           jobId,
-          (progress, message) => {
-            console.log(`[EBOOK] Progress: ${progress}% - ${message}`);
+          (progress, message, quotaInfo) => {
+            let fullMessage = message;
+            if (quotaInfo) {
+              fullMessage += ` (Quota: ${quotaInfo.percentUsed}%)`;
+            }
+            console.log(`[EBOOK] Progress: ${progress}% - ${fullMessage}`);
             update((store) => ({
               ...store,
               progress,
-              progressMessage: message,
+              progressMessage: fullMessage,
             }));
           }
         );

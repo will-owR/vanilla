@@ -611,6 +611,51 @@ app.get("/health", async (req, res) => {
   }
 });
 
+/**
+ * GET /api/quota-status
+ * Returns current Gemini API quota status and job queue metrics
+ */
+app.get("/api/quota-status", (req, res) => {
+  try {
+    const { quotaTracker } = require("./geminiClient");
+    const jobQueueManager = require("./jobQueueManager");
+
+    const quotaStatus = quotaTracker.getStatus();
+    const jobStats = jobQueueManager.getStats();
+    const deferredCount = jobQueueManager.deferredQueue?.length || 0;
+
+    res.json({
+      quota: {
+        callCount: quotaStatus.callCount,
+        limit: quotaStatus.limit,
+        remaining: quotaStatus.remaining,
+        percentUsed: quotaStatus.percentUsed,
+        isPaused: quotaStatus.isPaused,
+        secondsUntilReset: quotaStatus.secondsUntilReset,
+        pauseUntil: quotaStatus.pauseUntil,
+        dailyCallCount: quotaStatus.dailyCallCount,
+        message: quotaStatus.message,
+      },
+      queue: {
+        totalJobs: jobStats.totalJobs,
+        processing: jobStats.processing,
+        deferred: jobStats.deferred,
+        complete: jobStats.complete,
+        error: jobStats.error,
+        deferredCount,
+        maxQueueSize: jobQueueManager.maxQueueSize,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[Quota Status Error]", error);
+    res.status(500).json({
+      error: "Failed to retrieve quota status",
+      message: error.message,
+    });
+  }
+});
+
 // Default route
 app.get("/", (req, res) => {
   res.send("Hello, world! Your Express server is running.");

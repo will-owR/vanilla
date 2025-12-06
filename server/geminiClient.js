@@ -1,6 +1,166 @@
 const fs = require("fs");
 const path = require("path");
 
+/**
+ * Gemini API Quota Tracker
+ *
+ * Manages per-minute call counting, quota exhaustion detection, and backoff logic.
+ * Implements a simple counter-based rate limiter for Gemini free tier (20 calls/minute).
+ */
+class QuotaTracker {
+  constructor(limit = 20, windowMs = 60000) {
+    this.limit = limit;
+    this.windowMs = windowMs;
+    this.callCount = 0;
+    this.windowStart = Date.now();
+    this.pauseUntil = null;
+    this.dailyCallCount = 0;
+    this.lastError = null;
+    this.lastCallTime = Date.now();
+  }
+
+  recordCall() {
+    this.rotateWindow();
+
+    if (this.isPaused()) {
+      const waitMs = this.pauseUntil - Date.now();
+      const waitSec = Math.ceil(waitMs / 1000);
+      return {
+        success: false,
+        reason: "paused",
+        message: `Still in quota cooldown. Wait ${waitSec}s.`,
+      };
+    }
+
+    if (this.callCount >= this.limit) {
+      this.pause();
+      const waitMs = this.pauseUntil - Date.now();
+      const waitSec = Math.ceil(waitMs / 1000);
+      return {
+        success: false,
+        reason: "quota_exhausted",
+        message: `Quota exhausted (${this.callCount}/${this.limit}). Pausing ${waitSec}s.`,
+      };
+    }
+
+    this.callCount++;
+    this.dailyCallCount++;
+    this.lastCallTime = Date.now();
+
+    const percentUsed = (this.callCount / this.limit) * 100;
+    if (percentUsed >= 75) {
+      console.warn(
+        `[QuotaTracker] WARNING: ${this.callCount}/${
+          this.limit
+        } calls used (${Math.round(percentUsed)}%)`
+      );
+    }
+
+    return {
+      success: true,
+      callCount: this.callCount,
+      remaining: this.limit - this.callCount,
+    };
+  }
+
+  getStatus() {
+    this.rotateWindow();
+    const percentUsed = Math.round((this.callCount / this.limit) * 100);
+    const isPaused = this.isPaused();
+    const secondsUntilReset = isPaused
+      ? Math.ceil((this.pauseUntil - Date.now()) / 1000)
+      : 0;
+
+    return {
+      callCount: this.callCount,
+      limit: this.limit,
+      remaining: Math.max(0, this.limit - this.callCount),
+      percentUsed,
+      isPaused,
+      pauseUntil: this.pauseUntil,
+      secondsUntilReset: Math.max(0, secondsUntilReset),
+      dailyCallCount: this.dailyCallCount,
+      lastError: this.lastError,
+      message: this.getMessage(),
+    };
+  }
+
+  getMessage() {
+    const status = this.getStatus();
+    if (status.isPaused) {
+      return `Quota cooldown active. Resume in ${status.secondsUntilReset}s.`;
+    }
+    if (status.percentUsed >= 90) {
+      return `Quota at ${status.percentUsed}%. ${status.remaining} calls remaining.`;
+    }
+    if (status.percentUsed >= 75) {
+      return `Quota approaching. ${status.remaining} calls left.`;
+    }
+    return `Quota normal. ${status.remaining}/${status.limit} calls available.`;
+  }
+
+  rotateWindow() {
+    const now = Date.now();
+    if (now - this.windowStart > this.windowMs) {
+      console.log(
+        `[QuotaTracker] Window rotated. Calls in previous window: ${this.callCount}/${this.limit}`
+      );
+      this.windowStart = now;
+      this.callCount = 0;
+      this.pauseUntil = null;
+    }
+  }
+
+  isPaused() {
+    if (!this.pauseUntil) return false;
+    return Date.now() < this.pauseUntil;
+  }
+
+  pause() {
+    const pauseDuration = 65000;
+    this.pauseUntil = Date.now() + pauseDuration;
+    console.error(
+      `[QuotaTracker] QUOTA EXHAUSTED. Pausing ${
+        pauseDuration / 1000
+      }s until ${new Date(this.pauseUntil).toISOString()}`
+    );
+  }
+
+  handleQuotaError(error) {
+    this.lastError = error.message || error.toString();
+    const retryAfter = this.parseRetryAfter(error);
+    if (retryAfter) {
+      const pauseDuration = (retryAfter + 5) * 1000;
+      this.pauseUntil = Date.now() + pauseDuration;
+      console.warn(
+        `[QuotaTracker] Quota error. Pause until ${new Date(
+          this.pauseUntil
+        ).toISOString()}`
+      );
+    } else {
+      this.pause();
+    }
+  }
+
+  parseRetryAfter(error) {
+    const message = error.message || error.toString();
+    const match = message.match(/retry in (\d+\.?\d*)\s*s/i);
+    return match ? Math.ceil(parseFloat(match[1])) : null;
+  }
+
+  reset() {
+    console.log("[QuotaTracker] Resetting quota tracker");
+    this.callCount = 0;
+    this.windowStart = Date.now();
+    this.pauseUntil = null;
+    this.lastError = null;
+  }
+}
+
+// Export singleton instance
+const quotaTracker = new QuotaTracker();
+console.log("[QuotaTracker] Initialized (20 calls/min)");
+
 // Small wrapper to call Google's Generative Language endpoints for TEXT or IMAGE modalities.
 // Selects URL/key based on modality and returns parsed response. Does not throw on API errors —
 // returns an object with ok/status/json/rawText and imageData (base64) when present.
@@ -179,7 +339,7 @@ async function callGemini({
     const imageFound = findImage(json) || null;
 
     return {
-      ok: resp.ok,
+module.exports = { callGemini, quotaTracker };
       status: resp.status,
       json,
       rawText: raw,
