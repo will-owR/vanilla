@@ -31,7 +31,6 @@
       progress = 100;
 
       // Create download link
-      const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

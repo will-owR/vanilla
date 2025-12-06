@@ -97,15 +97,25 @@ export async function exportToPdf(content, options = {}) {
       ...options,
     });
 
-    // Use common response handler; it will return parsed JSON for JSON responses
-    // or return the raw response object for non-JSON (e.g., PDF) responses.
-    const handled = await handleApiResponse(response);
-
-    // If server returned a PDF, return it as a blob
+    // Check content-type FIRST before consuming response body
     const ct = response.headers?.get?.("content-type");
     if (ct?.includes("application/pdf")) {
+      // If server returned a PDF, return it as a blob
+      if (!response.ok) {
+        const text = await response.text();
+        throw new APIError(
+          "PDF export failed",
+          "PROCESSING_ERROR",
+          response.status,
+          null,
+          { body: text }
+        );
+      }
       return await response.blob();
     }
+
+    // For non-PDF responses (JSON error or unexpected), use common handler
+    const handled = await handleApiResponse(response);
 
     // If we got here, the response was neither JSON error nor a PDF
     throw new APIError(
