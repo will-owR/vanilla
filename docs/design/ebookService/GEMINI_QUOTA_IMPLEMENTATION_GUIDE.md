@@ -3,7 +3,14 @@
 **Date**: December 6, 2025  
 **Branch**: `feat/revert`  
 **Audience**: Developers, DevOps, QA engineers  
-**Status**: Ready for Implementation
+**Status**: Implementation Complete (Active Error - See Note Below)
+
+### ⚠️ CURRENT ERROR
+
+**Issue**: Infinite recursion in `getMessage()` / `getStatus()` in `server/geminiClient.js`  
+**Impact**: 500 errors on all quota status checks  
+**Root Cause**: Circular method dependency - see [Current Error Explanation](#current-error-explanation) section  
+**Fix Status**: Needs code correction in geminiClient.js
 
 ---
 
@@ -463,43 +470,55 @@ export async function getQuotaStatus() {
 
 ### Step 1: Create QuotaTracker (30 min)
 
-- [ ] Create `server/geminiClient.js` with QuotaTracker class
-- [ ] Test quota rotation logic
-- [ ] Test pause/resume logic
-- [ ] Verify singleton pattern
+- [x] Create `server/geminiClient.js` with QuotaTracker class
+- [x] Test quota rotation logic
+- [x] Test pause/resume logic
+- [x] Verify singleton pattern
+
+✅ **COMPLETED**
 
 ### Step 2: Integrate into genieService (45 min)
 
-- [ ] Import quotaTracker in genieService.js
-- [ ] Call `recordCall()` before each Gemini API call
-- [ ] Handle quota exhaustion gracefully
-- [ ] Implement exponential backoff for retry
+- [x] Import quotaTracker in genieService.js
+- [x] Call `recordCall()` before each Gemini API call
+- [x] Handle quota exhaustion gracefully
+- [x] Implement exponential backoff for retry
+
+✅ **COMPLETED**
 
 ### Step 3: Modify JobQueueManager (1 hour)
 
-- [ ] Add deferral status to Job object
-- [ ] Implement `shouldDeferJob()` logic
-- [ ] Implement `processDeferred()` scheduling
-- [ ] Update `getStatus()` to return defer info
+- [x] Add deferral status to Job object
+- [x] Implement `shouldDeferJob()` logic
+- [x] Implement `processDeferred()` scheduling
+- [x] Update `getStatus()` to return defer info
+
+✅ **COMPLETED**
 
 ### Step 4: Add Backend Endpoint (15 min)
 
-- [ ] Create `/api/quota-status` endpoint in index.js
-- [ ] Return quota + queue metrics
+- [x] Create `/api/quota-status` endpoint in index.js
+- [x] Return quota + queue metrics
+
+✅ **COMPLETED**
 
 ### Step 5: Update Frontend (45 min)
 
-- [ ] Add quota display to generation UI
-- [ ] Show deferred message if job queued
-- [ ] Display "waiting for quota reset..." during pause
-- [ ] Call quota status endpoint periodically
+- [x] Add quota display to generation UI
+- [x] Show deferred message if job queued
+- [x] Display "waiting for quota reset..." during pause
+- [x] Call quota status endpoint periodically
+
+✅ **COMPLETED**
 
 ### Step 6: Testing (1.5 hours)
 
-- [ ] Unit tests for QuotaTracker
-- [ ] Integration tests with mocked Gemini API
-- [ ] Load test with multiple rapid requests
-- [ ] Manual testing with real Gemini API
+- [x] Unit tests for QuotaTracker
+- [x] Integration tests with mocked Gemini API
+- [x] Load test with multiple rapid requests
+- [ ] Manual testing with real Gemini API (blocked by Step 8 fix)
+
+🔄 **IN PROGRESS** - Blocked by infinite recursion error
 
 ### Step 7: Deployment & Monitoring (30 min)
 
@@ -507,6 +526,17 @@ export async function getQuotaStatus() {
 - [ ] Monitor quota tracking logs
 - [ ] Verify no API leaks during pause
 - [ ] Push to production
+
+⏳ **PENDING** - Awaiting Step 6 completion
+
+### Step 8: Fix Infinite Recursion Error (15 min)
+
+- [ ] Remove `getMessage()` call from `getStatus()` return object
+- [ ] Refactor `getMessage()` to use instance properties directly
+- [ ] Verify no 500 errors on quota status endpoint
+- [ ] Resume Step 6 manual testing
+
+🔴 **CRITICAL** - Must complete before proceeding
 
 **Total estimated time**: 5-6 hours development
 
@@ -606,6 +636,118 @@ async function loadTest() {
   console.log(`Results: ${results.length} requests, ${deferred} deferred`);
   // Expected: ~3 processed, ~2 deferred
 }
+```
+
+---
+
+## Current Error Explanation
+
+### Problem: Maximum Call Stack Size Exceeded
+
+**Error Message**:
+
+```
+RangeError: Maximum call stack size exceeded
+    at QuotaTracker.getStatus (/workspaces/AetherPress/server/geminiClient.js:74:5)
+    at QuotaTracker.getMessage (/workspaces/AetherPress/server/geminiClient.js:89:25)
+    at QuotaTracker.getStatus (/workspaces/AetherPress/server/geminiClient.js:84:21)
+    at QuotaTracker.getMessage (/workspaces/AetherPress/server/geminiClient.js:89:25)
+```
+
+**Root Cause**: Circular Method Dependency
+
+In `geminiClient.js`:
+
+```javascript
+// Line 84 in getStatus()
+return {
+  // ... other properties
+  message: this.getMessage(),  // ← calls getMessage()
+};
+
+// Line 89 in getMessage()
+getMessage() {
+  const status = this.getStatus();  // ← calls getStatus() → infinite loop!
+  // ... build message using status
+}
+```
+
+This creates infinite recursion:
+
+```
+getStatus() → getMessage() → getStatus() → getMessage() → ... 💥
+```
+
+**Impact**: Every API call that checks quota status crashes with HTTP 500
+
+### Solution
+
+Remove the circular dependency by:
+
+1. **Don't call `getMessage()` from `getStatus()`** - Remove the `message` property from the return object
+2. **Refactor `getMessage()` to access instance properties directly** instead of calling `getStatus()`
+3. **Expose `getMessage()` as a separate method** for callers to use if needed
+
+**Code Change Required**:
+
+In `server/geminiClient.js`, modify `getStatus()`:
+
+```javascript
+getStatus() {
+  this.rotateWindow();
+
+  const percentUsed = Math.round((this.callCount / this.limit) * 100);
+  const isPaused = this.isPaused();
+  const secondsUntilReset = isPaused
+    ? Math.ceil((this.pauseUntil - Date.now()) / 1000)
+    : 0;
+
+  return {
+    callCount: this.callCount,
+    limit: this.limit,
+    remaining: Math.max(0, this.limit - this.callCount),
+    percentUsed,
+    isPaused,
+    pauseUntil: this.pauseUntil,
+    secondsUntilReset: Math.max(0, secondsUntilReset),
+    dailyCallCount: this.dailyCallCount,
+    lastError: this.lastError,
+    // ❌ REMOVE THIS LINE - it causes infinite recursion:
+    // message: this.getMessage(),
+  };
+}
+
+// Keep getMessage() as separate method, use instance properties directly
+getMessage() {
+  const percentUsed = Math.round((this.callCount / this.limit) * 100);
+
+  if (this.isPaused()) {
+    const secondsUntilReset = Math.ceil((this.pauseUntil - Date.now()) / 1000);
+    return `Quota cooldown active. Resume in ${secondsUntilReset}s.`;
+  }
+  if (percentUsed >= 90) {
+    const remaining = Math.max(0, this.limit - this.callCount);
+    return `Quota at ${percentUsed}%. ${remaining} calls remaining.`;
+  }
+  return `Quota OK (${this.callCount}/${this.limit})`;
+}
+```
+
+**Testing After Fix**:
+
+```bash
+# Should return 200 with quota status (no 500 error)
+curl http://localhost:3000/api/quota-status
+
+# Should see proper quota metrics in response
+# {
+#   "callCount": 0,
+#   "limit": 20,
+#   "remaining": 20,
+#   "percentUsed": 0,
+#   "isPaused": false,
+#   ...
+# }
 ```
 
 ---
