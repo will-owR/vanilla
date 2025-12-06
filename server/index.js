@@ -3181,8 +3181,8 @@ app.get("/api/ebook/:jobId", (req, res) => {
     return res.status(202).json(result);
   }
 
-  // Status is "complete"
-  res.json(result.result);
+  // Status is "complete" - result IS the final ebook object
+  res.json(result);
 });
 
 // ==================== LEGACY ENDPOINT (DEPRECATED) ====================
