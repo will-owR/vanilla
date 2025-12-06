@@ -339,7 +339,6 @@ async function callGemini({
     const imageFound = findImage(json) || null;
 
     return {
-module.exports = { callGemini, quotaTracker };
       status: resp.status,
       json,
       rawText: raw,
@@ -351,4 +350,4 @@ module.exports = { callGemini, quotaTracker };
   }
 }
 
-module.exports = { callGemini };
+module.exports = { callGemini, quotaTracker };
