@@ -2999,7 +2999,7 @@ async function generateEbookInBackground(
         pageCount: pageCountNum,
         wordCount: (prompt || "").split(/\s+/).length,
         colorPalette,
-        fontSizeScale,
+        fontSizeScale: fontScaleNum,
         density,
         ...(envelope.metadata || {}),
       },
