@@ -167,7 +167,7 @@ function createEbookStore() {
           response.html?.length || "NULL"
         );
         console.log("[FRONTEND] - title:", response.title);
-        console.log("[FRONTEND] - chapters:", response.chapters?.length || 0);
+        console.log("[FRONTEND] - pages:", response.pages?.length || 0);
 
         update((store) => ({
           ...store,

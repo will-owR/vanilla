@@ -71,18 +71,32 @@ async function handle(payload, classification) {
   try {
     const { createAIService } = require("./aiService");
     aiSvc = createAIService();
+    console.log("[DIAGNOSTIC] AI Service Type:", aiSvc.constructor.name);
+    console.log("[DIAGNOSTIC] USE_REAL_AI:", process.env.USE_REAL_AI);
+    console.log("[DIAGNOSTIC] FORCE_MOCK_AI:", process.env.FORCE_MOCK_AI);
   } catch (err) {
     // Fallback: use a simple synchronous mock built-in if aiService is unavailable
+    console.error(
+      "[ERROR] Failed to load aiService. Error details:",
+      err.message,
+      "\n",
+      err.stack
+    );
     aiSvc = {
       async generateContent(p) {
         return {
           content: {
-            title: `Auto: ${String(p).slice(0, 30)}`,
-            body: String(p),
+            title: "MockFallback",
+            body: "Mock response from fallback - check server logs for error",
           },
         };
       },
     };
+    console.log(
+      "[DIAGNOSTIC] AI Service Type: FallbackMock (error:",
+      err.message,
+      ")"
+    );
   }
 
   // Strategy: To avoid Gemini free tier quota limits (10 requests/min per key),
@@ -123,20 +137,40 @@ async function handle(payload, classification) {
       if (typeof text === "object") return text;
       if (typeof text !== "string") return null;
 
+      // Trim and remove markdown code fence if present
+      let cleanText = text.trim();
+      if (cleanText.startsWith("```json")) {
+        cleanText = cleanText.substring(7); // Remove ```json
+      }
+      if (cleanText.startsWith("```")) {
+        cleanText = cleanText.substring(3); // Remove ```
+      }
+      if (cleanText.endsWith("```")) {
+        cleanText = cleanText.substring(0, cleanText.length - 3); // Remove trailing ```
+      }
+      cleanText = cleanText.trim();
+
       // Quick attempt: full-text JSON.parse
       try {
-        if (/^[\s]*[\[{]/.test(text)) {
-          return JSON.parse(text);
+        if (/^[\s]*[\[{]/.test(cleanText)) {
+          const result = JSON.parse(cleanText);
+          if (result && typeof result === "object") {
+            return result;
+          }
         }
       } catch (e) {
         // fall through to extraction
       }
 
-      // attempt to find a JSON block inside text
-      const jsonMatch = text.match(/\{[\s\S]*\}/m);
+      // If direct parse failed, try to find a complete JSON block
+      // This handles cases where there's explanatory text around JSON
+      const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
-          return JSON.parse(jsonMatch[0]);
+          const result = JSON.parse(jsonMatch[0]);
+          if (result && typeof result === "object") {
+            return result;
+          }
         } catch (e) {
           return null;
         }
@@ -144,15 +178,44 @@ async function handle(payload, classification) {
       return null;
     };
 
+    // DIAGNOSTIC: Log full structureResp object before extraction
+    console.log(
+      "[GEMINI] Full structureResp:",
+      JSON.stringify(structureResp, null, 2).substring(0, 500)
+    );
+
     const aiText =
       (structureResp &&
         (structureResp.content?.body ||
           structureResp.content?.title ||
           structureResp.rawText)) ||
       "";
+
+    // DIAGNOSTIC: Log what we're attempting to parse
+    console.log("[GEMINI] Conversation 1 - Response received:");
+    console.log("[DIAGNOSTIC] aiText extracted from structureResp");
+    console.log("[DIAGNOSTIC] Response type:", typeof aiText);
+    console.log("[DIAGNOSTIC] Response length:", aiText.length);
+    console.log("[DIAGNOSTIC] First 500 chars:", aiText.substring(0, 500));
+    console.log("[DIAGNOSTIC] Starts with JSON?:", /^[\s]*[\[{]/.test(aiText));
+    console.log("[DIAGNOSTIC] Contains {..}?:", /\{[\s\S]*\}/.test(aiText));
+
     structure = tryParse(aiText);
 
-    console.log("[GEMINI] Conversation 1 - Response received:");
+    console.log("[DIAGNOSTIC] Parse result:", structure ? "SUCCESS" : "FAILED");
+    if (structure) {
+      console.log("[DIAGNOSTIC] Structure keys:", Object.keys(structure));
+      console.log("[DIAGNOSTIC] Has title?:", !!structure.title);
+      console.log(
+        "[DIAGNOSTIC] Has outline?:",
+        Array.isArray(structure.outline)
+      );
+      console.log(
+        "[DIAGNOSTIC] Outline length:",
+        structure.outline?.length || 0
+      );
+    }
+
     console.log("[GEMINI] Structure title:", structure?.title || "NOT FOUND");
     console.log("[GEMINI] Chapters outline:", structure?.outline?.length || 0);
 

@@ -83,7 +83,11 @@ class RealAIService {
         const e = new Error(`Gemini call failed: ${errMsg}`);
 
         // Detect quota exhaustion errors from API
-        if (errMsg.includes("quota") || errMsg.includes("429") || status === 429) {
+        if (
+          errMsg.includes("quota") ||
+          errMsg.includes("429") ||
+          status === 429
+        ) {
           Object.defineProperty(e, "isQuotaError", {
             value: true,
             enumerable: true,
@@ -104,32 +108,37 @@ class RealAIService {
         throw e;
       }
 
-    // Prefer parsed text candidate, fall back to rawText or JSON.stringify
-    let text =
-      resp.text || resp.rawText || (resp.json ? JSON.stringify(resp.json) : "");
-    if (!text) text = String(resp.rawText || "");
+      // Prefer parsed text candidate, fall back to rawText or JSON.stringify
+      let text =
+        resp.text ||
+        resp.rawText ||
+        (resp.json ? JSON.stringify(resp.json) : "");
+      if (!text) text = String(resp.rawText || "");
 
-    // Simple heuristics for title/body: first line as title, rest as body
-    const lines = text
-      .split(/\n+/)
-      .map((l) => l.trim())
-      .filter(Boolean);
-    const title =
-      lines.length > 0
-        ? lines[0].slice(0, 200)
-        : `Result for: ${String(prompt).slice(0, 50)}`;
-    const body = lines.length > 1 ? lines.slice(1).join("\n\n") : text;
-    const layout = "ai-generated";
+      // Simple heuristics for title/body: first line as title, rest as body
+      const lines = text
+        .split(/\n+/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+      const title =
+        lines.length > 0
+          ? lines[0].slice(0, 200)
+          : `Result for: ${String(prompt).slice(0, 50)}`;
+      const body = lines.length > 1 ? lines.slice(1).join("\n\n") : text;
+      const layout = "ai-generated";
 
-    const metadata = {
-      model: resp.json?.model || "gemini",
-      status: resp.status,
-    };
+      const metadata = {
+        model: resp.json?.model || "gemini",
+        status: resp.status,
+      };
 
-    return {
-      content: { title, body, layout },
-      metadata,
-    };
+      return {
+        content: { title, body, layout },
+        metadata,
+      };
+    } catch (err) {
+      throw err;
+    }
   }
 
   /**
@@ -174,18 +183,25 @@ function createAIService() {
     process.env.FORCE_MOCK_AI === "1" || process.env.FORCE_MOCK_AI === "true";
   if (forceMock) {
     console.log("AI service: MockAIService enabled (FORCE_MOCK_AI=1)");
+    console.log("[DIAGNOSTIC] FORCE_MOCK_AI:", process.env.FORCE_MOCK_AI);
     return new MockAIService();
   }
 
   // Priority 2: Explicit enable real AI
   const useReal =
     process.env.USE_REAL_AI === "1" || process.env.USE_REAL_AI === "true";
+  console.log("[DIAGNOSTIC] USE_REAL_AI:", process.env.USE_REAL_AI);
+  console.log("[DIAGNOSTIC] FORCE_MOCK_AI:", process.env.FORCE_MOCK_AI);
+
   if (useReal) {
     // sanity check for required env vars
     const apiUrl =
       process.env.GEMINI_API_URL || process.env.GEMINI_API_URL_TEXT;
     const apiKey =
       process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_TEXT;
+    console.log("[DIAGNOSTIC] GEMINI_API_URL exists?:", !!apiUrl);
+    console.log("[DIAGNOSTIC] GEMINI_API_KEY exists?:", !!apiKey);
+
     if (!apiUrl || !apiKey) {
       console.warn(
         "USE_REAL_AI=true but GEMINI_API_URL or GEMINI_API_KEY not set. Falling back to MockAIService."

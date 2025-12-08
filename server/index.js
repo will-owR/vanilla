@@ -1336,6 +1336,17 @@ app.post("/export", async (req, res) => {
   try {
     const envelope = req.body || {};
 
+    // DIAGNOSTIC: Log what we're receiving
+    console.log(
+      "[EXPORT-EP] POST /export received body with keys:",
+      Object.keys(envelope)
+    );
+    console.log("[EXPORT-EP] Has pages?:", !!envelope.pages);
+    console.log("[EXPORT-EP] pages is array?:", Array.isArray(envelope.pages));
+    if (envelope.pages) {
+      console.log("[EXPORT-EP] pages length:", envelope.pages.length);
+    }
+
     // NEW: Check if this is a prompt-based export (new unified path)
     if (envelope.prompt && !envelope.pages) {
       console.log(
@@ -3036,7 +3047,7 @@ async function generateEbookInBackground(
     const responseObj = {
       id: ebookId,
       resultId: result.resultId,
-      chapters: envelope.pages,
+      pages: envelope.pages,
       html: envelope.html || null,
       title: actualTitle,
       metadata: {
