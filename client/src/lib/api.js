@@ -1,4 +1,4 @@
-import Logger from "./logger";
+import Logger from "./logger.js";
 import { get } from "svelte/store";
 import { promptStore } from "../stores/promptStore.js";
 import { modeStore } from "../stores/modeStore.js";

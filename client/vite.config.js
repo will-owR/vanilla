@@ -27,17 +27,11 @@ export default defineConfig(({ mode }) => {
         "/api": createProxy("/api", DEV_AUTH_TOKEN),
         "/override": createProxy("/override", DEV_AUTH_TOKEN),
         "/export": createProxy("/export", DEV_AUTH_TOKEN),
-        "/health": createProxy("/health", DEV_AUTH_TOKEN)
+        "/health": createProxy("/health", DEV_AUTH_TOKEN),
       },
       fs: {
         strict: true,
         allow: [".."], // Allow serving files from one level up
-      },
-      headers: {
-        // Ensure proper MIME types for Svelte files
-        "*.svelte": {
-          "Content-Type": "application/javascript",
-        },
       },
     },
     resolve: {

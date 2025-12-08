@@ -1,7 +1,7 @@
 // Lightweight frontend genie service wrapper.
 // Provides a stable generate() contract that can return a dev/demo payload
 // or delegate to the server via existing api.submitPrompt().
-import { submitPrompt, loadPreview } from "./api";
+import { submitPrompt, loadPreview } from "./api.js";
 
 function buildContentFromPrompt(prompt) {
   const title = `Dev: ${String(prompt).split(/\s+/).slice(0, 6).join(" ")}`;

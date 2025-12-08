@@ -4,8 +4,8 @@ import {
   loadPreview,
   savePromptContent,
   updatePromptContent,
-} from "./api";
-import genieServiceFE from "./genieServiceFE";
+} from "./api.js";
+import genieServiceFE from "./genieServiceFE.js";
 import {
   contentStore,
   previewStore,

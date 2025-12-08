@@ -18,6 +18,10 @@ Notes:
 - The preview flow surfaces errors and shows inline loading text.
 - Work in progress: in-UI smoke test, Playwright e2e script, and CI integration (see `docs/design/misc/V0.1_objectives_and_plan.md`).
 
+**[IMPORTANT] v2 Components Purge in Progress**
+
+The v2 component ecosystem (GenerateFlow-v2, MediaSelector-v2, api-v2, etc.) is being removed as dead code. See [V2_PURGE_PLAN.md](../docs/archive/V2_PURGE_PLAN.md) for details. This does NOT affect active functionality.
+
 ## Recommended IDE Setup
 
 [VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode).
