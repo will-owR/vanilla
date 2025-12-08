@@ -165,7 +165,7 @@
 
 **What to do**:
 
-1. Create `/workspaces/AetherPress/scripts/README_TESTS.md` documenting each test
+1. Create `/workspaces/Giggle-A-Day/scripts/README_TESTS.md` documenting each test
 2. Move test scripts to `/scripts/` directory
 3. Update any references in CI/CD workflows or documentation
 4. Keep only essential scripts in root (none for quota, all move to /scripts)

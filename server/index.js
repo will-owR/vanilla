@@ -621,6 +621,7 @@ app.get("/api/quota-status", (req, res) => {
     const jobQueueManager = require("./jobQueueManager");
 
     const quotaStatus = quotaTracker.getStatus();
+    const message = quotaTracker.getMessage();
     const jobStats = jobQueueManager.getStats();
     const deferredCount = jobQueueManager.deferredQueue?.length || 0;
 
@@ -634,7 +635,7 @@ app.get("/api/quota-status", (req, res) => {
         secondsUntilReset: quotaStatus.secondsUntilReset,
         pauseUntil: quotaStatus.pauseUntil,
         dailyCallCount: quotaStatus.dailyCallCount,
-        message: quotaStatus.message,
+        message: message,
       },
       queue: {
         totalJobs: jobStats.totalJobs,
