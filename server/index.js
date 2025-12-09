@@ -1378,10 +1378,11 @@ app.post("/export", async (req, res) => {
     console.log("[EXPORT-EP] /export: Using canonical envelope path");
 
     // Validate canonical envelope structure
-    if (!envelope || !Array.isArray(envelope.pages)) {
+    // Allow empty pages array IF html content is present (Priority 1 fallback)
+    if (!envelope || (!Array.isArray(envelope.pages) && !envelope.html)) {
       return sendValidationError(
         res,
-        "Export requires either: (1) prompt parameter with unified pipeline, or (2) canonical envelope with pages array"
+        "Export requires either: (1) prompt parameter with unified pipeline, or (2) canonical envelope with pages array or html content"
       );
     }
 
