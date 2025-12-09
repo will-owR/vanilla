@@ -25,14 +25,20 @@ const exportService = {
    * @returns {Promise<{buffer: Buffer, validation?: any}>}
    */
   async generate(envelope, options = {}) {
-    if (!envelope || !Array.isArray(envelope.pages)) {
-      const error = new Error("Envelope must contain pages array");
+    // Allow empty pages array IF html content is present (Priority 1 fallback)
+    if (!envelope || (!Array.isArray(envelope.pages) && !envelope.html)) {
+      const error = new Error(
+        "Envelope must contain pages array or html content"
+      );
       error.status = 400;
       throw error;
     }
 
-    if (envelope.pages.length === 0) {
-      const error = new Error("Envelope must contain at least one page");
+    // Allow empty pages IF html is present
+    if (envelope.pages.length === 0 && !envelope.html) {
+      const error = new Error(
+        "Envelope must contain at least one page or html content"
+      );
       error.status = 400;
       throw error;
     }
