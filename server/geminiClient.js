@@ -106,6 +106,28 @@ async function callGemini({
   };
 
   try {
+    // ✅ PRE-CALL QUOTA CHECK: Verify quota available before making API request
+    // This prevents calls from being sent to Gemini when quota is exhausted
+    const quotaTracker = require("./utils/quotaTracker");
+    const quotaStatus = quotaTracker.getStatus();
+
+    if (quotaStatus.availableQuota < 1) {
+      console.log(
+        `[QUOTA] Pre-call check BLOCKED: exhausted quota (${quotaStatus.callCount}/${quotaStatus.limit})`
+      );
+      return {
+        ok: false,
+        status: 429, // Too Many Requests
+        error: `Quota exhausted: reached limit of ${
+          quotaStatus.limit
+        } calls per ${Math.round(
+          quotaStatus.windowExpiredMs / 1000
+        )} seconds. Please retry after quota window resets.`,
+        quotaExhausted: true,
+        availableQuota: quotaStatus.availableQuota,
+      };
+    }
+
     const resp = await fetchImpl(apiUrl, {
       method: "POST",
       headers,
