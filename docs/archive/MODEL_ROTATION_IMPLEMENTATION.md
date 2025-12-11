@@ -2,7 +2,7 @@
 
 **Date**: December 11, 2025  
 **Branch**: `feat/ebook-revert`  
-**Status**: Implementation Phase  
+**Status**: Archival/Never implemented  
 **Audience**: Engineers implementing the feature  
 **Time Estimate**: 1-2 hours
 

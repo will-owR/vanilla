@@ -2,7 +2,7 @@
 
 **Date**: December 11, 2025 @ 1:20PM
 **Branch**: `feat/ebook-revert`  
-**Status**: Design Phase  
+**Status**: Archival/Never implemented  
 **Purpose**: Enable efficient Gemini API quota distribution across Pro and Flash models
 
 ---
