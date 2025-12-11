@@ -78,6 +78,45 @@ const AWAIT_PERSISTENCE = (() => {
   );
 })();
 
+/**
+ * Calculate API call cost for a given service mode
+ * Used by orchestrator to check quota BEFORE dispatching to service
+ *
+ * @param {string} mode - Service mode: "ebook", "poetry", "blog", etc.
+ * @param {Object} metadata - Service metadata (pageCount, wordCount, etc.)
+ * @returns {number} Number of API calls required
+ */
+function calculateCostForMode(mode, metadata = {}) {
+  const PAGES_PER_CALL = 2; // Ebook: 2 pages per Gemini call (typical)
+  const WORDS_PER_CALL = 500; // Blog: 500 words per Gemini call
+
+  if (mode === "ebook") {
+    const pageCount = metadata.pageCount || 10;
+    // +1 for structure call, then divide pages by PAGES_PER_CALL
+    // Example: 10 pages → 1 structure + 10/2 chapters = 1 + 5 = 6 calls
+    return 1 + Math.ceil(pageCount / PAGES_PER_CALL);
+  }
+
+  if (mode === "poetry") {
+    // Single call for poem generation
+    return 1;
+  }
+
+  if (mode === "blog") {
+    const wordCount = metadata.wordCount || 2000;
+    // Blog posts: estimate calls based on word count
+    return Math.ceil(wordCount / WORDS_PER_CALL);
+  }
+
+  if (mode === "custom") {
+    // Custom services can provide explicit cost
+    return metadata.estimatedCost || 1;
+  }
+
+  // Default: assume 1 call
+  return 1;
+}
+
 const genieService = {
   // For the demo, generate delegates to sampleService. In future this can
   // orchestrate real AI/image jobs via aetherService.
@@ -648,6 +687,39 @@ const genieService = {
     const resultDb = require("./utils/resultDb");
 
     try {
+      // ✅ PLATFORM CONCERN: Quota check before ANY service dispatch
+      // This ensures consistent quota protection across all services
+      const quotaTracker = require("./utils/quotaTracker");
+      const cost = calculateCostForMode(mode, payload.metadata);
+      const status = quotaTracker.getStatus();
+
+      console.log(
+        `[QUOTA] Checking quota for mode '${mode}': ` +
+          `cost=${cost}, available=${status.availableQuota}`
+      );
+
+      // Check if sufficient quota available
+      if (status.availableQuota < cost) {
+        console.log(
+          `[QUOTA] Insufficient quota: need ${cost}, have ${status.availableQuota}`
+        );
+
+        // Throw deferral error (will be caught in index.js)
+        const err = new Error(
+          `Quota exhausted: need ${cost} calls, but only ${status.availableQuota} available`
+        );
+        err.status = 202; // Accepted, not processed yet
+        err.defer = true;
+        err.cost = cost;
+        err.availableQuota = status.availableQuota;
+        err.windowResetAtMs = status.windowResetAt;
+        throw err;
+      }
+
+      console.log(
+        `[QUOTA] Quota check passed: proceeding with service dispatch`
+      );
+
       let result;
       let classification = null;
 
@@ -1293,7 +1365,10 @@ const genieService = {
   },
 };
 
-module.exports = genieService;
+module.exports = {
+  ...genieService,
+  calculateCostForMode,
+};
 
 // Test helpers: allow injecting a mock dbUtils or sample service for unit tests
 let _injectedDbUtils;
