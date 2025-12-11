@@ -192,6 +192,7 @@ Total: 4 calls / 20 min limit  → 80% quota remaining
 
 - **Implementation Guide**: `docs/design/MODEL_ROTATION_IMPLEMENTATION.md`
 - **Branch Strategy**: `docs/design/BRANCH_STRATEGY_FEAT_EBOOK_REVERT.md`
+- **Gemini Models Reference**: `docs/reference/GEMINI_MODELS_REFERENCE.md` - Detailed specs, capabilities, and recommendations for Pro vs Flash models
 - **Quota System**: Implemented as pure accounting module in orchestrator (ebookService)
 
 ---

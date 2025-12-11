@@ -375,6 +375,7 @@ After implementation:
 ## Related Files
 
 - Architecture: `docs/design/MODEL_ROTATION_ARCHITECTURE.md`
+- Gemini Models Reference: `docs/reference/GEMINI_MODELS_REFERENCE.md` - Specs for Pro/Flash, capabilities, config recommendations
 - Current tests: `server/__tests__/aiService.test.js`
 - Ebook service: `server/ebookService.js` (lines 95-220)
 - API client: `server/geminiClient.js` (lines 170+)
