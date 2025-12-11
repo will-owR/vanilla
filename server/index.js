@@ -2988,6 +2988,23 @@ app.post("/api/ebook/generate", async (req, res) => {
     try {
       result = await genieService.process(payload);
     } catch (err) {
+      // ✅ Handle quota deferral (202 response)
+      if (err.defer && err.status === 202) {
+        console.log(
+          `[${new Date().toISOString()}] [${reqId}] Quota insufficient, returning 202 deferral`
+        );
+
+        return res.status(202).json({
+          message: "Quota exhausted; request deferred for retry",
+          requiredQuota: err.cost,
+          availableQuota: err.availableQuota,
+          windowResetAtMs: err.windowResetAtMs,
+          retryAfterSeconds: Math.ceil((err.windowResetAtMs || 60000) / 1000),
+          requestId: reqId,
+        });
+      }
+
+      // Other errors: 400, 500, etc.
       console.error(
         `[${new Date().toISOString()}] [${reqId}] genieService.process() ERROR: ${
           err?.message
