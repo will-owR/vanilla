@@ -178,6 +178,19 @@ async function callGemini({
 
     const imageFound = findImage(json) || null;
 
+    // ✅ Track successful call for quota purposes (only on success)
+    if (resp.ok) {
+      try {
+        const quotaTracker = require("./utils/quotaTracker");
+        quotaTracker.recordCall();
+        console.log(
+          `[GEMINI] API call successful, quota tracked: ${resp.status}`
+        );
+      } catch (err) {
+        console.warn("[QUOTA] Failed to track API call:", err && err.message);
+      }
+    }
+
     return {
       ok: resp.ok,
       status: resp.status,
