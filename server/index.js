@@ -369,7 +369,7 @@ function attemptPuppeteerRestart() {
 app.set("trust proxy", 1);
 
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 app.use(morgan("dev"));
 app.use(cors());
 // Apply rate limiting, but allow a dev-only bypass via DISABLE_RATE_LIMIT=1
