@@ -786,6 +786,61 @@ The rate-limiter handles velocity at the API call level, allowing both sequentia
 
 ---
 
+## ADDENDA: Out-of-Scope Implementations Added
+
+During implementation, two incomplete features were discovered and completed:
+
+### 1. **Model Routing: Pro vs Flash Based on callIndex**
+
+**Original Feature Assumption:**
+
+- The design assumed model routing was already implemented
+- Code contained references to "Using Gemini 2.5 Pro (structure)" vs "Using Gemini 2.5 Flash (chapters)"
+
+**Reality:**
+
+- Logging was present but **no actual routing logic existed**
+- All calls went to the same API endpoint
+
+**Implementation:**
+
+- Added model selection in aiService: `callIndex === 0 ? "gemini-2.5-pro" : "gemini-2.5-flash"`
+- Added endpoint routing in geminiClient based on model name
+- Environment variables support model-specific endpoints: `GEMINI_API_URL_PRO`, `GEMINI_API_URL_FLASH`
+
+**Impact on Feature:**
+
+- Ensures quota distribution works as described
+- Structure generation (callIndex=0) uses Pro model
+- Chapter generation (callIndex>0) uses Flash model
+- Enables different pricing/quota tiers per model
+
+### 2. **callIndex Parameter Chain**
+
+**Original Feature Assumption:**
+
+- The design assumed `callIndex` flowed through all layers (ebookService → aiService → geminiClient)
+
+**Reality:**
+
+- `generateContentWithRotation()` had `callIndex` in signature but **never used it**
+- `generateContent()` had no `callIndex` parameter
+- Orphaned infrastructure set up but never wired
+
+**Implementation:**
+
+- Updated `generateContent()` to accept and forward `callIndex`
+- Updated `generateContentWithRotation()` to pass `callIndex` through
+- Completed call chain: all layers now receive correct call index
+
+**Impact on Feature:**
+
+- Rate-limiter logs now show correct call sequence (Call 0, 1, 2, 3...)
+- Burst detection is accurate at the specific failing call
+- Model routing works based on actual call sequence
+
+---
+
 ## Discussion Topics
 
 1. **Optimal delay value**: Is 1000ms the right baseline?
@@ -797,4 +852,4 @@ The rate-limiter handles velocity at the API call level, allowing both sequentia
 
 ---
 
-**Next Steps**: Implement rate-limiter module and run Test Cases 1-4.
+**Next Steps**: Run Test Cases 1-4 to validate both rate-limiter and model routing implementations.

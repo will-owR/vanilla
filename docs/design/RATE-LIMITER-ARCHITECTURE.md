@@ -1,7 +1,7 @@
 # Rate-Limiter Architecture: System Design & Integration
 
 **Status**: Architecture Design Phase  
-**Date**: December 12, 2025  @ 12:15PM
+**Date**: December 12, 2025 @ 12:15PM
 **Related Documents**:
 
 - [RATE-LIMITER-FEATURE.md](RATE-LIMITER-FEATURE.md) - Feature design and testing strategy
@@ -855,6 +855,73 @@ The rate-limiter architecture is:
 ✅ **Resilient**: Handles edge cases gracefully  
 ✅ **Scalable**: Works for any book size (3, 10, 20+ pages)  
 ✅ **Future-proof**: Enables batch/parallel mode without changes
+
+---
+
+## ADDENDA: Out-of-Scope Implementations Added
+
+During implementation, two additional features were identified and implemented beyond the original rate-limiter design scope:
+
+### 1. **Actual Model Routing Logic (Pro vs Flash)**
+
+**Original Design Assumption:**
+
+- The design documents assumed model routing (callIndex=0 → Pro, callIndex>0 → Flash) was already implemented
+- Code contained logging that claimed to use different models but had **no actual routing logic**
+
+**What Was Found:**
+
+- `generateContentWithRotation()` logged "Using Gemini 2.5 Pro" vs "Using Gemini 2.5 Flash"
+- But `callGemini()` selected endpoints only by **modality** (TEXT, IMAGE, IMAGERY), not by model
+- All calls used the same API endpoint regardless of `callIndex` value
+
+**Implementation Added:**
+
+- **aiService.js**: Added model selection logic based on callIndex
+- **geminiClient.js**: Added model-based endpoint routing with environment variable fallbacks
+
+**Why It Matters:**
+
+- Ensures quota distribution across Pro (structure) and Flash (chapters) models as documented
+- Enables different API keys/quotas per model if needed
+- Aligns logged behavior with actual behavior
+
+**Environment Variables Required:**
+
+```bash
+# Optional: Define separate endpoints for Pro and Flash
+GEMINI_API_URL_PRO=<pro-api-url>
+GEMINI_API_URL_FLASH=<flash-api-url>
+
+# Falls back to these if not defined:
+GEMINI_API_URL_TEXT=<text-api-url>
+GEMINI_API_URL=<generic-api-url>
+```
+
+### 2. **callIndex Parameter Propagation**
+
+**Original Design Assumption:**
+
+- The design assumed `callIndex` would flow through all layers
+- Code contained `callIndex` in `generateContentWithRotation()` signature but **wasn't used**
+
+**What Was Found:**
+
+- `generateContentWithRotation(prompt, callIndex=0)` accepted the parameter
+- But called `generateContent(prompt)` **without passing it**
+- `generateContent()` had no `callIndex` parameter at all
+- This was **orphaned infrastructure** — set up for future use but never wired
+
+**Implementation Added:**
+
+- **aiService.js**: Updated `generateContent()` to accept and forward `callIndex`
+- **aiService.js**: Updated `generateContentWithRotation()` to pass `callIndex` through the chain
+
+**Why It Matters:**
+
+- Completes the call chain: ebookService → aiService → geminiClient
+- Without this, rate-limiter logging would show `Call 0` for all calls (incorrect)
+- Enables model routing per call as described above
 
 ---
 

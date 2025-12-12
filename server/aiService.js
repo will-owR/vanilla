@@ -47,7 +47,7 @@ class RealAIService {
     return this._gemini;
   }
 
-  async generateContent(prompt) {
+  async generateContent(prompt, callIndex = 0) {
     if (typeof prompt !== "string" || !prompt.trim()) {
       throw new Error("Prompt must be a non-empty string");
     }
@@ -56,10 +56,17 @@ class RealAIService {
     // Default to TEXT modality. generationConfig can be passed via env or options.
     const generationConfig = this.options.generationConfig || {};
 
+    // Determine which model to use based on callIndex
+    // callIndex=0: Structure generation (Gemini 2.5 Pro) - primary model
+    // callIndex>0: Chapter generation (Gemini 2.5 Flash) - secondary model
+    const model = callIndex === 0 ? "gemini-2.5-pro" : "gemini-2.5-flash";
+
     const resp = await callGemini({
       prompt: String(prompt),
       modality: "TEXT",
       generationConfig,
+      callIndex,
+      model,
     });
 
     if (!resp || resp.ok === false) {
@@ -139,7 +146,7 @@ class RealAIService {
 
     // Use single API key for both models - quota is distributed across
     // the two different model quotas in the free tier
-    return this.generateContent(prompt);
+    return this.generateContent(prompt, callIndex);
   }
 }
 

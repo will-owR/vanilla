@@ -1,7 +1,7 @@
 # Rate-Limiter Implementation: Step-by-Step Guide
 
 **Status**: Implementation Phase  
-**Date**: December 12, 2025  @ 12:15PM
+**Date**: December 12, 2025 @ 12:15PM
 **Related Documents**:
 
 - [RATE-LIMITER-FEATURE.md](RATE-LIMITER-FEATURE.md) - Feature design and testing strategy
@@ -839,6 +839,155 @@ grep "Chapter.*response received" server.log | \
 
 ---
 
+## ADDENDA: Out-of-Scope Implementations Added
+
+During implementation, two additional features were identified as incomplete and implemented:
+
+### 1. **Actual Model Routing Logic (Pro vs Flash)**
+
+**Issue Found:**
+
+- `generateContentWithRotation()` in aiService.js logged which model should be used ("Using Gemini 2.5 Pro" vs "Using Gemini 2.5 Flash")
+- But `callGemini()` in geminiClient.js had **no actual logic** to route to different models
+- All API calls went to the same endpoint regardless of `callIndex`
+
+**Files Modified:**
+
+#### server/aiService.js - generateContent()
+
+Added model selection logic:
+
+```javascript
+const model = callIndex === 0 ? "gemini-2.5-pro" : "gemini-2.5-flash";
+
+const resp = await callGemini({
+  prompt: String(prompt),
+  modality: "TEXT",
+  generationConfig,
+  callIndex,
+  model, // ← Pass model to geminiClient
+});
+```
+
+#### server/geminiClient.js - callGemini()
+
+Added model parameter and routing logic:
+
+```javascript
+async function callGemini({
+  prompt,
+  modality = "TEXT",
+  generationConfig = {},
+  imageB64 = null,
+  callIndex = 0,
+  model = null, // ← New parameter
+}) {
+  let apiUrl;
+  let rawKey;
+
+  if (model === "gemini-2.5-pro") {
+    // Use Pro model endpoints (primary/structure)
+    apiUrl =
+      process.env.GEMINI_API_URL_PRO ||
+      process.env.GEMINI_API_URL_TEXT ||
+      process.env.GEMINI_API_URL;
+    rawKey =
+      process.env.GEMINI_API_KEY_PRO ||
+      process.env.GEMINI_API_KEY_TEXT ||
+      process.env.GEMINI_API_KEY;
+  } else if (model === "gemini-2.5-flash") {
+    // Use Flash model endpoints (secondary/chapters)
+    apiUrl =
+      process.env.GEMINI_API_URL_FLASH ||
+      process.env.GEMINI_API_URL_TEXT ||
+      process.env.GEMINI_API_URL;
+    rawKey =
+      process.env.GEMINI_API_KEY_FLASH ||
+      process.env.GEMINI_API_KEY_TEXT ||
+      process.env.GEMINI_API_KEY;
+  } else {
+    // Fallback: select by modality (original logic)
+    // ... existing code ...
+  }
+}
+```
+
+**Environment Variables:**
+
+```bash
+# Optional: Define model-specific API endpoints
+GEMINI_API_URL_PRO=<pro-model-url>
+GEMINI_API_URL_FLASH=<flash-model-url>
+
+# Falls back to these if model-specific not defined:
+GEMINI_API_URL_TEXT=<text-api-url>
+GEMINI_API_URL=<generic-api-url>
+```
+
+**Impact:**
+
+- Call 0 (structure) → Gemini 2.5 Pro
+- Calls 1-N (chapters) → Gemini 2.5 Flash
+- Different quotas and pricing tiers can be used per model if configured
+
+### 2. **callIndex Parameter Propagation Through Call Chain**
+
+**Issue Found:**
+
+- `generateContentWithRotation(prompt, callIndex=0)` had `callIndex` in signature but **never passed it**
+- `generateContent(prompt)` had **no `callIndex` parameter** at all
+- Rate-limiter could never receive the correct call index for logging
+
+**Files Modified:**
+
+#### server/aiService.js - generateContent()
+
+Added `callIndex` parameter and passed to geminiClient:
+
+```javascript
+async generateContent(prompt, callIndex = 0) {
+  // ...
+  const resp = await callGemini({
+    prompt: String(prompt),
+    modality: "TEXT",
+    generationConfig,
+    callIndex,  // ← Pass through to geminiClient
+    model,
+  });
+}
+```
+
+#### server/aiService.js - generateContentWithRotation()
+
+Updated to pass `callIndex` to generateContent():
+
+```javascript
+async generateContentWithRotation(prompt, callIndex = 0) {
+  // ... determine model ...
+  return this.generateContent(prompt, callIndex);  // ← Pass callIndex through
+}
+```
+
+**Impact:**
+
+- Rate-limiter logs now show correct call sequence: `[RATE-LIMIT] Call 0`, `[RATE-LIMIT] Call 1`, etc.
+- Model routing now works correctly based on call sequence
+- Enables proper burst detection at the exact call that fails
+
+**Call Chain Verification:**
+
+```
+ebookService.handle()
+  └─ aiSvc.generateContentWithRotation(prompt, callIndex)
+     └─ generateContent(prompt, callIndex)
+        └─ callGemini({..., callIndex, model})
+           └─ rateLimiter.waitForReadiness(callIndex)
+```
+
+All layers now receive and use `callIndex` correctly.
+
+---
+
 **Ready for implementation!**
 
 Next steps:
@@ -846,7 +995,8 @@ Next steps:
 1. Review this document
 2. Create rateLimiter.js
 3. Update geminiClient.js
-4. Run Test 1 (verify baseline failure)
-5. Run Test 2 (verify fix works)
-6. Run Tests 3-6 (scalability and integration)
-7. Commit and push changes
+4. Update aiService.js with model routing and callIndex propagation
+5. Run Test 1 (verify baseline failure)
+6. Run Test 2 (verify fix works)
+7. Run Tests 3-6 (scalability and integration)
+8. Commit and push changes
