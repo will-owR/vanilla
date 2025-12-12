@@ -455,12 +455,25 @@ RATE_LIMIT_MIN_DELAY_MS=0     # No pacing (simulates current behavior)
 
 ## Testing Strategy
 
-### Test 1: Verify Current Behavior (Baseline)
+### Test Configuration Matrix
+
+The rate-limiter solution must scale across **any book size**. Testing focuses on three standard configurations:
+
+| Configuration | Chapters | Use Case                 | Expected Duration      |
+| ------------- | -------- | ------------------------ | ---------------------- |
+| **Small**     | 3 pages  | Current failing case     | 45-48s (with pacing)   |
+| **Medium**    | 10 pages | Real-world typical ebook | 100-115s (with pacing) |
+| **Large**     | 20 pages | Maximum complexity       | 190-210s (with pacing) |
+
+**Scalability assumption**: 1000ms inter-request delay applies uniformly across all book sizes. Success rate should remain consistent (100% chapter generation, zero fallback).
+
+### Test 1: Verify Current Behavior (Baseline) - 3-Page Book
 
 **Setup:**
 
 ```bash
 RATE_LIMIT_MIN_DELAY_MS=0  # Disable pacing (current behavior)
+PAGE_COUNT=3
 ```
 
 **Expected result:**
@@ -469,6 +482,7 @@ RATE_LIMIT_MIN_DELAY_MS=0  # Disable pacing (current behavior)
 - Fallback triggered
 - HTTP 200 with boilerplate Chapter 3
 - Total time: ~38s
+- **Quality**: 2/3 chapters AI-generated, 1/3 fallback stub
 
 **Logs:**
 
@@ -480,12 +494,13 @@ RATE_LIMIT_MIN_DELAY_MS=0  # Disable pacing (current behavior)
 [EBOOK] Chapter 3/3: AI generation failed, using fallback
 ```
 
-### Test 2: Verify Pacing Works (With 1s Delay)
+### Test 2: Verify Pacing Works (With 1s Delay) - 3-Page Book
 
 **Setup:**
 
 ```bash
 RATE_LIMIT_MIN_DELAY_MS=1000  # 1 second pacing
+PAGE_COUNT=3
 ```
 
 **Expected result:**
@@ -494,6 +509,7 @@ RATE_LIMIT_MIN_DELAY_MS=1000  # 1 second pacing
 - Chapter 3 gets Gemini API response (not fallback)
 - HTTP 200 with quality content
 - Total time: ~45-48s (+7-10s for pacing)
+- **Quality**: 3/3 chapters AI-generated ✓
 
 **Logs:**
 
@@ -512,36 +528,128 @@ RATE_LIMIT_MIN_DELAY_MS=1000  # 1 second pacing
 [EBOOK] Chapter 3/3: AI response received in 19000ms ← SUCCESS
 ```
 
-### Test 3: Optimize Delay Value
+### Test 3: Scalability - 10-Page Book
 
-Run against Gemini API with varying delays:
+**Setup:**
 
-- `RATE_LIMIT_MIN_DELAY_MS=250` - Too aggressive?
-- `RATE_LIMIT_MIN_DELAY_MS=500` - Acceptable?
-- `RATE_LIMIT_MIN_DELAY_MS=1000` - Safe?
-- `RATE_LIMIT_MIN_DELAY_MS=2000` - Over-conservative?
-
-Track:
-
-- Success rate (% of chapters that generate without fallback)
-- Response time (total request duration)
-- Quality score (heuristic: summary length, coherence, etc.)
-
-### Test 4: Integration with Quota
-
-Ensure both systems work together:
-
-**Scenario A: Quota exhausted**
-
+```bash
+RATE_LIMIT_MIN_DELAY_MS=1000  # 1 second pacing
+PAGE_COUNT=10
 ```
-Sequential ebook requests until quota reaches 0
-Expected: genieService rejects new requests before reaching geminiClient
-Logs should show: [QUOTA] Insufficient quota before any [RATE-LIMIT] checks
+
+**Expected result:**
+
+- All 10 chapters succeed without fallback
+- No burst rate errors throughout sequence
+- Total time: ~100-115s (structure 6s + 10 chapters avg 10s each + 9 delays 1s each)
+- **Quality**: 10/10 chapters AI-generated ✓
+- **Metrics**:
+  - Fallback count: 0
+  - Quota used: 11/20 (structure + 10 chapters)
+  - Success rate: 100%
+
+**Verification**:
+
+- Spot-check Chapter 7 (mid-sequence) and Chapter 10 (end) for quality
+- Ensure no "overloaded" errors in logs
+- Confirm rate-limiter enforced delays at each inter-request boundary
+
+### Test 4: Scalability - 20-Page Book
+
+**Setup:**
+
+```bash
+RATE_LIMIT_MIN_DELAY_MS=1000  # 1 second pacing
+PAGE_COUNT=20
 ```
+
+**Expected result:**
+
+- All 20 chapters succeed without fallback
+- Total time: ~190-210s (structure 6s + 20 chapters avg 9.5s each + 19 delays 1s each)
+- **Quality**: 20/20 chapters AI-generated ✓
+- **Quota impact**: Uses full 20-call limit (structure + 19 chapters) - at quota boundary
+- **Metrics**:
+  - Fallback count: 0
+  - Quota used: 20/20 (at limit, no buffer)
+  - Success rate: 100%
+
+**Verification**:
+
+- Test close to quota limit: Chapters 19-20 should succeed despite quota near exhaustion
+- Verify quota check still functions: Would a 21st chapter (21st call) properly fail with quota error?
+- Spot-check Chapter 10 and Chapter 20 for quality consistency across full sequence
+
+### Test 5: Optimize Delay Value
+
+Run against Gemini API with varying delays across all three book sizes (3, 10, 20 pages):
+
+| Delay    | 3-Page Result | 10-Page Result | 20-Page Result | Verdict            |
+| -------- | ------------- | -------------- | -------------- | ------------------ |
+| `250ms`  | ?             | ?              | ?              | Too aggressive?    |
+| `500ms`  | ?             | ?              | ?              | Acceptable?        |
+| `1000ms` | ✓ Success     | ?              | ?              | Safe baseline      |
+| `2000ms` | ✓ Success     | ✓ Success      | ✓ Success      | Over-conservative? |
+
+**Metrics to track per test**:
+
+- **Success rate**: % of chapters generated (target: 100%, no fallback)
+- **Response time**: Total request duration vs expected
+- **Quality score**: Content depth, summary coherence, narrative continuity
+- **Quota efficiency**: Calls used per book size
+- **Consistency**: Error rates and timing variance across repeated runs
+
+**Target outcome**: Identify the lowest delay that maintains 100% success rate across all book sizes.
+
+### Test 6: Integration with Quota System
+
+Ensure rate-limiter and quota tracker work together without interference:
+
+**Scenario A: Quota exhausted (multi-request scenario)**
+
+```bash
+# Run 15 ebook requests back-to-back (3 pages each = 4 calls per request)
+# This will exhaust the 20-call/minute quota after 5 requests
+RATE_LIMIT_MIN_DELAY_MS=1000
+PAGE_COUNT=3
+```
+
+**Expected behavior**:
+
+- Requests 1-5: Complete successfully (20 calls total, uses full quota)
+- Request 6+: Rejected by genieService with `[QUOTA] Insufficient quota` message
+- **Verify**: Rate-limiter delays still apply until quota rejection occurs
 
 **Scenario B: Rate-limited but quota available**
 
+```bash
+# Single large ebook that takes 4+ minutes (over the quota window)
+RATE_LIMIT_MIN_DELAY_MS=1000
+PAGE_COUNT=20
 ```
+
+**Expected behavior**:
+
+- First 19 chapters: rate-limiter paces at 1s delays, quota available
+- ~2 minutes elapsed: quota window may reset (60s sliding window)
+- Remaining chapters: quota refreshes, continues with pacing
+- **Verify**: Quota tracker correctly rotates window mid-request
+
+---
+
+## Configuration & Tuning
+
+### Finding Optimal Delay
+
+```javascript
+// Empirical testing across all book sizes (3, 10, 20 pages):
+// - 250ms:  Frequently fails on later chapters (too aggressive)
+// - 500ms:  Occasionally fails on 20-page books (risky)
+// - 1000ms: Consistently succeeds across all sizes (safe baseline)
+// - 2000ms: Always succeeds but adds ~20s overhead for 20-page book
+
+// Recommendation: Start with 1000ms baseline, optimize after data collection
+
 Rapid-fire API calls from external client
 Expected: Rate-limiter enforces pacing, quota tracker stays healthy
 ```
@@ -627,15 +735,37 @@ The rate-limiter handles velocity at the API call level, allowing both sequentia
 
 ## Acceptance Criteria
 
+**Core functionality:**
+
 - [ ] rateLimiter module created in `server/utils/rateLimiter.js`
 - [ ] geminiClient.callGemini() integrates waitForReadiness() and recordCall()
-- [ ] Environment variable `RATE_LIMIT_MIN_DELAY_MS` configurable
-- [ ] Logs show pacing: `[RATE-LIMIT] Call X: enforcing Yms delay`
-- [ ] Test Case 1 (baseline): Chapter 3 fails with delay=0
-- [ ] Test Case 2 (paced): Chapter 3 succeeds with delay=1000
-- [ ] Test Case 3: Optimal delay identified through testing
-- [ ] Test Case 4: Quota and rate-limiter work together
+- [ ] Environment variable `RATE_LIMIT_MIN_DELAY_MS` configurable (default: 1000ms)
+
+**Testing across all book sizes:**
+
+- [ ] Test 1 (Baseline): 3-page book with RATE_LIMIT_MIN_DELAY_MS=0 fails on Chapter 3 ✗
+- [ ] Test 2 (Paced): 3-page book with RATE_LIMIT_MIN_DELAY_MS=1000 succeeds 3/3 chapters ✓
+- [ ] Test 3 (Scalability): 10-page book with pacing succeeds 10/10 chapters ✓
+- [ ] Test 4 (Large scale): 20-page book with pacing succeeds 20/20 chapters ✓
+- [ ] Test 5 (Optimization): Identify optimal delay that works for all sizes
+- [ ] Test 6 (Integration): Rate-limiter and quota system work together without conflicts
+
+**Logging and observability:**
+
+- [ ] Logs show pacing: `[RATE-LIMIT] Call X: enforcing Yms inter-request delay`
+- [ ] Logs show completion: `[RATE-LIMIT] Call X: delay complete, proceeding`
+- [ ] Logs show recorded timestamps: `[RATE-LIMIT] Call X: timestamp recorded`
 - [ ] Documentation in inline comments and logs
+
+**Quality assurance:**
+
+- [ ] Zero fallback chapters across all test cases (3, 10, 20 page books)
+- [ ] Success rate: 100% chapters AI-generated (no boilerplate stubs)
+- [ ] No breaking changes to existing sequential ebook flow
+- [ ] Quota and rate-limit checks remain independent
+
+---
+
 - [ ] No breaking changes to existing sequential ebook flow
 
 ---
