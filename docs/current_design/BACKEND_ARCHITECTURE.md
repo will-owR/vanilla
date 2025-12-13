@@ -863,6 +863,71 @@ const result = await ebookService.handle(payload, { aiService: mockAI });
 // No mocking of quota, rate-limit, or API infrastructure needed
 ```
 
+### Scalable Service Architecture
+
+**EbookService is just the first of many media services.** The architectural pattern—separating business logic from accounting concerns—scales effortlessly to all content generation services:
+
+```
+Media Services Layer (All benefit from accounting isolation):
+├─ ebookService.handle()        → Generate structured ebook content
+├─ wallartService.handle()      → Generate wall art/poster content
+├─ calendarService.handle()     → Generate calendar content
+├─ poetryService.handle()       → Generate poetry/verse content
+├─ blogService.handle()         → Generate blog post content
+└─ [future services]            → All follow the same pattern
+
+Each service:
+✓ Generates content with semantic clarity
+✓ Has zero awareness of quotas or rate-limiting
+✓ Calls aiService with callIndex for implicit model selection
+✓ Is independently testable with mocked aiService
+✓ Benefits from unified accounting (genieService + geminiClient)
+```
+
+**Earlier Quasi-Services** prepare the context:
+
+```
+Request Handler → Input Validator → Classifier → Media Service
+                  (Transforms input)  (Determines  (Generates
+                                       which route)  content)
+                                                    ↓
+                                              genieService
+                                              (Quota check)
+                                                    ↓
+                                              [media service]
+                                                    ↓
+                                              aiService
+                                                    ↓
+                                              geminiClient
+                                              (Quota track)
+```
+
+**Benefits of This Pattern**:
+
+1. **Service Uniformity**: All media services follow the same contract (take payload, return content)
+2. **Reusable Accounting**: A single quota system (genieService + geminiClient) handles ALL services
+3. **Independent Evolution**: Add a new service (e.g., musicService) without touching accounting
+4. **Testing at Scale**: Test any service with mocked aiService; accounting never enters unit tests
+5. **Cost Tracking**: All services automatically contribute to quota accounting without explicit integration
+
+**Real-world scaling scenario**:
+
+```javascript
+// Today: ebookService uses 5 Flash + 1 Pro per request
+const ebook = await ebookService.handle(payload);
+// Quota: Flash 10/15, Pro 1/2
+
+// Tomorrow: Add wallartService (uses 2 Flash per request)
+const wallart = await wallartService.handle(payload);
+// Quota automatically decremented: Flash 8/15, Pro 1/2
+
+// Next week: Add calendarService (uses 1 Pro + 1 Flash)
+const calendar = await calendarService.handle(payload);
+// Quota automatically decremented: Flash 7/15, Pro 0/2
+
+// All WITHOUT modifying wallartService or calendarService to know about quotas
+```
+
 ---
 
 ## Performance Characteristics
