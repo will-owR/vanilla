@@ -1,7 +1,7 @@
 # Async Polling Solution: 60-Second Infrastructure Timeout Fix
 
 **Status:** Draft Proposal  
-**Date:** December 13, 2025  @ 5:15 PM
+**Date:** December 13, 2025 @ 5:15 PM
 **Related Issues:** 60-second infrastructure timeout blocking 3+ page ebook generation  
 **Related Documentation:** [CLIENT_SERVER_INTEGRATION.md](CLIENT_SERVER_INTEGRATION.md#scenario-a-60-second-infrastructure-timeout)
 
@@ -655,53 +655,31 @@ class EbookGenerationWorker {
   async processJob(job) {
     job.status = "processing";
     job.processingStartedAt = new Date();
-    job.abortController = new AbortController();
+    const abortController = new AbortController();
+    job.abortController = abortController;
 
     try {
-      // Phase 1: Generate structure
-      job.currentPhase = "structure";
-      job.progress = 10;
-      const structure = await aiService.generateStructure(job.request.prompt, {
-        signal: job.abortController.signal,
+      // Dispatch to service layer with ONLY:
+      // 1. Request payload (prompt, theme, pageCount, etc.)
+      // 2. AbortSignal for cancellation control
+      //
+      // Service layer has ZERO awareness of:
+      // - Job record structure
+      // - Progress tracking
+      // - Phase management
+      // - Job queue state
+      // - Cancellation callbacks
+      //
+      // This separation keeps business logic pure and testable.
+      const result = await ebookService.handle(job.request, {
+        signal: abortController.signal,
       });
 
-      // Phase 2: Generate chapters
-      job.currentPhase = "chapter_generation";
-      const chapters = [];
-      for (let i = 0; i < structure.chapters; i++) {
-        if (job.cancelled) return; // Check cancellation
-
-        const chapter = await aiService.generateChapter(structure[i], {
-          signal: job.abortController.signal,
-        });
-        chapters.push(chapter);
-        job.progress = 15 + (i / structure.chapters) * 50;
-      }
-
-      // Phase 3: Compose HTML
-      job.currentPhase = "html_composition";
-      job.progress = 65;
-      const html = await ebookService.compose({
-        chapters,
-        theme: job.request.theme,
-        signal: job.abortController.signal,
-      });
-
-      job.progress = 95;
-
-      // Store result
+      // Store result in job record (infrastructure layer only)
       job.result = {
         id: generateId(),
         resultId: uuidv4(),
-        content: { title: structure.title, chapters },
-        html,
-        metadata: {
-          model: "gemini-2.5-flash",
-          cost: 0.045,
-          tokensUsed: structure.tokensUsed + chapters.tokensUsed,
-          generationTime: Date.now() - job.processingStartedAt,
-          pageCount: job.request.pageCount,
-        },
+        ...result,
       };
 
       job.status = "complete";
@@ -730,6 +708,117 @@ class EbookGenerationWorker {
 const ebookWorker = new EbookGenerationWorker(3);
 ebookWorker.start();
 ```
+
+### 4.3.1 Service Layer Purity (Critical Architectural Requirement)
+
+**MUST BE RESPECTED**: The `ebookService.handle()` method must remain **pure business logic** with **zero awareness** of infrastructure plumbing.
+
+**What ebookService.handle() CAN do:**
+
+```javascript
+async handle(payload, { signal }) {
+  const { prompt, theme, pageCount, ... } = payload;
+
+  // ✓ Generate content
+  const structure = await aiService.generateContent(prompt, { signal });
+
+  // ✓ Process content
+  const chapters = await this.generateChapters(structure, { signal });
+
+  // ✓ Compose result
+  const html = await this.composeHTML(chapters, theme);
+
+  // ✓ Return business result
+  return {
+    content: { title, chapters },
+    html,
+    metadata: { model, tokens, generationTime }
+  };
+}
+```
+
+**What ebookService.handle() CANNOT do:**
+
+```javascript
+async handle(payload, options) {
+  // ✗ NEVER directly access job record
+  options.job.progress = 50;  // VIOLATION
+  options.job.currentPhase = "structure";  // VIOLATION
+
+  // ✗ NEVER manage progress updates
+  this.updateProgress(50);  // VIOLATION
+
+  // ✗ NEVER know about queue position
+  const queuePos = this.getQueuePosition();  // VIOLATION
+
+  // ✗ NEVER know about cancellation state
+  if (options.isCancelled) return;  // VIOLATION (check signal instead)
+
+  // ✗ NEVER update job status
+  options.job.status = "processing";  // VIOLATION
+}
+```
+
+**Why This Separation is Critical**:
+
+| Aspect                 | Without Separation                                           | With Separation                             |
+| ---------------------- | ------------------------------------------------------------ | ------------------------------------------- |
+| **What Service Knows** | Job records, progress, phases, queue, callbacks, persistence | Only how to generate content                |
+| **What Service Tests** | Full infrastructure needed                                   | Just the business logic                     |
+| **Reusability**        | Locked to async polling pattern                              | Works anywhere (sync, events, imports)      |
+| **Maintainability**    | Changes to job tracking affect service code                  | Service untouched by infrastructure changes |
+| **Complexity**         | Service contains: generation + accounting + orchestration    | Service contains: generation only           |
+| **Testing**            | Mock jobs, queue, worker, storage, progress                  | Mock aiService only                         |
+
+**Example: The Cost of Coupling**
+
+```javascript
+// WITHOUT separation: Service knows job structure
+async handle(payload, options) {
+  options.job.currentPhase = "structure";
+  options.job.progress = 10;
+  const structure = await aiService.generateStructure(...);
+
+  options.job.currentPhase = "chapter_generation";
+  for (let i = 0; i < chapters; i++) {
+    if (options.job.cancelled) return;  // Must check job state
+    options.job.progress = 15 + ...;
+    // ...
+  }
+}
+// Problem: If we add a feature (e.g., pause/resume),
+// we must rewrite ebookService.handle() instead of just
+// updating the worker infrastructure.
+```
+
+```javascript
+// WITH separation: Service knows nothing about job infrastructure
+async handle(payload, { signal }) {
+  const structure = await aiService.generateStructure(..., { signal });
+
+  const chapters = [];
+  for (let i = 0; i < structure.chapters; i++) {
+    const chapter = await aiService.generateChapter(..., { signal });
+    chapters.push(chapter);
+  }
+  // That's it. Return content.
+  return { content: { structure, chapters }, html, metadata };
+}
+// Benefit: Worker infrastructure can change (add pause/resume,
+// change storage, change progress tracking) without touching
+// ebookService at all.
+```
+
+**Implementation Guarantee**: Before deployment, verify that:
+
+1. ✓ `ebookService.handle()` receives only `(payload, { signal })`
+2. ✓ Service never accesses job record fields directly
+3. ✓ Service never manages progress, phases, or queue state
+4. ✓ Service returns `{ content, chapters, html, metadata }`
+5. ✓ Service can be tested with just `{ aiService: mock }` dependency
+6. ✓ No worker-specific code exists in service layer
+
+---
 
 ### 4.4 Endpoint Handlers
 

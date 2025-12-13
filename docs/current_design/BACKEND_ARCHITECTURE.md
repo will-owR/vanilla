@@ -675,57 +675,83 @@ T+55-60s [CLIENT] Receive and parse JSON
 
 ## Architectural Patterns
 
-### Independent Separation of Concerns
+### Infrastructure Accounting as Separate Plumbing
 
-The AetherPress backend employs an elegant architectural pattern that separates two distinct constraint types, allowing each to evolve independently:
+The AetherPress backend elegantly separates **content generation logic** (what services do) from **infrastructure accounting** (what middleware and interceptors do). The ebook service and future content services have **zero awareness** of quota tracking, rate-limiting, or any accounting mechanics.
 
-**Velocity Constraint** (Rate-Limiter):
+**What Stays in the Service Layer**:
 
-- Enforces _when_ calls can be made (inter-request timing)
-- Tracks: Time between consecutive calls per model
-- Implementation: `express-rate-limit` middleware
-- Configuration: Global 100 requests / 15 minutes
-- Purpose: Prevent aggressive hammering, ensure fair resource sharing
+```javascript
+async function handle(payload, classification) {
+  // 1. Generate structure
+  const structure = await aiSvc.generateContent(structurePrompt, {
+    callIndex: 0,
+  });
 
-**Volume Constraint** (Quota System):
+  // 2. Generate chapters
+  const chapters = [];
+  for (let i = 0; i < pageCount / 2; i++) {
+    const chapter = await aiSvc.generateContent(chapterPrompt, {
+      callIndex: i + 1,
+    });
+    chapters.push(chapter);
+  }
 
-- Enforces _how many_ calls can be made (per time window)
-- Tracks: Call count per model per rolling window
-- Implementation: `quotaTracker` in geminiClient.js
-- Configuration: Flash 15 RPM, Pro 2 RPM (model-aware)
-- Purpose: Respect API rate limits, prevent quota exhaustion
+  // 3. Compose HTML
+  const html = composeHTML(structure, chapters, theme);
+
+  // Done. Return the business result.
+  return { content, chapters, html };
+}
+```
+
+**What Stays in the Infrastructure Layers**:
+
+| Layer                  | Concern            | Responsibility                              |
+| ---------------------- | ------------------ | ------------------------------------------- |
+| **genieService**       | Quota pre-check    | "Do we have enough budget before dispatch?" |
+| **express-rate-limit** | Velocity control   | "Has enough time passed since last call?"   |
+| **geminiClient**       | Quota post-track   | "Record this successful call"               |
+| **aiService**          | Model routing      | "Based on callIndex, which model?"          |
+| **ebookService**       | Content generation | "Generate great structured content"         |
 
 **Why This Separation Matters**:
 
 ```
-Traditional "Single Constraint" Model:
-┌─ Rate-limiter enforces both velocity AND volume
-│  Problem: Over-restrictive (forces unnecessary delays)
-│  Problem: Hard to tune (too fast or too slow)
-└─ Result: Suboptimal throughput
+Coupled Design (Service + Infrastructure):
+ebookService.handle() {
+  Check quota ❌ ← Not its job
+  Check rate-limit ❌ ← Not its job
+  Generate content ✓ ← Its job
+  Track quota ❌ ← Not its job
+  Retry on 429 ❌ ← Not its job
+}
+Result: Service bloated, hard to test, tight coupling
 
-AetherPress "Independent Constraints" Model:
-├─ Rate-limiter: Velocity only
-│  ├─ Tracks: Milliseconds between calls
-│  ├─ Enforces: No-hammer policy
-│  └─ Benefit: Lightweight, predictable delays
-│
-└─ Quota tracker: Volume only
-   ├─ Tracks: Successful API calls per model
-   ├─ Enforces: Respect RPM limits
-   └─ Benefit: Model-aware, separate windows (Flash ≠ Pro)
+AetherPress Design (Separation):
+ebookService.handle() {
+  Generate content ✓ ← Only its job
+}
+// Quota checked BEFORE service dispatch (genieService)
+// Rate-limiting applied DURING api call (middleware)
+// Quota tracked AFTER successful response (geminiClient)
+Result: Service focused, testable, loosely coupled
 ```
 
-**Real-World Impact** (10-page ebook, 5 Flash + 1 Pro calls):
+**Testing Impact**:
 
-| Constraint          | Limits      | Spacing          | Cumulative       |
-| ------------------- | ----------- | ---------------- | ---------------- |
-| **Rate-limiter**    | 100/15min   | ~9 seconds apart | N/A              |
-| **Flash quota**     | 15/min      | ~4 seconds apart | ~20s for 5 calls |
-| **Pro quota**       | 2/min       | ~30s apart       | ~30s for 1 call  |
-| **Pro + Flash seq** | Both active | Interspersed     | ~50s total       |
+With infrastructure isolation, you can test ebookService with a mock aiService, completely ignoring quota or rate-limit infrastructure:
 
-The beauty of this design: **Pro's 30-second spacing naturally spaces Flash calls far enough apart that the rate-limiter rarely triggers additional delays**. The Pro bottleneck becomes a beneficial feature, not a bug.
+```javascript
+// Test: "Generate 5 chapters correctly"
+const mockAI = {
+  generateContent: () => ({ text: "Chapter content..." }),
+};
+
+const result = await ebookService.handle(payload, { aiService: mockAI });
+// Assert: chapters.length === 5, html includes all content
+// No mocking of quota, rate-limit, or API infrastructure needed
+```
 
 ### Model Routing via callIndex
 
@@ -777,100 +803,12 @@ async generateContent(prompt, options = {}) {
 - Traceability: Logs show `callIndex` for debugging
 - Future-proof: Can add complexity (callIndex % 3 selects model) without changing interfaces
 
-### Business Logic Isolation
-
-The true elegance of the architecture emerges at the service layer: **ebookService.handle() has zero awareness of quotas, rate-limiting, or accounting concerns**.
-
-**What ebookService Knows**:
-
-```javascript
-async function handle(payload, classification) {
-  // 1. Generate structure
-  const structure = await aiSvc.generateContent(structurePrompt, {
-    callIndex: 0,
-  });
-
-  // 2. Generate chapters
-  const chapters = [];
-  for (let i = 0; i < pageCount / 2; i++) {
-    const chapter = await aiSvc.generateContent(chapterPrompt, {
-      callIndex: i + 1,
-    });
-    chapters.push(chapter);
-  }
-
-  // 3. Compose HTML
-  const html = composeHTML(structure, chapters, theme);
-
-  // Done. Return the business result.
-  return { content, chapters, html };
-}
-```
-
-**What ebookService Does NOT Know**:
-
-- ❌ How many quotas remain (Flash vs Pro)
-- ❌ Whether rate-limiter will delay the next call
-- ❌ When the quota window resets
-- ❌ Which API endpoint gets called
-- ❌ Whether the call succeeded or failed
-- ❌ How many RPM this model allows
-
-**Where These Concerns Live**:
-
-| Concern              | Layer                           | Responsibility                            |
-| -------------------- | ------------------------------- | ----------------------------------------- |
-| **Quota pre-check**  | genieService (orchestrator)     | "Do we have enough budget?"               |
-| **Rate-limiting**    | express-rate-limit (middleware) | "Has enough time passed since last call?" |
-| **Quota post-track** | geminiClient                    | "Record this successful call"             |
-| **Model selection**  | aiService (router)              | "Based on callIndex, which model?"        |
-| **API invocation**   | geminiClient                    | "Make the HTTP request"                   |
-| **Business logic**   | ebookService                    | "Generate great content"                  |
-
-**Why This Matters**:
-
-```
-Coupled Design (Business + Infrastructure):
-ebookService.handle() {
-  Check quota ❌ ← Not its job
-  Check rate-limit ❌ ← Not its job
-  Generate content ✓ ← Its job
-  Track quota ❌ ← Not its job
-  Retry on 429 ❌ ← Not its job
-}
-Result: Service bloated, hard to test, tight coupling
-
-AetherPress Design (Separation):
-ebookService.handle() {
-  Generate content ✓ ← Only its job
-}
-// Quota checked BEFORE service dispatch
-// Rate-limiting applied DURING api call
-// Quota tracked AFTER successful response
-Result: Service focused, testable, loosely coupled
-```
-
-**Testing Impact**:
-
-With business logic isolation, you can test ebookService with a mock aiService:
-
-```javascript
-// Test: "Generate 5 chapters correctly"
-const mockAI = {
-  generateContent: () => ({ text: "Chapter content..." }),
-};
-
-const result = await ebookService.handle(payload, { aiService: mockAI });
-// Assert: chapters.length === 5, html includes all content
-// No mocking of quota, rate-limit, or API infrastructure needed
-```
-
 ### Scalable Service Architecture
 
-**EbookService is just the first of many media services.** The architectural pattern—separating business logic from accounting concerns—scales effortlessly to all content generation services:
+**EbookService is just the first of many media services.** The architectural pattern—completely isolating business logic from infrastructure plumbing—allows services to evolve independently and scales effortlessly:
 
 ```
-Media Services Layer (All benefit from accounting isolation):
+Media Services Layer (All independent from accounting):
 ├─ ebookService.handle()        → Generate structured ebook content
 ├─ wallartService.handle()      → Generate wall art/poster content
 ├─ calendarService.handle()     → Generate calendar content
@@ -883,51 +821,46 @@ Each service:
 ✓ Has zero awareness of quotas or rate-limiting
 ✓ Calls aiService with callIndex for implicit model selection
 ✓ Is independently testable with mocked aiService
-✓ Benefits from unified accounting (genieService + geminiClient)
+✓ Contributes automatically to unified accounting (no integration needed)
 ```
 
-**Earlier Quasi-Services** prepare the context:
+**Request Flow**:
 
 ```
-Request Handler → Input Validator → Classifier → Media Service
-                  (Transforms input)  (Determines  (Generates
-                                       which route)  content)
+Request Handler → Input Validator → Classifier → genieService (quota check)
+                  (Transforms input)  (Determines  ↓
+                                       which route) [media service]
                                                     ↓
-                                              genieService
-                                              (Quota check)
+                                              aiService (route to model)
                                                     ↓
-                                              [media service]
-                                                    ↓
-                                              aiService
-                                                    ↓
-                                              geminiClient
-                                              (Quota track)
+                                              geminiClient (make call + track quota)
 ```
 
 **Benefits of This Pattern**:
 
 1. **Service Uniformity**: All media services follow the same contract (take payload, return content)
-2. **Reusable Accounting**: A single quota system (genieService + geminiClient) handles ALL services
-3. **Independent Evolution**: Add a new service (e.g., musicService) without touching accounting
-4. **Testing at Scale**: Test any service with mocked aiService; accounting never enters unit tests
-5. **Cost Tracking**: All services automatically contribute to quota accounting without explicit integration
+2. **Reusable Infrastructure**: A single quota system (genieService + geminiClient) handles ALL services
+3. **Independent Evolution**: Add a new service (e.g., musicService) without touching infrastructure
+4. **Testing at Scale**: Test any service with mocked aiService; infrastructure never enters unit tests
+5. **Zero Coupling**: Services don't know or care about quotas, rate-limiting, models, or API calls
 
 **Real-world scaling scenario**:
 
 ```javascript
 // Today: ebookService uses 5 Flash + 1 Pro per request
 const ebook = await ebookService.handle(payload);
-// Quota: Flash 10/15, Pro 1/2
+// Infrastructure automatically tracks: Flash -5, Pro -1
 
 // Tomorrow: Add wallartService (uses 2 Flash per request)
 const wallart = await wallartService.handle(payload);
-// Quota automatically decremented: Flash 8/15, Pro 1/2
+// Infrastructure automatically tracks: Flash -2 (separate from ebook)
 
 // Next week: Add calendarService (uses 1 Pro + 1 Flash)
 const calendar = await calendarService.handle(payload);
-// Quota automatically decremented: Flash 7/15, Pro 0/2
+// Infrastructure automatically tracks: Flash -1, Pro -1
 
-// All WITHOUT modifying wallartService or calendarService to know about quotas
+// Each service is completely unaware the others exist
+// Each service is completely unaware of infrastructure accounting
 ```
 
 ---
