@@ -5,6 +5,8 @@
 **Target Audience**: Developers, maintainers, stakeholders  
 **Reading Time**: ~10-12 minutes
 
+**Related**: See [ARCHITECTURE_DOCUMENTATION_PROPOSAL.md](ARCHITECTURE_DOCUMENTATION_PROPOSAL.md) for documentation project overview and Scopes 2-4
+
 ---
 
 ## System Goals

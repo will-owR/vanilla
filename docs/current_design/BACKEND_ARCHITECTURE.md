@@ -5,6 +5,8 @@
 **Target Audience**: Backend developers, DevOps, API consumers  
 **Reading Time**: ~15-20 minutes
 
+**Related**: See [ARCHITECTURE_DOCUMENTATION_PROPOSAL.md](ARCHITECTURE_DOCUMENTATION_PROPOSAL.md) for documentation project overview and Scopes 3-4
+
 ---
 
 ## Table of Contents
