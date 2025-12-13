@@ -602,19 +602,31 @@ T=55s    Response fully received by client
 T=60s    Infrastructure timeout FIRES (if response not fully sent)
 ```
 
-**Current Status:** CRITICAL ISSUE
+**Current Status:** CRITICAL ISSUE - **Confirmed in testing**
 
-- Backend generation takes **49-50 seconds** for mid-size content
-- Transmission adds **5-10 seconds**
-- Total: **54-60 seconds**
-- Infrastructure limit: **60 seconds**
-- **Buffer: 0-6 seconds** (margin of safety is minimal)
+Evidence from Light_3-page_02 and Light_3-page_04:
+
+- Backend completes processing in **49.4-50.4 seconds** ✓
+- Server logs confirm response serialized and ready to send ✓
+- HTTP 200 returned with full payload ✓
+- **Client receives: "Network error: Failed to fetch"** ❌
+
+**Root Cause Analysis:**
+
+The failure is **infrastructure/network timeout**, not generation time:
+
+- Request completes at T+49s
+- Response transmission begins at T+49s
+- **Infrastructure timeout fires at ~T+60s** (likely in proxy/middleware)
+- Response never reaches client browser
+- Manifests as generic "Failed to fetch" TypeError
 
 **Known impacts:**
 
-- Large ebooks (15+ pages) fail intermittently
-- Pro model (slower) fails more frequently
-- Network latency compounds the issue
+- **Occurs at minimal size** (3-page ebook with light theme succeeds backend, fails on transmission)
+- Affects all successful responses that cross the 49-60 second boundary
+- Systematic and repeatable (not random network blip)
+- Backend processing time (49-50s) leaves minimal buffer before infrastructure hard timeout
 
 #### **Scenario B: Client Abort During Generation**
 
@@ -1161,7 +1173,7 @@ This section will be populated after comparing against original design documents
 
 - [ ] Request envelope structure matches design spec
 - [ ] Response codes align with REST conventions
-- [ ] Timeout values match performance requirements
+- [ ] Timeout values match performance requirementsF
 - [ ] Error taxonomy is complete and consistent
 - [ ] State machine transitions follow intended flow
 - [ ] Async patterns (202 Accepted) implemented as designed
