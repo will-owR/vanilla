@@ -5,7 +5,7 @@
 **Target Audience**: Frontend developers, UI/UX designers, integration specialists  
 **Reading Time**: ~15-20 minutes
 
-**Related**: See [ARCHITECTURE_DOCUMENTATION_PROPOSAL.md](ARCHITECTURE_DOCUMENTATION_PROPOSAL.md) for documentation project overview and Scope 4
+**Related**: See [ARCHITECTURE_DOCUMENTATION_PROPOSAL.md](ARCHITECTURE_DOCUMENTATION_PROPOSAL.md) for documentation project overview, [CLIENT_SERVER_INTEGRATION.md](CLIENT_SERVER_INTEGRATION.md) for HTTP contracts and timeout behavior analysis
 
 ---
 
