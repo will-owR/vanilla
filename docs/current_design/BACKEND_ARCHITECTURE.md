@@ -775,6 +775,94 @@ async generateContent(prompt, options = {}) {
 - Traceability: Logs show `callIndex` for debugging
 - Future-proof: Can add complexity (callIndex % 3 selects model) without changing interfaces
 
+### Business Logic Isolation
+
+The true elegance of the architecture emerges at the service layer: **ebookService.handle() has zero awareness of quotas, rate-limiting, or accounting concerns**.
+
+**What ebookService Knows**:
+
+```javascript
+async function handle(payload, classification) {
+  // 1. Generate structure
+  const structure = await aiSvc.generateContent(structurePrompt, {
+    callIndex: 0,
+  });
+
+  // 2. Generate chapters
+  const chapters = [];
+  for (let i = 0; i < pageCount / 2; i++) {
+    const chapter = await aiSvc.generateContent(chapterPrompt, {
+      callIndex: i + 1,
+    });
+    chapters.push(chapter);
+  }
+
+  // 3. Compose HTML
+  const html = composeHTML(structure, chapters, theme);
+
+  // Done. Return the business result.
+  return { content, chapters, html };
+}
+```
+
+**What ebookService Does NOT Know**:
+
+- ❌ How many quotas remain (Flash vs Pro)
+- ❌ Whether rate-limiter will delay the next call
+- ❌ When the quota window resets
+- ❌ Which API endpoint gets called
+- ❌ Whether the call succeeded or failed
+- ❌ How many RPM this model allows
+
+**Where These Concerns Live**:
+
+| Concern              | Layer                           | Responsibility                            |
+| -------------------- | ------------------------------- | ----------------------------------------- |
+| **Quota pre-check**  | genieService (orchestrator)     | "Do we have enough budget?"               |
+| **Rate-limiting**    | express-rate-limit (middleware) | "Has enough time passed since last call?" |
+| **Quota post-track** | geminiClient                    | "Record this successful call"             |
+| **Model selection**  | aiService (router)              | "Based on callIndex, which model?"        |
+| **API invocation**   | geminiClient                    | "Make the HTTP request"                   |
+| **Business logic**   | ebookService                    | "Generate great content"                  |
+
+**Why This Matters**:
+
+```
+Coupled Design (Business + Infrastructure):
+ebookService.handle() {
+  Check quota ❌ ← Not its job
+  Check rate-limit ❌ ← Not its job
+  Generate content ✓ ← Its job
+  Track quota ❌ ← Not its job
+  Retry on 429 ❌ ← Not its job
+}
+Result: Service bloated, hard to test, tight coupling
+
+AetherPress Design (Separation):
+ebookService.handle() {
+  Generate content ✓ ← Only its job
+}
+// Quota checked BEFORE service dispatch
+// Rate-limiting applied DURING api call
+// Quota tracked AFTER successful response
+Result: Service focused, testable, loosely coupled
+```
+
+**Testing Impact**:
+
+With business logic isolation, you can test ebookService with a mock aiService:
+
+```javascript
+// Test: "Generate 5 chapters correctly"
+const mockAI = {
+  generateContent: () => ({ text: "Chapter content..." }),
+};
+
+const result = await ebookService.handle(payload, { aiService: mockAI });
+// Assert: chapters.length === 5, html includes all content
+// No mocking of quota, rate-limit, or API infrastructure needed
+```
+
 ---
 
 ## Performance Characteristics
