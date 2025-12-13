@@ -6,6 +6,20 @@
 
 ---
 
+## Related Documentation
+
+This proposal outlines a comprehensive documentation initiative. The following scopes have been completed:
+
+- **Scope 1**: [ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md) - High-level system architecture, components, and request lifecycle (555 lines)
+- **Scope 2**: [BACKEND_ARCHITECTURE.md](BACKEND_ARCHITECTURE.md) - Detailed backend technical specification, AI integration, and quota management (1,072 lines)
+- **Scope 3**: [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) - Client-side component structure, state management, API integration, and user-facing timeout behavior (1,200+ lines)
+
+Remaining scopes:
+
+- **Scope 4**: CLIENT_SERVER_INTEGRATION.md - Request/response contracts and integration points (pending)
+
+---
+
 ## Objective
 
 Establish comprehensive documentation of AetherPress media (ebook, art et al.) system at two levels of detail before proposing architectural modifications to resolve the 60-second infrastructure timeout issue.
@@ -103,14 +117,14 @@ Establish comprehensive documentation of AetherPress media (ebook, art et al.) s
 
 ## Implementation Plan
 
-| Scope        | Document                     | Effort         | Status                 | Lines     |
-| ------------ | ---------------------------- | -------------- | ---------------------- | --------- |
-| 1            | ARCHITECTURE_OVERVIEW.md     | 1-2 hrs        | ✅ **COMPLETE**        | 555       |
-| 2            | BACKEND_ARCHITECTURE.md      | 3-4 hrs        | ✅ **COMPLETE**        | 1,072     |
-| 3            | FRONTEND_ARCHITECTURE.md     | 2-3 hrs        | ⏳ **NOT STARTED**     | —         |
-| 4            | CLIENT_SERVER_INTEGRATION.md | 1-2 hrs        | ⏳ **NOT STARTED**     | —         |
-| **Subtotal** | **Scopes 1-2**               | **~4-6 hrs**   | **✅ COMPLETED (50%)** | **1,627** |
-| **Total**    | **All Documents**            | **~10-12 hrs** | **In Progress**        | —         |
+| Scope        | Document                     | Effort         | Status                 | Lines      |
+| ------------ | ---------------------------- | -------------- | ---------------------- | ---------- |
+| 1            | ARCHITECTURE_OVERVIEW.md     | 1-2 hrs        | ✅ **COMPLETE**        | 555        |
+| 2            | BACKEND_ARCHITECTURE.md      | 3-4 hrs        | ✅ **COMPLETE**        | 1,072      |
+| 3            | FRONTEND_ARCHITECTURE.md     | 2-3 hrs        | ✅ **COMPLETE**        | 1,200+     |
+| 4            | CLIENT_SERVER_INTEGRATION.md | 1-2 hrs        | ⏳ **NOT STARTED**     | —          |
+| **Subtotal** | **Scopes 1-3**               | **~6-9 hrs**   | **✅ COMPLETED (75%)** | **2,827+** |
+| **Total**    | **All Documents**            | **~10-12 hrs** | **In Progress**        | —          |
 
 ---
 
