@@ -94,7 +94,7 @@ Implementing NAT-CONT_0 (Narrative Continuity Zero) strategy for ebook generatio
 ## Completed ✅
 
 - ✅ Phase 1: Helper Functions
-  - Commit: (pending - will add after git commit)
+  - Commit: 4ad1c76
   - Tests: 29/29 passing
   - Duration: ~30 minutes
 
