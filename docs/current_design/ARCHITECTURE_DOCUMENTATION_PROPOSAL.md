@@ -184,7 +184,7 @@ After completion, we will have:
 
 **Key Findings**
 
-1. **Critical Issue Identified**: Infrastructure imposes 60-second hard timeout, but large ebook generation (15+ pages) takes 49-50 seconds alone, leaving only 0-6 seconds buffer for transmission
+1. **Critical Issue Identified**: Infrastructure imposes 60-second hard timeout, but ebook generation (3+ pages) takes 49-50 seconds alone, leaving only 0-6 seconds buffer for transmission
 2. **Complete API Contract**: Documented all endpoints (generate, classify, override, export with async queue)
 3. **Error Handling**: Comprehensive error taxonomy with HTTP status codes, retry policies, and recovery strategies
 4. **State Management**: Detailed state machine transitions and timeout failure scenarios
