@@ -18,7 +18,7 @@ const {
   tryParseChapterResponse,
   tryParseBatchResponse,
   handleNARRATIVE_CONT_0,
-} = require("../../server/ebookService");
+} = require("../ebookService");
 
 // ============================================================================
 // MOCK SETUP
@@ -447,7 +447,7 @@ describe("handleNARRATIVE_CONT_0()", () => {
     );
 
     // Mock the aiService creation
-    jest.mock("../../server/aiService", () => ({
+    jest.mock("../aiService", () => ({
       createAIService: () => mockAiSvc,
     }));
   });

@@ -132,8 +132,8 @@ a6c1365 docs: Add table of contents to documentation >300 lines
 # Verify branch is correct
 git checkout feat/nat-cont-impl
 
-# Install dependencies
-npm install
+# Install server dependencies (localized monorepo)
+cd server && npm install
 
 # Run tests to verify current state
 npm test -- __tests__/ebookService.nat-cont.test.js --verbose
@@ -249,7 +249,9 @@ git diff    # Show any uncommitted changes
 **Implementation guide**: [NAT-CONT_IMPLEMENTATION_GUIDE.md](docs/current_design/NAT-CONT_IMPLEMENTATION_GUIDE.md)  
 **Strategic brief**: [NAT-CONT_STRATEGIC_BRIEF.md](docs/current_design/NAT-CONT_STRATEGIC_BRIEF.md)  
 **Original issue**: 60-second infrastructure timeout  
-**Related docs**: TIMEOUT_RESOLUTION_STRATEGY.md
+**Related docs**: TIMEOUT_RESOLUTION_STRATEGY.md  
+**Test location**: [server/**tests**/ebookService.nat-cont.test.js](server/__tests__/ebookService.nat-cont.test.js)  
+**Implementation location**: [server/ebookService.js](server/ebookService.js)
 
 ---
 

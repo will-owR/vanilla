@@ -208,7 +208,8 @@ npm test -- __tests__/ebookService.nat-cont.test.js --verbose
 - [NAT-CONT_IMPLEMENTATION_GUIDE.md](docs/current_design/NAT-CONT_IMPLEMENTATION_GUIDE.md) — Technical spec
 - [NAT-CONT_STRATEGIC_BRIEF.md](docs/current_design/NAT-CONT_STRATEGIC_BRIEF.md) — Architectural context
 - [NAT-CONT_HANDOFF.md](NAT-CONT_HANDOFF.md) — Checkpoint state (if pausing)
-- Current implementation: [ebookService.js](server/ebookService.js)
+- Current implementation: [server/ebookService.js](server/ebookService.js)
+- Test suite: [server/**tests**/ebookService.nat-cont.test.js](server/__tests__/ebookService.nat-cont.test.js)
 
 ---
 
