@@ -137,3 +137,222 @@ describe("ebookService.handle() - unit", () => {
     );
   });
 });
+
+describe("ebookService.handle() - strategy dispatch", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("uses legacy strategy by default when strategy not specified", async () => {
+    const mockGen = {
+      generateContentWithRotation: vi.fn(async (prompt) => {
+        if (prompt.includes("Create a detailed structure")) {
+          return {
+            content: {
+              body: JSON.stringify({
+                title: "Test Ebook",
+                chapters: 3,
+                outline: [
+                  { chapter: 1, title: "Ch1", estimated_topics: ["topic1"] },
+                  { chapter: 2, title: "Ch2", estimated_topics: ["topic2"] },
+                  { chapter: 3, title: "Ch3", estimated_topics: ["topic3"] },
+                ],
+              }),
+            },
+          };
+        }
+        return {
+          content: {
+            body: JSON.stringify({
+              chapter: 1,
+              title: "Test",
+              content: "Content",
+              summary: "Summary",
+              image: { concept: "Concept", suggested_style: "contemporary" },
+            }),
+          },
+        };
+      }),
+    };
+    await mockAI(mockGen);
+    const mod = await import("../ebookService.js");
+    const svc = mod.default || mod;
+
+    const payload = {
+      prompt: "Test story",
+      metadata: { pageCount: 3 },
+    };
+    const result = await svc.handle(payload);
+
+    expect(result).toBeDefined();
+    expect(result.metadata.model).toBe("ebook-v1");
+    expect(Array.isArray(result.pages)).toBe(true);
+    expect(result.pages.length).toBeGreaterThan(0);
+  });
+
+  it("uses NAT-CONT_0 strategy when explicitly specified", async () => {
+    const mockGen = {
+      generateContentWithRotation: vi.fn(async (prompt, callIndex) => {
+        // Structure (callIndex 0)
+        if (callIndex === 0) {
+          return {
+            content: {
+              body: JSON.stringify({
+                title: "NAT-CONT Test",
+                chapters: 3,
+                outline: [
+                  { chapter: 1, title: "Ch1", estimated_topics: ["topic1"] },
+                  { chapter: 2, title: "Ch2", estimated_topics: ["topic2"] },
+                  { chapter: 3, title: "Ch3", estimated_topics: ["topic3"] },
+                ],
+              }),
+            },
+          };
+        }
+        // Any other callIndex returns single chapter
+        return {
+          content: {
+            body: JSON.stringify({
+              chapter: callIndex || 1,
+              title: `Chapter ${callIndex || 1}`,
+              content: `Content for chapter ${callIndex || 1}`,
+              summary: `Summary ${callIndex || 1}`,
+              image: {
+                concept: "Concept",
+                suggested_style: "contemporary",
+                tone: "narrative",
+              },
+            }),
+          },
+        };
+      }),
+      generateContent: vi.fn(async () => ({
+        content: {
+          body: JSON.stringify({
+            chapter: 1,
+            title: "Chapter",
+            content: "Content",
+            summary: "Summary",
+            image: { concept: "Concept", suggested_style: "contemporary" },
+          }),
+        },
+      })),
+    };
+    await mockAI(mockGen);
+    const mod = await import("../ebookService.js");
+    const svc = mod.default || mod;
+
+    const payload = {
+      prompt: "Test story",
+      metadata: { pageCount: 3, strategy: "nat-cont_0" },
+    };
+    const result = await svc.handle(payload);
+
+    expect(result).toBeDefined();
+    expect(result.metadata.model).toBe("nat-cont_0");
+    expect(Array.isArray(result.pages)).toBe(true);
+    expect(result.pages.length).toBe(3);
+  });
+
+  it("returns correct output format for both strategies", async () => {
+    const mockGen = {
+      generateContentWithRotation: vi.fn(async (prompt, callIndex) => {
+        if (callIndex === 0 || prompt.includes("Create a detailed structure")) {
+          return {
+            content: {
+              body: JSON.stringify({
+                title: "Test Title",
+                chapters: 3,
+                outline: [
+                  { chapter: 1, title: "Ch1", estimated_topics: ["t1"] },
+                  { chapter: 2, title: "Ch2", estimated_topics: ["t2"] },
+                  { chapter: 3, title: "Ch3", estimated_topics: ["t3"] },
+                ],
+              }),
+            },
+          };
+        }
+        return {
+          content: {
+            body: JSON.stringify({
+              chapter: 1,
+              title: "Test",
+              content: "Test content",
+              summary: "Test summary",
+              image: {
+                concept: "Test concept",
+                suggested_style: "contemporary",
+                tone: "narrative",
+              },
+            }),
+          },
+        };
+      }),
+      generateContent: vi.fn(async (prompt) => {
+        if (prompt.includes("Create a detailed structure")) {
+          return {
+            content: {
+              body: JSON.stringify({
+                title: "Test Title",
+                chapters: 3,
+                outline: [
+                  { chapter: 1, title: "Ch1", estimated_topics: ["t1"] },
+                  { chapter: 2, title: "Ch2", estimated_topics: ["t2"] },
+                  { chapter: 3, title: "Ch3", estimated_topics: ["t3"] },
+                ],
+              }),
+            },
+          };
+        }
+        return {
+          content: {
+            body: JSON.stringify({
+              chapter: 1,
+              title: "Test",
+              content: "Test content",
+              summary: "Test summary",
+              image: {
+                concept: "Test concept",
+                suggested_style: "contemporary",
+              },
+            }),
+          },
+        };
+      }),
+    };
+    await mockAI(mockGen);
+    const mod = await import("../ebookService.js");
+    const svc = mod.default || mod;
+
+    // Test legacy strategy
+    const legacyResult = await svc.handle({
+      prompt: "Test",
+      metadata: { pageCount: 3, theme: "dark" },
+    });
+
+    // Test NAT-CONT_0 strategy
+    const natContResult = await svc.handle({
+      prompt: "Test",
+      metadata: { pageCount: 3, theme: "dark", strategy: "nat-cont_0" },
+    });
+
+    // Both should have same output shape
+    expect(legacyResult).toHaveProperty("title");
+    expect(legacyResult).toHaveProperty("pages");
+    expect(legacyResult).toHaveProperty("metadata");
+    expect(legacyResult).toHaveProperty("actions");
+
+    expect(natContResult).toHaveProperty("title");
+    expect(natContResult).toHaveProperty("pages");
+    expect(natContResult).toHaveProperty("metadata");
+    expect(natContResult).toHaveProperty("actions");
+
+    // Both should have theme in metadata
+    expect(legacyResult.metadata.theme).toBe("dark");
+    expect(natContResult.metadata.theme).toBe("dark");
+
+    // Both should support persist/export actions
+    expect(legacyResult.actions.generate_pdf).toBe(true);
+    expect(natContResult.actions.generate_pdf).toBe(true);
+  });
+});

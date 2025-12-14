@@ -25,6 +25,12 @@ class MockAIService {
       metadata,
     };
   }
+
+  // Support NAT-CONT model rotation (generateContentWithRotation)
+  // callIndex parameter used for quota routing in real service, ignored in mock
+  async generateContentWithRotation(prompt, callIndex = 0) {
+    return this.generateContent(prompt);
+  }
 }
 
 // Real AI service - thin wrapper around geminiClient.callGemini

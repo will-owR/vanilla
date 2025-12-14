@@ -37,7 +37,12 @@ async function generateFromPrompt(prompt) {
  * Handle enhanced payload for ebook mode
  * Generates ebook content without orchestrating utility services
  * (Those are handled by genieService orchestrator if needed)
- * @param {Object} payload - { prompt, metadata: { theme, pageCount, colorPalette, fontSizeScale } }
+ *
+ * Supports multiple generation strategies via metadata.strategy:
+ * - "nat-cont_0": NAT-CONT (Pro for structure/ch1/final, Flash for batches)
+ * - undefined/default: Legacy sequential single-chapter generation
+ *
+ * @param {Object} payload - { prompt, metadata: { theme, pageCount, colorPalette, fontSizeScale, strategy } }
  * @param {Object} classification - Optional classification data from genieService
  * @returns {Promise<Object>} Handler result { pages, metadata, html, actions }
  */
@@ -48,7 +53,9 @@ async function handle(payload, classification) {
     pageCount = 8,
     colorPalette = "standard",
     fontSizeScale = 1.0,
+    strategy = undefined,
   } = payload.metadata || {};
+
   // Basic input validation
   if (!prompt || !String(prompt).trim()) {
     const e = new Error(
@@ -84,6 +91,37 @@ async function handle(payload, classification) {
       },
     };
   }
+
+  // Strategy dispatch: NAT-CONT_0 for optimized generation
+  if (strategy === "nat-cont_0") {
+    console.log("[EBOOK] Using strategy: nat-cont_0 (Narrative Continuity)");
+    const result = await handleNARRATIVE_CONT_0(payload, aiSvc);
+    // Transform NAT-CONT result to match legacy output format
+    return {
+      title: result.metadata?.title || result.pages?.[0]?.title || "eBook",
+      pages: result.pages,
+      html: result.html,
+      metadata: {
+        ...result.metadata,
+        model: "nat-cont_0",
+        source: "ebook",
+        theme,
+        colorPalette,
+        fontSizeScale,
+        classification,
+      },
+      actions: {
+        persist_prompt: true,
+        generate_pdf: true,
+        can_export: true,
+        can_preview: true,
+        can_override: true,
+      },
+    };
+  }
+
+  // Legacy implementation for default strategy
+  console.log("[EBOOK] Using strategy: legacy (default sequential generation)");
 
   // Strategy: To avoid Gemini free tier quota limits (10 requests/min per key),
   // distribute calls across different models:
