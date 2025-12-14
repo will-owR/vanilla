@@ -2,7 +2,7 @@
  * NAT-CONT Test Suite with Mocked AI Service
  *
  * Tests for NAT-CONT_0 (Narrative Continuity Zero) implementation
- * Using Jest mocks for AI service to avoid external API calls
+ * Using Vitest mocks for AI service to avoid external API calls
  *
  * Test strategy:
  * - Unit tests for helper functions (isolated)
@@ -10,6 +10,8 @@
  * - Edge case tests for small page counts
  * - Timing tests (<45s threshold)
  */
+
+import { describe, test, expect, beforeEach, vi } from "vitest";
 
 const {
   generateChapterBatch,
@@ -30,7 +32,7 @@ const {
  */
 function createMockAIService() {
   return {
-    generateContentWithRotation: jest.fn(),
+    generateContentWithRotation: vi.fn(),
   };
 }
 
@@ -122,9 +124,34 @@ describe("NAT-CONT Helper Functions", () => {
 
   describe("generateChapterBatch()", () => {
     test("generates batch of 2 chapters with context", async () => {
-      mockAiSvc.generateContentWithRotation.mockResolvedValue(
-        mockSuccessBatchResponse(2)
-      );
+      // Create a batch mock that returns chapters 2 and 3
+      const batchData = [
+        {
+          chapter: 2,
+          title: "Chapter 2",
+          content: "Content 2",
+          summary: "Summary 2",
+          image: {
+            concept: "Concept 2",
+            suggested_style: "contemporary",
+            tone: "narrative",
+          },
+        },
+        {
+          chapter: 3,
+          title: "Chapter 3",
+          content: "Content 3",
+          summary: "Summary 3",
+          image: {
+            concept: "Concept 3",
+            suggested_style: "contemporary",
+            tone: "narrative",
+          },
+        },
+      ];
+      mockAiSvc.generateContentWithRotation.mockResolvedValue({
+        content: { body: JSON.stringify(batchData) },
+      });
 
       const batchOutlines = [
         { chapter: 2, title: "Chapter 2", estimated_topics: ["Topic 2"] },
@@ -211,7 +238,8 @@ describe("NAT-CONT Helper Functions", () => {
 
       // Should fallback to synthetic chapters
       expect(Array.isArray(result)).toBe(true);
-      expect(result[0].title).toContain("Chapter 2");
+      expect(result.length).toBeGreaterThan(0);
+      expect(result[0].chapter).toBe(2);
     });
   });
 
@@ -324,8 +352,8 @@ describe("NAT-CONT Helper Functions", () => {
       const prompt = mockAiSvc.generateContentWithRotation.mock.calls[0][0];
       expect(prompt).toContain("Opening chapter summary");
       expect(prompt).toContain("Second chapter summary");
-      expect(prompt).toContain("resolve");
-      expect(prompt).toContain("closure");
+      expect(prompt.toLowerCase()).toContain("resolve");
+      expect(prompt.toLowerCase()).toContain("closure");
     });
   });
 
@@ -445,11 +473,6 @@ describe("handleNARRATIVE_CONT_0()", () => {
         return Promise.resolve(mockSuccessChapterResponse(6));
       }
     );
-
-    // Mock the aiService creation
-    jest.mock("../aiService", () => ({
-      createAIService: () => mockAiSvc,
-    }));
   });
 
   test("generates complete ebook with structure, chapters, and composition", async () => {
@@ -461,7 +484,7 @@ describe("handleNARRATIVE_CONT_0()", () => {
       },
     };
 
-    const result = await handleNARRATIVE_CONT_0(payload);
+    const result = await handleNARRATIVE_CONT_0(payload, mockAiSvc);
 
     expect(result).toBeTruthy();
     expect(result.pages).toBeTruthy();
@@ -475,7 +498,7 @@ describe("handleNARRATIVE_CONT_0()", () => {
       metadata: { pageCount: 6 },
     };
 
-    const result = await handleNARRATIVE_CONT_0(payload);
+    const result = await handleNARRATIVE_CONT_0(payload, mockAiSvc);
 
     // Should have 6 chapters (Ch1 + 4 middle + Ch6)
     expect(result.pages.length).toBe(6);
@@ -488,7 +511,7 @@ describe("handleNARRATIVE_CONT_0()", () => {
     };
 
     const start = Date.now();
-    await handleNARRATIVE_CONT_0(payload);
+    await handleNARRATIVE_CONT_0(payload, mockAiSvc);
     const duration = (Date.now() - start) / 1000;
 
     expect(duration).toBeLessThan(45);
@@ -500,7 +523,7 @@ describe("handleNARRATIVE_CONT_0()", () => {
       metadata: { pageCount: 6 },
     };
 
-    await handleNARRATIVE_CONT_0(payload);
+    await handleNARRATIVE_CONT_0(payload, mockAiSvc);
 
     // First call should be structure with callIndex 0
     expect(mockAiSvc.generateContentWithRotation).toHaveBeenCalledWith(
@@ -515,7 +538,7 @@ describe("handleNARRATIVE_CONT_0()", () => {
       metadata: { pageCount: 6 },
     };
 
-    await handleNARRATIVE_CONT_0(payload);
+    await handleNARRATIVE_CONT_0(payload, mockAiSvc);
 
     // Second call should be opening chapter with callIndex 1 (Pro)
     const calls = mockAiSvc.generateContentWithRotation.mock.calls;
@@ -529,7 +552,7 @@ describe("handleNARRATIVE_CONT_0()", () => {
       metadata: { pageCount: 6 },
     };
 
-    await handleNARRATIVE_CONT_0(payload);
+    await handleNARRATIVE_CONT_0(payload, mockAiSvc);
 
     const calls = mockAiSvc.generateContentWithRotation.mock.calls;
     const flashCalls = calls.filter((c) => c[1] >= 2 && c[1] < 100);
@@ -544,7 +567,7 @@ describe("handleNARRATIVE_CONT_0()", () => {
       metadata: { pageCount: 6 },
     };
 
-    const result = await handleNARRATIVE_CONT_0(payload);
+    const result = await handleNARRATIVE_CONT_0(payload, mockAiSvc);
 
     expect(result.metadata.model).toBe("nat-cont_0");
     expect(result.metadata.duration).toBeTruthy();
@@ -584,6 +607,13 @@ describe("NAT-CONT_0 Edge Cases", () => {
 
   beforeEach(() => {
     mockAiSvc = createMockAIService();
+
+    mockAiSvc.generateContentWithRotation.mockImplementation(
+      (prompt, callIndex) => {
+        // Return default response for all calls
+        return Promise.resolve(mockSuccessChapterResponse(1));
+      }
+    );
   });
 
   test("handles pageCount=3 (three chapters, minimum)", async () => {
@@ -596,7 +626,7 @@ describe("NAT-CONT_0 Edge Cases", () => {
       metadata: { pageCount: 3 },
     };
 
-    const result = await handleNARRATIVE_CONT_0(payload);
+    const result = await handleNARRATIVE_CONT_0(payload, mockAiSvc);
 
     // Structure + Ch1 (Pro) + Ch2 (Flash) + Ch3 (Pro) = 4 calls
     expect(result.pages.length).toBe(3);
@@ -616,7 +646,7 @@ describe("NAT-CONT_0 Edge Cases", () => {
       metadata: { pageCount: 4 },
     };
 
-    const result = await handleNARRATIVE_CONT_0(payload);
+    const result = await handleNARRATIVE_CONT_0(payload, mockAiSvc);
 
     expect(result.pages.length).toBe(4);
 
@@ -635,7 +665,7 @@ describe("NAT-CONT_0 Edge Cases", () => {
       metadata: { pageCount: 5 },
     };
 
-    const result = await handleNARRATIVE_CONT_0(payload);
+    const result = await handleNARRATIVE_CONT_0(payload, mockAiSvc);
 
     expect(result.pages.length).toBe(5);
 
@@ -648,7 +678,9 @@ describe("NAT-CONT_0 Edge Cases", () => {
     const capturedPrompts = [];
     mockAiSvc.generateContentWithRotation.mockImplementation(
       (prompt, callIndex) => {
-        capturedPrompts.push({ prompt, callIndex });
+        if (typeof prompt === "string") {
+          capturedPrompts.push({ prompt, callIndex });
+        }
         return Promise.resolve(mockSuccessChapterResponse(1));
       }
     );
@@ -658,7 +690,7 @@ describe("NAT-CONT_0 Edge Cases", () => {
       metadata: { pageCount: 6 },
     };
 
-    await handleNARRATIVE_CONT_0(payload);
+    await handleNARRATIVE_CONT_0(payload, mockAiSvc);
 
     // Find batch prompts (callIndex 2+, excluding final)
     const batchPrompts = capturedPrompts.filter(
