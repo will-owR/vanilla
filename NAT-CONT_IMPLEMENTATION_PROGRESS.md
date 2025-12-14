@@ -117,7 +117,7 @@ Implementing NAT-CONT_0 (Narrative Continuity Zero) strategy for ebook generatio
   - Tests: 29/29 passing
   - Duration: ~30 minutes
 - ✅ Phase 2: Strategy Dispatch & Integration
-  - Commits: (pending - will add after git commit)
+  - Commit: b0815a3
   - Tests: 54/54 passing (7 dispatch + 29 Phase 1 + 18 legacy)
   - Duration: ~1 hour
 
