@@ -7,6 +7,24 @@
 
 ---
 
+## Table of Contents
+
+1. [Quick Start](#quick-start)
+2. [Architecture Overview](#architecture-overview)
+3. [Implementation Details: NAT-CONT_0](#implementation-details-nat-cont_0)
+   - [Step 1: Add Helper Functions](#step-1-add-helper-functions-to-ebookservicejs)
+   - [Step 2: Create Main Handler](#step-2-create-main-nat-cont_0-handler)
+   - [Step 3: Update Main Handler](#step-3-update-main-handler)
+4. [Edge Cases: Small Page Counts](#edge-cases-small-page-counts)
+5. [Testing Strategy](#testing-strategy)
+   - [Unit Tests](#unit-tests)
+   - [Integration Tests](#integration-tests)
+6. [NAT-CONT_1: Parallel Implementation](#nat-cont_1-parallel-implementation)
+7. [Deployment Checklist](#deployment-checklist)
+8. [References](#references)
+
+---
+
 ## Quick Start
 
 **What to implement:** Two ebook generation strategies

@@ -7,6 +7,24 @@
 
 ---
 
+## Table of Contents
+
+1. [Executive Summary](#executive-summary)
+2. [The Core Insight](#the-core-insight)
+3. [Strategic Model Assignment](#strategic-model-assignment)
+4. [Two Implementation Paths](#two-implementation-paths)
+   - [NAT-CONT_0: Sequential Batching](#nat-cont_0-sequential-batching-safest)
+   - [NAT-CONT_1: Batch Parallel](#nat-cont_1-batch-parallel-optimal)
+5. [Decision Framework](#decision-framework)
+6. [Architectural Impact Assessment](#architectural-impact-assessment)
+7. [Risk Profile](#risk-profile)
+8. [Success Metrics](#success-metrics)
+9. [Timeline & Roadmap](#timeline--roadmap)
+10. [Recommended Next Steps](#recommended-next-steps)
+11. [References](#references)
+
+---
+
 ## Executive Summary
 
 **Problem:** Sequential single-chapter API calls (6-10 calls/ebook) cause 49-50s processing time, leaving only 5-10s before infrastructure timeout (60s limit).

@@ -3,8 +3,26 @@
 **Phase**: 1a (Optimization - Pre-TIMEOUT resolution)  
 **Name**: NAT-CONT_0 (Narrative Continuity Zero - Batch Sequential)  
 **Alternative**: NAT-CONT_1 (Narrative Continuity One - Batch Parallel)  
-**Date**: December 14, 2025  @ 3:15PM
+**Date**: December 14, 2025 @ 3:15PM
 **Purpose**: Maintain narrative coherence while reducing sequential API calls and processing time
+
+---
+
+## Table of Contents
+
+1. [Strategic Model Assignment](#strategic-model-assignment)
+2. [Execution Timeline: NAT-CONT_0](#execution-timeline-nat-cont_0-sequential-batching)
+3. [Pseudocode: NAT-CONT_0 Implementation](#pseudocode-nat-cont_0-implementation)
+4. [Alternative Execution: NAT-CONT_1](#alternative-execution-nat-cont_1-batch-parallel)
+5. [Integration Points with Existing Code](#integration-points-with-existing-code)
+6. [Quota Tracking Compatibility](#quota-tracking-compatibility)
+7. [Testing Strategy](#testing-strategy)
+   - [Unit Tests](#unit-tests)
+   - [Integration Tests](#integration-tests)
+8. [Success Metrics](#success-metrics)
+9. [Decision Tree](#decision-tree)
+10. [Implementation Checklist](#implementation-checklist-for-nat-cont_0)
+11. [References](#references)
 
 ---
 
