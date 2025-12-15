@@ -656,7 +656,8 @@ Response format must be valid JSON:
 
   const response = await aiService.generateContentWithRotation(
     openingPrompt,
-    1 // callIndex 1 = Pro model
+    1,
+    { model: "gemini-2.5-pro" } // Explicit Pro for narrative voice
   );
 
   const aiText =
@@ -751,7 +752,8 @@ Response format must be valid JSON:
 
   const response = await aiService.generateContentWithRotation(
     closingPrompt,
-    1 // callIndex 1 = Pro model (final chapter generation)
+    1,
+    { model: "gemini-2.5-pro" } // Explicit Pro for narrative closure
   );
 
   const aiText =

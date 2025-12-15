@@ -28,7 +28,8 @@ class MockAIService {
 
   // Support NAT-CONT model rotation (generateContentWithRotation)
   // callIndex parameter used for quota routing in real service, ignored in mock
-  async generateContentWithRotation(prompt, callIndex = 0) {
+  // options.model can override default model selection for complex strategies
+  async generateContentWithRotation(prompt, callIndex = 0, options = {}) {
     return this.generateContent(prompt);
   }
 }
@@ -128,17 +129,19 @@ class RealAIService {
    * This distributes the 10 req/min free tier quota across two different models
    * @param {string} prompt - The prompt text
    * @param {number} callIndex - Index of the call (0=structure, 1+=chapters)
+   * @param {Object} options - Optional overrides (e.g., { model: "gemini-2.5-pro" })
    * @returns {Promise<Object>} Generated content
    */
-  async generateContentWithRotation(prompt, callIndex = 0) {
+  async generateContentWithRotation(prompt, callIndex = 0, options = {}) {
     if (typeof prompt !== "string" || !prompt.trim()) {
       throw new Error("Prompt must be a non-empty string");
     }
 
     // callIndex=0: Structure (Gemini 2.5 Pro, primary)
     // callIndex>0: Chapters (Gemini 2.5 Flash, secondary)
+    // options.model: explicit override for complex strategies (e.g., NAT-CONT_0 opening/closing chapters)
     // Both models are accessed via the same API key
-    const isStructureCall = callIndex === 0;
+    const isStructureCall = !options.model && callIndex === 0;
 
     if (isStructureCall) {
       console.log(
