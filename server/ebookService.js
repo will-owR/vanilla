@@ -53,7 +53,7 @@ async function handle(payload, classification) {
     pageCount = 8,
     colorPalette = "standard",
     fontSizeScale = 1.0,
-    strategy = undefined,
+    strategy = "nat-cont_0",
   } = payload.metadata || {};
 
   // Basic input validation
