@@ -54,7 +54,7 @@ class RealAIService {
     return this._gemini;
   }
 
-  async generateContent(prompt, callIndex = 0) {
+  async generateContent(prompt, callIndex = 0, options = {}) {
     if (typeof prompt !== "string" || !prompt.trim()) {
       throw new Error("Prompt must be a non-empty string");
     }
@@ -63,10 +63,16 @@ class RealAIService {
     // Default to TEXT modality. generationConfig can be passed via env or options.
     const generationConfig = this.options.generationConfig || {};
 
-    // Determine which model to use based on callIndex
-    // callIndex=0: Structure generation (Gemini 2.5 Pro) - primary model
-    // callIndex>0: Chapter generation (Gemini 2.5 Flash) - secondary model
-    const model = callIndex === 0 ? "gemini-2.5-pro" : "gemini-2.5-flash";
+    // Determine which model to use based on:
+    // 1. Routing map (if provided via options.routingMap)
+    // 2. Explicit model override (if provided via options.model)
+    // 3. Default callIndex-based routing
+    const routingMap = options.routingMap || {};
+    const modelFromMap = routingMap[callIndex];
+    const model =
+      modelFromMap ||
+      options.model ||
+      (callIndex === 0 ? "gemini-2.5-pro" : "gemini-2.5-flash");
 
     const resp = await callGemini({
       prompt: String(prompt),
@@ -129,33 +135,14 @@ class RealAIService {
    * This distributes the 10 req/min free tier quota across two different models
    * @param {string} prompt - The prompt text
    * @param {number} callIndex - Index of the call (0=structure, 1+=chapters)
-   * @param {Object} options - Optional overrides (e.g., { model: "gemini-2.5-pro" })
+   * @param {Object} options - Optional overrides { routingMap, model }
+   *   - routingMap: { callIndex: model } mapping from orchestrator
+   *   - model: explicit model override for complex strategies (e.g., NAT-CONT_0)
    * @returns {Promise<Object>} Generated content
    */
   async generateContentWithRotation(prompt, callIndex = 0, options = {}) {
-    if (typeof prompt !== "string" || !prompt.trim()) {
-      throw new Error("Prompt must be a non-empty string");
-    }
-
-    // callIndex=0: Structure (Gemini 2.5 Pro, primary)
-    // callIndex>0: Chapters (Gemini 2.5 Flash, secondary)
-    // options.model: explicit override for complex strategies (e.g., NAT-CONT_0 opening/closing chapters)
-    // Both models are accessed via the same API key
-    const isStructureCall = !options.model && callIndex === 0;
-
-    if (isStructureCall) {
-      console.log(
-        `[QUOTA] Call ${callIndex}: Using Gemini 2.5 Pro (structure generation)`
-      );
-    } else {
-      console.log(
-        `[QUOTA] Call ${callIndex}: Using Gemini 2.5 Flash (chapter generation)`
-      );
-    }
-
-    // Use single API key for both models - quota is distributed across
-    // the two different model quotas in the free tier
-    return this.generateContent(prompt, callIndex);
+    // Delegate to generateContent which handles all routing logic
+    return this.generateContent(prompt, callIndex, options);
   }
 }
 

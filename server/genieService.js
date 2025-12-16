@@ -117,6 +117,153 @@ function calculateCostForMode(mode, metadata = {}) {
   return 1;
 }
 
+/**
+ * Get call requirements for a given service mode.
+ * Returns semantic description of which calls need special handling.
+ *
+ * @param {string} mode - Service mode: 'ebook', 'poetry', 'blog', etc.
+ * @param {object} metadata - Service metadata with pageCount, strategy, etc.
+ * @returns {object} Requirements object with calls array
+ */
+function getCallRequirements(mode, metadata = {}) {
+  const { pageCount = 8, strategy = "default" } = metadata;
+
+  // NAT-CONT_0 strategy requires semantic routing
+  if (mode === "ebook" && strategy === "nat-cont_0") {
+    // NAT-CONT structure: structure(0) + opening(1) + content(2..pageCount-1) + closing(pageCount)
+    return {
+      mode: "ebook",
+      strategy: "nat-cont_0",
+      pageCount,
+      calls: [
+        {
+          callIndex: 0,
+          role: "structure",
+          tier: "expert",
+          description: "Generate ebook structure and TOC",
+        },
+        {
+          callIndex: 1,
+          role: "opening",
+          tier: "expert",
+          description: "Generate opening chapter with narrative voice",
+        },
+        // Middle chapters (callIndex 2 to pageCount-1)
+        {
+          callIndex: "2..pageCount-1",
+          role: "content",
+          tier: "standard",
+          count: pageCount - 2,
+          description: "Generate middle chapter content",
+        },
+        {
+          callIndex: pageCount,
+          role: "closing",
+          tier: "expert",
+          description: "Generate closing chapter with narrative closure",
+        },
+      ],
+    };
+  }
+
+  // Default (no special routing): standard structure + chapter pattern
+  return {
+    mode,
+    strategy: strategy || "default",
+    pageCount,
+    calls: [], // Empty = use default callIndex-based routing
+  };
+}
+
+/**
+ * Calculate quota cost from call requirements based on tiers.
+ *
+ * For NAT-CONT_0:
+ *   Expert tier calls: structure(1) + opening(1) + closing(1) = 3
+ *   Standard tier calls: middle chapters = pageCount - 2
+ *
+ * For others (default routing):
+ *   Expert tier calls: structure only = 1
+ *   Standard tier calls: chapters = ceil(pageCount / 2)
+ *
+ * @param {object} requirements - Output from getCallRequirements()
+ * @returns {object} Cost object { pro: number, flash: number }
+ */
+function calculateCostFromRequirements(requirements) {
+  const { mode, strategy, pageCount, calls } = requirements;
+
+  // If no special calls defined, use default calculation
+  if (!calls || calls.length === 0) {
+    return {
+      pro: 1, // structure only
+      flash: Math.ceil(pageCount / 2), // chapters
+    };
+  }
+
+  // Count expert and standard tier calls from requirements
+  let expertCalls = 0;
+  let standardCalls = 0;
+
+  for (const call of calls) {
+    if (call.tier === "expert") {
+      if (call.callIndex === "2..pageCount-1") {
+        // Range (should never be expert)
+        standardCalls += call.count;
+      } else {
+        expertCalls += 1;
+      }
+    } else if (call.tier === "standard") {
+      if (call.callIndex === "2..pageCount-1") {
+        standardCalls += call.count;
+      } else {
+        standardCalls += 1;
+      }
+    }
+  }
+
+  return {
+    pro: expertCalls,
+    flash: standardCalls,
+  };
+}
+
+/**
+ * Build routing map from call requirements using tier configuration.
+ * Maps callIndex to actual model name based on tier abstraction.
+ *
+ * @param {object} requirements - Output from getCallRequirements()
+ * @param {object} modelTiers - Tier config { expert: string, standard: string }
+ * @returns {object} Routing map: { callIndex: model, ... }
+ */
+function buildRoutingMap(requirements, modelTiers) {
+  const { calls, pageCount } = requirements;
+  const routingMap = {};
+
+  // If no special calls, return empty map (aiService uses defaults)
+  if (!calls || calls.length === 0) {
+    return routingMap;
+  }
+
+  // Build map from requirements using tier configuration
+  for (const call of calls) {
+    // Determine model from tier config (not hardcoded)
+    const model =
+      call.tier === "expert" ? modelTiers.expert : modelTiers.standard;
+
+    if (call.callIndex === "2..pageCount-1") {
+      // Range: map all indices in range
+      for (let i = 2; i < pageCount; i++) {
+        routingMap[i] = model;
+      }
+    } else {
+      // Single index
+      routingMap[call.callIndex] = model;
+    }
+  }
+
+  return routingMap;
+}
+
 const genieService = {
   // For the demo, generate delegates to sampleService. In future this can
   // orchestrate real AI/image jobs via aetherService.
@@ -1368,6 +1515,9 @@ const genieService = {
 module.exports = {
   ...genieService,
   calculateCostForMode,
+  getCallRequirements,
+  calculateCostFromRequirements,
+  buildRoutingMap,
 };
 
 // Test helpers: allow injecting a mock dbUtils or sample service for unit tests

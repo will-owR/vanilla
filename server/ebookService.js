@@ -656,8 +656,7 @@ Response format must be valid JSON:
 
   const response = await aiService.generateContentWithRotation(
     openingPrompt,
-    1,
-    { model: "gemini-2.5-pro" } // Explicit Pro for narrative voice
+    1 // callIndex 1, will be routed by semantic intent in genieService
   );
 
   const aiText =
@@ -752,8 +751,7 @@ Response format must be valid JSON:
 
   const response = await aiService.generateContentWithRotation(
     closingPrompt,
-    1,
-    { model: "gemini-2.5-pro" } // Explicit Pro for narrative closure
+    1 // callIndex 1, will be routed by semantic intent in genieService
   );
 
   const aiText =
