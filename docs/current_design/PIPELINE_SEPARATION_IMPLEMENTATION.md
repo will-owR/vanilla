@@ -50,6 +50,8 @@ git checkout -b feat/ebook-nat-cont fix/nat-cont-model-routing
 
 ## Minimal PR templates
 
+**Note:** Base branch for these feature PRs should be `fix/nat-cont-model-routing`. **DO NOT** create PRs targeting `main` (production); open PRs against `fix/nat-cont-model-routing` for review and iteration.
+
 Title (legacy):
 `chore(ebook): create feat/ebook-legacy — legacy-only ebook generation`
 
