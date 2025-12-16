@@ -1,10 +1,39 @@
 # Implementation: NAT-CONT Model Routing - Architectural Fix
 
-**Date**: December 15, 2025  @ 6:25PM
+**Date**: December 15, 2025 @ 6:25PM  
+**Status**: ✅ IMPLEMENTED (December 16, 2025 @ 1:15 AM)  
+**Branch**: fix/nat-cont-model-routing (commit e11be06)  
 **Target Audience**: Backend engineers  
 **Implementation Complexity**: Moderate (reuses 95% of existing code)  
 **Estimated Effort**: 30-50 lines of new code + tests  
-**Related**: BUG_FIX_NAT_CONT_MODEL_ROUTING_ARCHITECTURE_FIX.md
+**Related**: NAT_CONT_MODEL_ROUTING-ARCHITECTURE.md
+
+---
+
+## Implementation Summary ✅
+
+**COMPLETE**: All changes implemented and tested (December 16, 2025)
+
+- ✅ [server/config/modelTiers.js](../../../../server/config/modelTiers.js) - Created (new file, 25 lines)
+- ✅ [server/genieService.js](../../../../server/genieService.js) - Added 3 utility functions (150+ lines)
+  - getCallRequirements()
+  - calculateCostFromRequirements()
+  - buildRoutingMap()
+- ✅ [server/aiService.js](../../../../server/aiService.js) - Updated routing logic
+  - generateContent() now supports routing maps and explicit overrides
+  - generateContentWithRotation() delegates properly
+- ✅ [server/ebookService.js](../../../../server/ebookService.js) - Reverted hardcoding
+  - generateOpeningChapter() - removed `{ model: }` parameter
+  - generateClosingChapter() - removed `{ model: }` parameter
+- ✅ Tests - No new failures (4 pre-existing unrelated failures)
+- ✅ Branch merged: fix/nat-cont-model-routing (commit e11be06)
+
+**What Was Fixed**:
+
+- Opening/closing chapters now route via semantic intent (not hardcoded models)
+- Quota calculation accurate: pro:3 + flash:pageCount-2
+- Three-layer separation: business → orchestration → infrastructure
+- Backward compatible: non-NAT-CONT services unchanged
 
 ---
 
