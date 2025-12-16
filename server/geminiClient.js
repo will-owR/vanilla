@@ -170,12 +170,25 @@ async function callGemini({
       };
     }
 
+    const callStart = Date.now();
+    console.log(
+      `[GEMINI] callStart model=${
+        model || "auto"
+      } callIndex=${callIndex} at=${callStart}`
+    );
+
     const resp = await fetchImpl(apiUrl, {
       method: "POST",
       headers,
       body: JSON.stringify(body),
     });
     const raw = await resp.text();
+    const callElapsed = Date.now() - callStart;
+    console.log(
+      `[GEMINI] callComplete model=${
+        model || "auto"
+      } callIndex=${callIndex} elapsed=${callElapsed}ms status=${resp.status}`
+    );
     let json = null;
     try {
       json = JSON.parse(raw);

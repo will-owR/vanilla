@@ -47,6 +47,14 @@ async function generateFromPrompt(prompt) {
  * @returns {Promise<Object>} Handler result { pages, metadata, html, actions }
  */
 async function handle(payload, classification) {
+  const startTime = Date.now();
+  const requestId =
+    payload && payload.requestId ? payload.requestId : `req-${startTime}`;
+  console.log(
+    `[EBOOK] handle START requestId=${requestId} prompt=${String(
+      payload.prompt || ""
+    ).substring(0, 60)} start=${startTime}`
+  );
   const { prompt } = payload;
   const {
     theme = "dark",
@@ -97,6 +105,17 @@ async function handle(payload, classification) {
     console.log("[EBOOK] Using strategy: nat-cont_0 (Narrative Continuity)");
     const result = await handleNARRATIVE_CONT_0(payload, aiSvc);
     // Transform NAT-CONT result to match legacy output format
+    // append processing timing
+    const procMs = Date.now() - startTime;
+    result.metadata = {
+      ...(result.metadata || {}),
+      processingTimeMs: procMs,
+    };
+
+    console.log(
+      `[EBOOK] handle COMPLETE (nat-cont) requestId=${requestId} processingTimeMs=${procMs}`
+    );
+
     return {
       title: result.metadata?.title || result.pages?.[0]?.title || "eBook",
       pages: result.pages,
@@ -396,11 +415,13 @@ async function handle(payload, classification) {
       image: c.image,
     }));
 
+    const chaptersDoneMs = Date.now() - startTime;
     console.log(
       "[EBOOK] Chapter generation complete, total chapters:",
-      chapters.length
+      chapters.length,
+      `elapsed=${chaptersDoneMs}ms`
     );
-    console.log("[EBOOK] Returning structured envelope");
+    console.log(`[EBOOK] Returning structured envelope requestId=${requestId}`);
 
     // Return structured envelope following README contract
     return {
@@ -410,6 +431,7 @@ async function handle(payload, classification) {
       metadata: {
         title: structure.title, // Also include in metadata for export orchestrator
         model: "ebook-v1",
+        processingTimeMs: Date.now() - startTime,
         pages_count: pageCount,
         source: "ebook",
         theme,
