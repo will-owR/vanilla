@@ -7,7 +7,6 @@
 
 This file captures the recent conversation about implementing ebook generation behavior, idempotency, and a simple FIFO scheduling strategy in the `genieService` to handle polling, quota reservations, and ETA estimation.
 
-
 ---
 
 ## Full Transcript (selected highlights)
